@@ -100,6 +100,113 @@ cargo run -- trip delete 1
 
 更新時は `--name` / `--start` / `--end` のうち、変更したい項目だけ指定します。
 
+### JSON エクスポート
+
+旅行 1 件と、紐づく日程を JSON で出力します。将来の Web 版や Firebase / Firestore への移行を想定した形式です。
+
+```bash
+# 標準出力に表示
+cargo run -- trip export 1
+
+# ファイルに保存
+cargo run -- trip export 1 --output trip-1.json
+```
+
+出力例（構造）:
+
+```json
+{
+  "trip": {
+    "id": 1,
+    "name": "沖縄旅行",
+    "start_date": "2026-04-26",
+    "end_date": "2026-04-29",
+    "created_at": "...",
+    "updated_at": "..."
+  },
+  "itinerary_items": [
+    {
+      "id": 1,
+      "trip_id": 1,
+      "day": 1,
+      "title": "首里城",
+      "start_time": "09:00",
+      "duration_minutes": 90,
+      "travel_minutes": 20,
+      "location": "沖縄県那覇市首里金城町1-2"
+    }
+  ]
+}
+```
+
+`itinerary_items` は一覧表示と同じく、日目・時刻・並び順でソートされた状態で出力されます。
+
+### Markdown エクスポート（旅行しおり）
+
+旅行計画を Markdown 形式の「旅行しおり」として標準出力できます。
+
+```bash
+cargo run -- trip export-md 1
+```
+
+出力例:
+
+```md
+# 沖縄旅行
+
+2026-04-26 〜 2026-04-29
+
+## Day 1
+
+### 09:00 那覇空港
+- 場所: 那覇空港
+- 所要時間: 60分
+- 移動時間: 30分
+- メモ: レンタカー受け取り
+```
+
+日程は **日目 → 並び順（sort_order）** の順で出力されます。日程が登録されていない日目は表示されません。
+
+チェックリストが登録されている場合、末尾に以下の形式で出力されます。
+
+```md
+## Checklist
+
+- [ ] パスポート
+- [x] 充電器
+```
+
+チェックリストがない場合は `## Checklist` セクション自体を出力しません。
+
+### JSON インポート
+
+`export` で出力した JSON を読み込み、**新しい Trip として**登録します。
+
+```bash
+cargo run -- trip import trip-1.json
+```
+
+| 動作 | 説明 |
+|---|---|
+| ID の扱い | JSON 内の `id` / `trip_id` は無視し、DB の AUTOINCREMENT で新規採番 |
+| trip_id の変換 | 日程の `trip_id` は、新しく作成された Trip の ID に置き換わる |
+| 日時 | `created_at` / `updated_at` はインポート時に新しく設定される |
+
+完了時の表示例:
+
+```
+旅行をインポートしました (ID: 2)
+  名前: 沖縄旅行
+  日程: 3 件
+```
+
+エクスポートとインポートの流れ:
+
+```bash
+cargo run -- trip export 1 --output trip-1.json
+cargo run -- trip import trip-1.json
+```
+
 ## Itinerary（日程）の使い方
 
 日程は **Trip ID** に紐づきます。先に `trip add` で旅行を作成してください。
@@ -138,6 +245,38 @@ cargo run -- itinerary show 1
 cargo run -- itinerary update 1 --time 09:30 --duration 120
 cargo run -- itinerary update 1 --title "首里城公園" --travel 25
 cargo run -- itinerary delete 1
+```
+
+## Checklist（持ち物・準備リスト）の使い方
+
+チェックリストは **Trip ID** に紐づきます。
+
+### 項目の追加・一覧
+
+```bash
+cargo run -- checklist add 1 "パスポート"
+cargo run -- checklist add 1 "充電器"
+cargo run -- checklist list 1
+```
+
+一覧の表示例:
+
+```
+[ ] 1. パスポート
+[x] 2. 充電器
+[ ] 3. ETCカード
+```
+
+並び順は **未完了 → 完了済み**、同じ状態内では **sort_order → id** の順です。
+
+### 詳細・更新・完了切り替え・削除
+
+```bash
+cargo run -- checklist show 1
+cargo run -- checklist update 1 --title "旅券" --sort-order 5
+cargo run -- checklist check 2
+cargo run -- checklist uncheck 2
+cargo run -- checklist delete 1
 ```
 
 ## Timeline（タイムライン）の使い方
