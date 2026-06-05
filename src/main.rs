@@ -4,6 +4,7 @@ mod diff;
 mod itinerary;
 mod markdown;
 mod models;
+mod stats;
 mod trip;
 
 use anyhow::Result;
@@ -119,6 +120,11 @@ enum TripAction {
     ChecklistGenerate {
         /// 旅行 ID
         id: i64,
+    },
+    /// 旅行の統計を表示
+    Stats {
+        /// 旅行 ID
+        trip_id: i64,
     },
 }
 
@@ -467,6 +473,9 @@ fn main() -> Result<()> {
             TripAction::ChecklistGenerate { id } => {
                 let result = crate::checklist::generate_checklist_from_itinerary(&conn, id)?;
                 crate::checklist::print_checklist_generate_result(&result);
+            }
+            TripAction::Stats { trip_id } => {
+                crate::stats::print_trip_stats(&conn, trip_id)?;
             }
         },
     }

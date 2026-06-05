@@ -86,7 +86,6 @@ impl ItineraryCategory {
     }
 
     /// 定義済みの全カテゴリを返す
-    #[allow(dead_code)]
     pub fn all() -> [Self; 8] {
         [
             Self::Flight,

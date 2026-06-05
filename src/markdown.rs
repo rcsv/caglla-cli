@@ -48,6 +48,9 @@ pub(crate) fn format_itinerary_item_markdown(item: &ItineraryItem) -> String {
     lines.push(heading);
 
     let mut detail_lines = Vec::new();
+    if let Some(category) = item.category {
+        detail_lines.push(format!("- Category: {}", category.as_str()));
+    }
     if let Some(location) = &item.location {
         detail_lines.push(format!("- 場所: {location}"));
     }
@@ -61,14 +64,8 @@ pub(crate) fn format_itinerary_item_markdown(item: &ItineraryItem) -> String {
         detail_lines.push(format!("- メモ: {note}"));
     }
 
-    if let Some(category) = item.category {
-        lines.push(String::new());
-        lines.push(format!("Category: {}", category.as_str()));
-    }
     if !detail_lines.is_empty() {
-        if item.category.is_some() {
-            lines.push(String::new());
-        }
+        lines.push(String::new());
         lines.extend(detail_lines);
     }
 
@@ -86,7 +83,7 @@ pub(crate) fn format_checklist_markdown(items: &[ChecklistItem]) -> Option<Strin
         let mark = if item.is_done { 'x' } else { ' ' };
         lines.push(format!("- [{mark}] {}", item.title));
     }
-    Some(format!("\n{}\n", lines.join("\n")))
+    Some(format!("\n\n{}\n", lines.join("\n")))
 }
 
 /// 旅行と日程一覧から Markdown 文字列を組み立てる
@@ -105,10 +102,15 @@ pub(crate) fn format_trip_markdown(
     let mut current_day: Option<i64> = None;
     for item in items {
         if current_day != Some(item.day) {
-            output.push_str(&format!("\n## Day {}\n\n", item.day));
+            if current_day.is_some() {
+                output.push_str("\n\n");
+            } else {
+                output.push('\n');
+            }
+            output.push_str(&format!("## Day {}\n\n", item.day));
             current_day = Some(item.day);
         } else {
-            output.push('\n');
+            output.push_str("\n\n");
         }
         output.push_str(&format_itinerary_item_markdown(item));
     }
@@ -223,9 +225,9 @@ mod tests {
 
         let md = build_trip_markdown(&conn, trip_id).unwrap();
         assert!(md.contains("### Hilton Hawaiian Village"));
-        assert!(md.contains("Category: hotel"));
+        assert!(md.contains("- Category: hotel"));
         assert!(md.contains("- 場所: Waikiki"));
-        let category_pos = md.find("Category: hotel").unwrap();
+        let category_pos = md.find("- Category: hotel").unwrap();
         let location_pos = md.find("- 場所: Waikiki").unwrap();
         assert!(category_pos < location_pos);
     }
@@ -278,7 +280,7 @@ mod tests {
         .unwrap();
 
         let md = build_trip_markdown(&conn, trip_id).unwrap();
-        assert!(!md.contains("Category:"));
+        assert!(!md.contains("- Category:"));
     }
 
     #[test]

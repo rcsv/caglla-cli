@@ -8,8 +8,14 @@ Caglla.Travel のコマンドライン版です。旅行の計画を、ターミ
 
 - **Trip（旅行）** の登録・一覧・詳細・更新・削除
 - **Itinerary（日程）** の登録・一覧・詳細・更新・削除
-- 各予定への **開始時刻・所要時間・移動時間** の設定
+- 各予定への **開始時刻・所要時間・移動時間・場所・カテゴリ** の設定
 - **Timeline（タイムライン）** による旅行の流れの表示
+- **Checklist（持ち物・準備リスト）** の管理
+- **checklist-generate** によるカテゴリ定義からのチェックリスト自動生成
+- **JSON エクスポート / インポート**（`trip export` / `trip import`）
+- **trip diff** による 2 つの旅行 JSON の比較
+- **Markdown エクスポート**（`trip export-md`）による旅行しおり出力
+- **trip stats** による旅行統計（日数・件数・カテゴリ内訳・時間集計・チェックリスト進捗）
 - **db reset** による開発用 DB 初期化
 
 ## 必要な環境
@@ -159,13 +165,21 @@ cargo run -- trip export-md 1
 ## Day 1
 
 ### 09:00 那覇空港
+
+- Category: transport
 - 場所: 那覇空港
 - 所要時間: 60分
 - 移動時間: 30分
 - メモ: レンタカー受け取り
+
+### 12:30 昼食
+
+- Category: restaurant
+- 場所: 国際通り
+- 所要時間: 60分
 ```
 
-日程は **日目 → 並び順（sort_order）** の順で出力されます。日程が登録されていない日目は表示されません。
+日程は **日目 → 並び順（sort_order）** の順で出力されます。日程が登録されていない日目は表示されません。各 Day 見出し・予定ブロック・Checklist セクションの前後には空行が入り、読みやすさを優先しています。
 
 チェックリストが登録されている場合、末尾に以下の形式で出力されます。
 
@@ -177,6 +191,62 @@ cargo run -- trip export-md 1
 ```
 
 チェックリストがない場合は `## Checklist` セクション自体を出力しません。
+
+ファイルに保存する場合:
+
+```bash
+cargo run -- trip export-md 1 > sample-trip.md
+```
+
+手動確認用のサンプルデータ投入は [Markdown Export 確認用サンプル](#markdown-export-確認用サンプル) を参照してください。
+
+### 旅行統計（trip stats）
+
+旅行の概要統計を表示します。
+
+```bash
+cargo run -- trip stats 1
+```
+
+出力例:
+
+```
+Trip Stats
+==========
+
+Trip: Okinawa Sample Trip
+
+Days: 4
+
+Itineraries: 15
+
+Checklist
+---------
+Completed: 4 / 10
+
+Category Breakdown
+------------------
+flight       2
+hotel        2
+restaurant   3
+...
+
+Time Summary
+------------
+Stay Time:   22h15m
+Travel Time: 6h50m
+Total Time:  29h05m
+```
+
+集計内容:
+
+| 項目 | 説明 |
+|---|---|
+| Days | 日程が登録されている最大日目 |
+| Itineraries | 日程の件数 |
+| Checklist | 完了数 / 総数 |
+| Category Breakdown | カテゴリ別件数（未設定は `uncategorized`） |
+| Time Summary | 所要時間・移動時間・合計（`3h20m` 形式） |
 
 ### JSON インポート
 
@@ -369,6 +439,32 @@ Day 1
 - 時刻が未設定の予定: `時刻: 未定` と表示（終了予定は表示しません）
 - 移動時間がある場合: 次の予定の前に `↓ 移動 N分` を表示
 
+## Markdown Export 確認用サンプル
+
+`trip export-md` / `trip stats` の見た目確認用に、4日間・日程15件・チェックリスト10件のサンプルデータを一括投入できます。
+
+```bash
+bash samples/markdown_sample_commands.sh
+```
+
+投入内容の概要:
+
+| 項目 | 内容 |
+|---|---|
+| 旅行 | Okinawa Sample Trip（2026-04-26 〜 2026-04-29） |
+| 日程 | 15件（flight / hotel / restaurant / activity / transport / beach / shopping + uncategorized 1件） |
+| チェックリスト | 10件（うち4件を完了済みに設定） |
+
+確認コマンド:
+
+```bash
+cargo run -- trip stats 1
+cargo run -- trip export-md 1
+cargo run -- trip export-md 1 > sample-trip.md
+```
+
+スクリプト本体は [`samples/markdown_sample_commands.sh`](samples/markdown_sample_commands.sh) です。カテゴリは `itinerary update --category` で設定しています。
+
 ## 開発用サンプルシナリオ
 
 沖縄旅行の 1 日目を登録し、タイムラインで確認する例です。  
@@ -402,7 +498,10 @@ caglla-cli/
 │   ├── itinerary.rs  # Itinerary CRUD・タイムライン
 │   ├── checklist.rs  # Checklist CRUD
 │   ├── markdown.rs   # trip export-md
+│   ├── stats.rs      # trip stats
 │   └── diff.rs       # trip diff
+├── samples/
+│   └── markdown_sample_commands.sh  # Markdown Export 確認用データ投入
 ├── Cargo.toml
 ├── Makefile
 ├── caglla.db         # ローカル DB（実行時に自動作成、git 管理外）
