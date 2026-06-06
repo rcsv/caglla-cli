@@ -532,8 +532,8 @@ fn main() -> Result<()> {
             }
             TripAction::Stats { trip_id, json } => {
                 if json {
-                    let json_output = crate::stats::stats_to_json(&conn, trip_id)?;
-                    println!("{json_output}");
+                    let stats = crate::stats::compute_trip_stats(&conn, trip_id)?;
+                    crate::trip::print_json(&stats)?;
                 } else {
                     crate::stats::print_trip_stats(&conn, trip_id)?;
                 }

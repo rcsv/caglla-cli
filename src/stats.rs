@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use rusqlite::Connection;
 use serde::Serialize;
 
@@ -160,12 +160,6 @@ pub(crate) fn print_trip_stats(conn: &Connection, trip_id: i64) -> Result<()> {
     );
 
     Ok(())
-}
-
-/// 旅行統計を pretty JSON 文字列に変換する
-pub(crate) fn stats_to_json(conn: &Connection, trip_id: i64) -> Result<String> {
-    let stats = compute_trip_stats(conn, trip_id)?;
-    serde_json::to_string_pretty(&stats).context("JSON の生成に失敗しました")
 }
 
 #[cfg(test)]
@@ -375,7 +369,8 @@ mod tests {
             crate::checklist::add_checklist_item(&conn, trip_id, "パスポート").unwrap();
         crate::checklist::set_checklist_done(&conn, checklist_id, true).unwrap();
 
-        let json = stats_to_json(&conn, trip_id).unwrap();
+        let stats = compute_trip_stats(&conn, trip_id).unwrap();
+        let json = serde_json::to_string_pretty(&stats).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
 
         assert_eq!(parsed["trip_name"], "沖縄旅行");
