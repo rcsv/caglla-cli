@@ -4,6 +4,7 @@ GitHub Release 用ノート一覧（新しい順）。
 
 | Version | Title | File |
 |---|---|---|
+| v1.0.1 | Not found handling polish | [v1.0.1-notes.md](v1.0.1-notes.md) |
 | v1.0.0 | First stable CLI baseline | [v1.0.0-notes.md](v1.0.0-notes.md) |
 | v0.9.5 | CI and release verification polish | [v0.9.5-notes.md](v0.9.5-notes.md) |
 | v0.9.4 | Command reference polish | [v0.9.4-notes.md](v0.9.4-notes.md) |
