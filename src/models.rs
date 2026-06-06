@@ -13,7 +13,7 @@ pub struct Trip {
 }
 
 /// 日程カテゴリ（定義済みのみ受け付ける）
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ItineraryCategory {
     Flight,
@@ -98,6 +98,47 @@ impl ItineraryCategory {
             Self::Museum,
         ]
     }
+}
+
+/// カテゴリ組み合わせに応じたチェックリスト追加ルール
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ChecklistRule {
+    pub required_categories: &'static [ItineraryCategory],
+    pub checklist: &'static [&'static str],
+}
+
+/// 旅行全体のカテゴリ構成に応じて適用するチェックリスト組み合わせルール
+pub fn checklist_combination_rules() -> &'static [ChecklistRule] {
+    use ItineraryCategory::*;
+
+    const RULES: &[ChecklistRule] = &[
+        ChecklistRule {
+            required_categories: &[Flight, Hotel],
+            checklist: &["宿泊予約確認", "身分証明書", "充電器"],
+        },
+        ChecklistRule {
+            required_categories: &[Flight, Transport],
+            checklist: &["ETCカード", "運転免許証", "レンタカー予約確認"],
+        },
+        ChecklistRule {
+            required_categories: &[Beach],
+            checklist: &["水着", "タオル", "日焼け止め", "サンダル"],
+        },
+        ChecklistRule {
+            required_categories: &[Beach, Activity],
+            checklist: &["着替え", "防水バッグ", "酔い止め"],
+        },
+        ChecklistRule {
+            required_categories: &[Shopping],
+            checklist: &["エコバッグ", "現金（小銭）"],
+        },
+        ChecklistRule {
+            required_categories: &[Museum, Activity],
+            checklist: &["事前予約確認", "入場チケット"],
+        },
+    ];
+
+    RULES
 }
 
 const ITINERARY_CATEGORY_VALUES: &[&str] = &[

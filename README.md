@@ -11,7 +11,7 @@ Caglla.Travel のコマンドライン版です。旅行の計画を、ターミ
 - 各予定への **開始時刻・所要時間・移動時間・場所・カテゴリ** の設定
 - **Timeline（タイムライン）** による旅行の流れの表示
 - **Checklist（持ち物・準備リスト）** の管理
-- **checklist-generate** によるカテゴリ定義からのチェックリスト自動生成
+- **checklist-generate** によるカテゴリ定義・組み合わせルールからのチェックリスト自動生成
 - **JSON エクスポート / インポート**（`trip export` / `trip import`）
 - **trip diff** による 2 つの旅行 JSON の比較
 - **Markdown エクスポート**（`trip export-md`）による旅行しおり出力
@@ -430,7 +430,7 @@ Rust 側では `CategoryDefinition` 構造体として `display_name` と `defau
 
 ### チェックリスト自動生成
 
-日程に設定されたカテゴリの `CategoryDefinition.default_checklist` から、チェックリスト項目を自動追加します。
+日程に設定されたカテゴリの `CategoryDefinition.default_checklist` に加え、旅行全体のカテゴリ構成に応じた組み合わせルールからチェックリスト項目を自動追加します。
 
 ```bash
 cargo run -- trip checklist-generate 1
@@ -438,10 +438,24 @@ cargo run -- trip checklist-generate 1
 
 | ルール | 説明 |
 |---|---|
-| 対象 | カテゴリが設定されている itinerary items |
+| カテゴリ単体 | 各 itinerary の category に対応する `default_checklist` を展開 |
+| カテゴリ組み合わせ | 旅行内に必要な category が揃っている場合に追加（例: `flight + hotel`） |
 | 重複防止 | 同じ trip 内に同じ title が既にある場合は追加しない |
 | 並び順 | 既存の最大 `sort_order` の次から採番 |
 | 0件追加 | エラーにせず成功として扱う |
+
+組み合わせルール例:
+
+| 条件 | 追加候補 |
+|---|---|
+| flight + hotel | 宿泊予約確認, 身分証明書, 充電器 |
+| flight + transport | ETCカード, 運転免許証, レンタカー予約確認 |
+| beach | 水着, タオル, 日焼け止め, サンダル |
+| beach + activity | 着替え, 防水バッグ, 酔い止め |
+| shopping | エコバッグ, 現金（小銭） |
+| museum + activity | 事前予約確認, 入場チケット |
+
+`default_checklist` と重複する項目はスキップされます。
 
 出力例:
 
