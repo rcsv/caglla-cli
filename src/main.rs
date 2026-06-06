@@ -1,6 +1,7 @@
 mod checklist;
 mod db;
 mod diff;
+mod doctor;
 mod itinerary;
 mod markdown;
 mod models;
@@ -126,6 +127,11 @@ enum TripAction {
     },
     /// 旅行の統計を表示
     Stats {
+        /// 旅行 ID
+        trip_id: i64,
+    },
+    /// 旅行計画を点検する
+    Doctor {
         /// 旅行 ID
         trip_id: i64,
     },
@@ -478,6 +484,9 @@ fn main() -> Result<()> {
             }
             TripAction::Stats { trip_id } => {
                 crate::stats::print_trip_stats(&conn, trip_id)?;
+            }
+            TripAction::Doctor { trip_id } => {
+                crate::doctor::run_trip_doctor(&conn, trip_id)?;
             }
         },
     }

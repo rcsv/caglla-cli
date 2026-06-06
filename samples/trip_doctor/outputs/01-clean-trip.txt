@@ -1,0 +1,13 @@
+# trip doctor validation: clean trip
+# Generated: 2026-06-06T07:02:14Z
+#
+# restaurant あり・移動時間・所要時間ともに問題なし
+#
+# Command: cargo run -- trip doctor 1
+
+Trip Doctor
+===========
+
+Trip: Clean Trip
+
+No major issues found.

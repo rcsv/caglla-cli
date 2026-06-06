@@ -1,0 +1,13 @@
+# trip doctor validation: empty itinerary
+# Generated: 2026-06-06T07:02:16Z
+#
+# itinerary 0件でもエラーにならない
+#
+# Command: cargo run -- trip doctor 1
+
+Trip Doctor
+===========
+
+Trip: Empty Trip
+
+No major issues found.

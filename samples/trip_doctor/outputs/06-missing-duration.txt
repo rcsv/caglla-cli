@@ -1,0 +1,16 @@
+# trip doctor validation: missing duration
+# Generated: 2026-06-06T07:02:29Z
+#
+# duration_minutes 未設定の itinerary がある
+#
+# Command: cargo run -- trip doctor 1
+
+Trip Doctor
+===========
+
+Trip: Missing Duration Trip
+
+Warnings
+--------
+- Some itineraries have no duration estimate
+

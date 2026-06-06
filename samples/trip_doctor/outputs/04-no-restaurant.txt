@@ -1,0 +1,19 @@
+# trip doctor validation: no restaurant
+# Generated: 2026-06-06T07:02:24Z
+#
+# restaurant カテゴリがない日
+#
+# Command: cargo run -- trip doctor 1
+
+Trip Doctor
+===========
+
+Trip: No Restaurant Trip
+
+Warnings
+--------
+- Day 1 has no restaurant
+
+Suggestions
+-----------
+- Consider adding a lunch or dinner plan to Day 1

@@ -1,0 +1,27 @@
+# trip doctor validation: combined issues
+# Generated: 2026-06-06T07:02:37Z
+#
+# 複数の warning / suggestion が同時に出る
+#
+# Command: cargo run -- trip doctor 1
+
+Trip Doctor
+===========
+
+Trip: Combined Issues Trip
+
+Warnings
+--------
+- Day 1 has many itineraries (8)
+- Day 1 has no restaurant
+- Day 1 has high travel time (3h20m)
+- Day 2 has no restaurant
+- Day 3 has no restaurant
+- Some itineraries have no duration estimate
+
+Suggestions
+-----------
+- Consider adding a lunch or dinner plan to Day 1
+- Consider reducing travel time on Day 1
+- Consider adding a lunch or dinner plan to Day 2
+- Consider adding a lunch or dinner plan to Day 3

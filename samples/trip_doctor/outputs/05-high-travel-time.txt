@@ -1,0 +1,19 @@
+# trip doctor validation: high travel time
+# Generated: 2026-06-06T07:02:27Z
+#
+# Day 1 の travel_minutes 合計 205分（180分以上で warning）
+#
+# Command: cargo run -- trip doctor 1
+
+Trip Doctor
+===========
+
+Trip: High Travel Trip
+
+Warnings
+--------
+- Day 1 has high travel time (3h25m)
+
+Suggestions
+-----------
+- Consider reducing travel time on Day 1

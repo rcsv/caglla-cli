@@ -16,6 +16,7 @@ Caglla.Travel のコマンドライン版です。旅行の計画を、ターミ
 - **trip diff** による 2 つの旅行 JSON の比較
 - **Markdown エクスポート**（`trip export-md`）による旅行しおり出力
 - **trip stats** による旅行統計（日数・件数・カテゴリ内訳・時間集計・チェックリスト進捗）
+- **trip doctor** による旅行計画の簡易点検（予定過多・食事不足・移動時間など）
 - **db reset** による開発用 DB 初期化
 
 ## 必要な環境
@@ -262,6 +263,60 @@ Total Time:  29h05m
 | Checklist | 完了数 / 総数 |
 | Category Breakdown | カテゴリ別件数（未設定は `uncategorized`） |
 | Time Summary | 所要時間・移動時間・合計（`3h20m` 形式） |
+
+### 旅行計画の点検（trip doctor）
+
+旅行計画を点検し、予定の詰め込みすぎ、食事予定の不足、移動時間の長さなどを確認します。
+
+```bash
+cargo run -- trip doctor 1
+```
+
+出力例:
+
+```
+Trip Doctor
+===========
+
+Trip: Okinawa Sample Trip
+
+Warnings
+--------
+- Day 2 has many itineraries (8)
+- Day 3 has no restaurant
+- Day 4 has high travel time (3h20m)
+
+Suggestions
+-----------
+- Consider adding a lunch or dinner plan to Day 3
+- Consider reducing travel time on Day 4
+```
+
+問題がない場合:
+
+```
+Trip Doctor
+===========
+
+Trip: Okinawa Sample Trip
+
+No major issues found.
+```
+
+点検内容:
+
+| チェック | 目安 |
+|---|---|
+| 1日の予定数 | 7件以上で warning |
+| 食事予定 | その日に `restaurant` カテゴリがなければ warning / suggestion |
+| 移動時間 | 1日合計 180分以上で warning / suggestion |
+| 所要時間 | 未設定の itinerary がある場合に warning |
+
+検証用の実出力サンプルは [`samples/trip_doctor/`](samples/trip_doctor/) を参照してください。再生成:
+
+```bash
+bash samples/trip_doctor/generate_outputs.sh
+```
 
 ### JSON インポート
 
@@ -514,9 +569,13 @@ caglla-cli/
 │   ├── checklist.rs  # Checklist CRUD
 │   ├── markdown.rs   # trip export-md
 │   ├── stats.rs      # trip stats
+│   ├── doctor.rs     # trip doctor
 │   └── diff.rs       # trip diff
 ├── samples/
-│   └── markdown_sample_commands.sh  # Markdown Export 確認用データ投入
+│   ├── markdown_sample_commands.sh  # Markdown Export 確認用データ投入
+│   └── trip_doctor/                 # trip doctor 検証用サンプル・実出力
+├── docs/
+│   └── releases/                    # GitHub Release 用ノート
 ├── Cargo.toml
 ├── Makefile
 ├── caglla.db         # ローカル DB（実行時に自動作成、git 管理外）
