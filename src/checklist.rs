@@ -731,4 +731,53 @@ mod tests {
         assert_eq!(eco_bag_count, 1);
         assert!(result.added.contains(&"現金（小銭）".to_string()));
     }
+
+    #[test]
+    fn test_checklist_list_json_empty() {
+        let conn = test_db();
+        let trip_id = add_trip(&conn, "沖縄旅行", None, None).unwrap();
+
+        let items = list_checklist_items(&conn, trip_id).unwrap();
+        let json = serde_json::to_string_pretty(&items).unwrap();
+
+        assert_eq!(json, "[]");
+    }
+
+    #[test]
+    fn test_checklist_list_json() {
+        let conn = test_db();
+        let trip_id = add_trip(&conn, "沖縄旅行", None, None).unwrap();
+        add_checklist_item(&conn, trip_id, "パスポート").unwrap();
+        add_checklist_item(&conn, trip_id, "充電器").unwrap();
+        set_checklist_done(&conn, 2, true).unwrap();
+
+        let items = list_checklist_items(&conn, trip_id).unwrap();
+        let json = serde_json::to_string_pretty(&items).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+        assert!(parsed.is_array());
+        assert_eq!(parsed.as_array().unwrap().len(), 2);
+        assert_eq!(parsed[0]["title"], "パスポート");
+        assert_eq!(parsed[0]["is_done"], false);
+        assert_eq!(parsed[1]["title"], "充電器");
+        assert_eq!(parsed[1]["is_done"], true);
+    }
+
+    #[test]
+    fn test_checklist_show_json() {
+        let conn = test_db();
+        let trip_id = add_trip(&conn, "沖縄旅行", None, None).unwrap();
+        let id = add_checklist_item(&conn, trip_id, "パスポート").unwrap();
+        update_checklist_item(&conn, id, None, Some(5)).unwrap();
+
+        let item = get_checklist_item(&conn, id).unwrap();
+        let json = serde_json::to_string_pretty(&item).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(parsed["id"], id);
+        assert_eq!(parsed["trip_id"], trip_id);
+        assert_eq!(parsed["title"], "パスポート");
+        assert_eq!(parsed["is_done"], false);
+        assert_eq!(parsed["sort_order"], 5);
+    }
 }

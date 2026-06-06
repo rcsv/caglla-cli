@@ -266,11 +266,17 @@ enum ChecklistAction {
     List {
         /// 旅行 ID
         trip_id: i64,
+        /// JSON 形式で出力
+        #[arg(long)]
+        json: bool,
     },
     /// チェックリスト項目の詳細を表示
     Show {
         /// 項目 ID
         id: i64,
+        /// JSON 形式で出力
+        #[arg(long)]
+        json: bool,
     },
     /// チェックリスト項目を更新
     Update {
@@ -424,14 +430,22 @@ fn main() -> Result<()> {
                 println!("  旅行 ID : {trip_id}");
                 println!("  タイトル: {title}");
             }
-            ChecklistAction::List { trip_id } => {
+            ChecklistAction::List { trip_id, json } => {
                 let items = crate::checklist::list_checklist_items(&conn, trip_id)?;
-                println!("旅行 ID {trip_id} のチェックリスト:");
-                crate::checklist::print_checklist_list(&items);
+                if json {
+                    crate::trip::print_json(&items)?;
+                } else {
+                    println!("旅行 ID {trip_id} のチェックリスト:");
+                    crate::checklist::print_checklist_list(&items);
+                }
             }
-            ChecklistAction::Show { id } => {
+            ChecklistAction::Show { id, json } => {
                 let item = crate::checklist::get_checklist_item(&conn, id)?;
-                crate::checklist::print_checklist_detail(&item);
+                if json {
+                    crate::trip::print_json(&item)?;
+                } else {
+                    crate::checklist::print_checklist_detail(&item);
+                }
             }
             ChecklistAction::Update {
                 id,

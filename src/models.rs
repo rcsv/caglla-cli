@@ -262,7 +262,7 @@ pub struct ItineraryItem {
 }
 
 /// checklist_items テーブルの1行分のデータ
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct ChecklistItem {
     pub id: i64,
     pub trip_id: i64,

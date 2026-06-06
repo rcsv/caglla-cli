@@ -67,6 +67,8 @@ caglla trip show <trip_id> --json
 caglla trip stats <trip_id> --json
 caglla itinerary list <trip_id> --json
 caglla itinerary show <itinerary_id> --json
+caglla checklist list <trip_id> --json
+caglla checklist show <checklist_id> --json
 ```
 
 JSON 出力は、`jq` などを使った確認やスクリプト連携を想定しています。`--json` 指定時は人間向けの見出しや説明文は出さず、pretty JSON のみ stdout に出力します。
@@ -563,6 +565,7 @@ cargo run -- trip checklist-generate 1
 cargo run -- checklist add 1 "パスポート"
 cargo run -- checklist add 1 "充電器"
 cargo run -- checklist list 1
+cargo run -- checklist list 1 --json
 ```
 
 一覧の表示例:
@@ -579,6 +582,7 @@ cargo run -- checklist list 1
 
 ```bash
 cargo run -- checklist show 1
+cargo run -- checklist show 1 --json
 cargo run -- checklist update 1 --title "旅券" --sort-order 5
 cargo run -- checklist check 2
 cargo run -- checklist uncheck 2
