@@ -13,12 +13,29 @@ const MAX_TRAVEL_MINUTES_PER_DAY: i64 = 180;
 pub(crate) struct DoctorReport {
     pub warnings: Vec<String>,
     pub suggestions: Vec<String>,
+    pub info: Vec<String>,
+}
+
+fn format_missing_duration_warning(count: usize) -> String {
+    if count == 1 {
+        "1 itinerary has no duration estimate".to_string()
+    } else {
+        format!("{count} itineraries have no duration estimate")
+    }
 }
 
 /// 旅行計画を分析し、警告と提案を返す
 pub(crate) fn analyze_trip(conn: &Connection, trip_id: i64) -> Result<DoctorReport> {
     crate::trip::get_trip(conn, trip_id)?;
     let items = crate::itinerary::list_itinerary_items(conn, trip_id)?;
+
+    if items.is_empty() {
+        return Ok(DoctorReport {
+            warnings: vec![],
+            suggestions: vec![],
+            info: vec!["No itinerary found.".to_string()],
+        });
+    }
 
     let mut by_day: HashMap<i64, Vec<&ItineraryItem>> = HashMap::new();
     for item in &items {
@@ -67,12 +84,13 @@ pub(crate) fn analyze_trip(conn: &Connection, trip_id: i64) -> Result<DoctorRepo
         .filter(|item| item.duration_minutes.is_none())
         .count();
     if missing_duration > 0 {
-        warnings.push("Some itineraries have no duration estimate".to_string());
+        warnings.push(format_missing_duration_warning(missing_duration));
     }
 
     Ok(DoctorReport {
         warnings,
         suggestions,
+        info: vec![],
     })
 }
 
@@ -87,7 +105,7 @@ pub(crate) fn run_trip_doctor(conn: &Connection, trip_id: i64) -> Result<()> {
     println!("Trip: {}", trip.name);
     println!();
 
-    if report.warnings.is_empty() && report.suggestions.is_empty() {
+    if report.warnings.is_empty() && report.suggestions.is_empty() && report.info.is_empty() {
         println!("No major issues found.");
         return Ok(());
     }
@@ -106,6 +124,17 @@ pub(crate) fn run_trip_doctor(conn: &Connection, trip_id: i64) -> Result<()> {
         println!("-----------");
         for suggestion in &report.suggestions {
             println!("- {suggestion}");
+        }
+        if !report.info.is_empty() {
+            println!();
+        }
+    }
+
+    if !report.info.is_empty() {
+        println!("Info");
+        println!("----");
+        for message in &report.info {
+            println!("- {message}");
         }
     }
 
@@ -229,7 +258,7 @@ mod tests {
     }
 
     #[test]
-    fn test_doctor_detects_missing_duration() {
+    fn test_doctor_detects_missing_duration_singular() {
         let conn = test_db();
         let trip_id = add_trip(&conn, "時間未設定旅行", None, None).unwrap();
         add_itinerary_item(
@@ -251,7 +280,35 @@ mod tests {
         assert!(report
             .warnings
             .iter()
-            .any(|w| w == "Some itineraries have no duration estimate"));
+            .any(|w| w == "1 itinerary has no duration estimate"));
+    }
+
+    #[test]
+    fn test_doctor_detects_missing_duration_plural() {
+        let conn = test_db();
+        let trip_id = add_trip(&conn, "時間未設定旅行", None, None).unwrap();
+        for i in 1..=3 {
+            add_itinerary_item(
+                &conn,
+                trip_id,
+                1,
+                &format!("予定{i}"),
+                None,
+                None,
+                Some(i),
+                None,
+                None,
+                None,
+                None,
+            )
+            .unwrap();
+        }
+
+        let report = analyze_trip(&conn, trip_id).unwrap();
+        assert!(report
+            .warnings
+            .iter()
+            .any(|w| w == "3 itineraries have no duration estimate"));
     }
 
     #[test]
@@ -276,16 +333,18 @@ mod tests {
         let report = analyze_trip(&conn, trip_id).unwrap();
         assert!(report.warnings.is_empty());
         assert!(report.suggestions.is_empty());
+        assert!(report.info.is_empty());
     }
 
     #[test]
-    fn test_doctor_empty_itinerary_succeeds() {
+    fn test_doctor_empty_itinerary_reports_info() {
         let conn = test_db();
         let trip_id = add_trip(&conn, "空の旅行", None, None).unwrap();
 
         let report = analyze_trip(&conn, trip_id).unwrap();
         assert!(report.warnings.is_empty());
         assert!(report.suggestions.is_empty());
+        assert_eq!(report.info, vec!["No itinerary found.".to_string()]);
         run_trip_doctor(&conn, trip_id).unwrap();
     }
 }

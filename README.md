@@ -303,6 +303,19 @@ Trip: Okinawa Sample Trip
 No major issues found.
 ```
 
+itinerary が0件の場合:
+
+```
+Trip Doctor
+===========
+
+Trip: Empty Trip
+
+Info
+----
+- No itinerary found.
+```
+
 点検内容:
 
 | チェック | 目安 |
@@ -310,7 +323,7 @@ No major issues found.
 | 1日の予定数 | 7件以上で warning |
 | 食事予定 | その日に `restaurant` カテゴリがなければ warning / suggestion |
 | 移動時間 | 1日合計 180分以上で warning / suggestion |
-| 所要時間 | 未設定の itinerary がある場合に warning |
+| 所要時間 | 未設定の itinerary がある場合に warning（件数付き） |
 
 検証用の実出力サンプルは [`samples/trip_doctor/`](samples/trip_doctor/) を参照してください。再生成:
 

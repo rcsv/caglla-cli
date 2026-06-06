@@ -1,5 +1,5 @@
 # trip doctor validation: empty itinerary
-# Generated: 2026-06-06T07:02:16Z
+# Generated: 2026-06-06T08:46:21Z
 #
 # itinerary 0件でもエラーにならない
 #
@@ -10,4 +10,6 @@ Trip Doctor
 
 Trip: Empty Trip
 
-No major issues found.
+Info
+----
+- No itinerary found.

@@ -1,5 +1,5 @@
 # trip doctor validation: missing duration
-# Generated: 2026-06-06T07:02:29Z
+# Generated: 2026-06-06T08:46:38Z
 #
 # duration_minutes 未設定の itinerary がある
 #
@@ -12,5 +12,5 @@ Trip: Missing Duration Trip
 
 Warnings
 --------
-- Some itineraries have no duration estimate
+- 1 itinerary has no duration estimate
 
