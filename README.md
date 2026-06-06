@@ -32,51 +32,23 @@ Caglla.Travel のコマンドライン版です。旅行の計画を、ターミ
 cargo build
 ```
 
-ビルドが成功すれば、`cargo run --` の後ろにコマンドを付けて実行できます。
+ビルドが成功すれば、`cargo run --` の後ろにコマンドを付けて実行できます。以降の例も同形式です（インストール済みの `caglla` バイナリに読み替え可能）。
 
-## 品質チェック（make check）
+## 使い方
 
-コードの整形・静的解析・テスト・ビルドをまとめて確認できます。
-
-```bash
-make check
-```
-
-内部では次のコマンドを順番に実行します。
-
-1. `cargo fmt --check` — コード整形の確認
-2. `cargo clippy -- -D warnings` — 警告なしの静的解析
-3. `cargo test` — ユニットテスト
-4. `cargo build` — ビルド
-
-その他の Make ターゲット:
-
-| コマンド | 内容 |
+| カテゴリ | 主なコマンド |
 |---|---|
-| `make test` | テストのみ実行 |
-| `make run` | `cargo run` を実行 |
-| `make clean` | ビルド成果物を削除 |
+| Trip | `trip add`, `trip list`, `trip show`, `trip update`, `trip delete` |
+| Itinerary | `itinerary add`, `itinerary list`, `itinerary show`, `itinerary update`, `itinerary delete` |
+| Checklist | `checklist add`, `checklist list`, `checklist show`, `checklist check`, `checklist uncheck` |
+| Timeline | `itinerary timeline` |
+| Stats | `trip stats` |
+| Doctor / Advisor | `trip doctor`, `trip advisor` |
+| Export / Import / Diff | `trip export`, `trip import`, `trip diff` |
+| Markdown | `trip export-md` |
+| その他 | `trip checklist-generate`, `db reset` |
 
-## JSON 出力について
-
-一部の読み取り系コマンドは `--json` オプションに対応しています。
-
-```bash
-caglla trip list --json
-caglla trip show <trip_id> --json
-caglla trip stats <trip_id> --json
-caglla itinerary list <trip_id> --json
-caglla itinerary show <itinerary_id> --json
-caglla checklist list <trip_id> --json
-caglla checklist show <checklist_id> --json
-caglla trip doctor <trip_id> --json
-```
-
-JSON 出力は、`jq` などを使った確認やスクリプト連携を想定しています。`--json` 指定時は人間向けの見出しや説明文は出さず、pretty JSON のみ stdout に出力します。
-
-なお、現時点の JSON schema は内部仕様扱いです。フィールド名や構造は、今後の開発状況に応じて変更される可能性があります。`trip doctor --json` は診断ロジックの issue 構造をそのまま反映するため、特に変更されやすい内部形式です。
-
-## データベースについて
+### DB
 
 - DB ファイル名: `caglla.db`（プロジェクト直下に作成されます）
 - 初回起動時に `trips` / `itinerary_items` テーブルが自動作成されます
@@ -95,7 +67,7 @@ cargo run -- db reset
 - テーブル定義は残す
 - ID の採番（AUTOINCREMENT）をリセット
 
-## Trip（旅行）の使い方
+### Trip
 
 ### 旅行を追加
 
@@ -117,7 +89,6 @@ cargo run -- trip list
 cargo run -- trip show 1
 cargo run -- trip list --json
 cargo run -- trip show 1 --json
-cargo run -- trip stats 1 --json
 ```
 
 ### 更新・削除
@@ -130,7 +101,58 @@ cargo run -- trip delete 1
 
 更新時は `--name` / `--start` / `--end` のうち、変更したい項目だけ指定します。
 
-### JSON エクスポート
+### Stats
+
+旅行の概要統計を表示します。
+
+```bash
+cargo run -- trip stats 1
+cargo run -- trip stats 1 --json
+```
+
+出力例:
+
+```
+Trip Stats
+==========
+
+Trip: Okinawa Sample Trip
+
+Days: 4
+
+Itineraries: 15
+
+Checklist
+---------
+Completed: 4 / 10
+
+Category Breakdown
+------------------
+flight       2
+hotel        2
+restaurant   3
+...
+
+Time Summary
+------------
+Stay Time:   22h15m
+Travel Time: 6h50m
+Total Time:  29h05m
+```
+
+集計内容:
+
+| 項目 | 説明 |
+|---|---|
+| Days | 日程が登録されている最大日目 |
+| Itineraries | 日程の件数 |
+| Checklist | 完了数 / 総数 |
+| Category Breakdown | カテゴリ別件数（未設定は `uncategorized`） |
+| Time Summary | 所要時間・移動時間・合計（`3h20m` 形式） |
+
+### Export / Import / Diff
+
+#### JSON エクスポート（trip export）
 
 旅行 1 件と、紐づく日程を JSON で出力します。将来の Web 版や Firebase / Firestore への移行を想定した形式です。
 
@@ -171,9 +193,46 @@ cargo run -- trip export 1 --output trip-1.json
 
 `itinerary_items` は一覧表示と同じく、日目・時刻・並び順でソートされた状態で出力されます。
 
-### Markdown エクスポート（旅行しおり）
+#### JSON インポート（trip import）
 
-旅行計画を Markdown 形式の「旅行しおり」として標準出力できます。
+`export` で出力した JSON を読み込み、**新しい Trip として**登録します。
+
+```bash
+cargo run -- trip import trip-1.json
+```
+
+| 動作 | 説明 |
+|---|---|
+| ID の扱い | JSON 内の `id` / `trip_id` は無視し、DB の AUTOINCREMENT で新規採番 |
+| trip_id の変換 | 日程の `trip_id` は、新しく作成された Trip の ID に置き換わる |
+| 日時 | `created_at` / `updated_at` はインポート時に新しく設定される |
+
+完了時の表示例:
+
+```
+旅行をインポートしました (ID: 2)
+  名前: 沖縄旅行
+  日程: 3 件
+```
+
+エクスポートとインポートの流れ:
+
+```bash
+cargo run -- trip export 1 --output trip-1.json
+cargo run -- trip import trip-1.json
+```
+
+#### 旅行 JSON の比較（trip diff）
+
+2 つの `trip export` JSON を比較し、Trip 名・日程の追加・削除・フィールド変更を表示します。
+
+```bash
+cargo run -- trip diff trip-old.json trip-new.json
+```
+
+### Markdown Export
+
+旅行計画を Markdown 形式の「旅行しおり」として出力します。
 
 ```bash
 cargo run -- trip export-md 1
@@ -239,55 +298,7 @@ cargo run -- trip export-md 1 > sample-trip.md
 
 手動確認用のサンプルデータ投入は [Markdown Export 確認用サンプル](#markdown-export-確認用サンプル) を参照してください。
 
-### 旅行統計（trip stats）
-
-旅行の概要統計を表示します。
-
-```bash
-cargo run -- trip stats 1
-```
-
-出力例:
-
-```
-Trip Stats
-==========
-
-Trip: Okinawa Sample Trip
-
-Days: 4
-
-Itineraries: 15
-
-Checklist
----------
-Completed: 4 / 10
-
-Category Breakdown
-------------------
-flight       2
-hotel        2
-restaurant   3
-...
-
-Time Summary
-------------
-Stay Time:   22h15m
-Travel Time: 6h50m
-Total Time:  29h05m
-```
-
-集計内容:
-
-| 項目 | 説明 |
-|---|---|
-| Days | 日程が登録されている最大日目 |
-| Itineraries | 日程の件数 |
-| Checklist | 完了数 / 総数 |
-| Category Breakdown | カテゴリ別件数（未設定は `uncategorized`） |
-| Time Summary | 所要時間・移動時間・合計（`3h20m` 形式） |
-
-### 旅行計画の点検（trip doctor）
+### Doctor
 
 旅行計画を点検し、予定の詰め込みすぎ、食事予定の不足、移動時間の長さなどを確認します。
 
@@ -355,7 +366,7 @@ Info
 bash samples/trip_doctor/generate_outputs.sh
 ```
 
-### 旅行計画の改善提案（trip advisor）
+### Advisor
 
 `trip doctor` が検出した問題に対し、ルールベースで具体的な改善提案を表示します。
 
@@ -410,36 +421,7 @@ bash samples/advisor/generate_outputs.sh
 bash samples/advisor/generate_outputs_with_commands.sh
 ```
 
-### JSON インポート
-
-`export` で出力した JSON を読み込み、**新しい Trip として**登録します。
-
-```bash
-cargo run -- trip import trip-1.json
-```
-
-| 動作 | 説明 |
-|---|---|
-| ID の扱い | JSON 内の `id` / `trip_id` は無視し、DB の AUTOINCREMENT で新規採番 |
-| trip_id の変換 | 日程の `trip_id` は、新しく作成された Trip の ID に置き換わる |
-| 日時 | `created_at` / `updated_at` はインポート時に新しく設定される |
-
-完了時の表示例:
-
-```
-旅行をインポートしました (ID: 2)
-  名前: 沖縄旅行
-  日程: 3 件
-```
-
-エクスポートとインポートの流れ:
-
-```bash
-cargo run -- trip export 1 --output trip-1.json
-cargo run -- trip import trip-1.json
-```
-
-## Itinerary（日程）の使い方
+### Itinerary
 
 日程は **Trip ID** に紐づきます。先に `trip add` で旅行を作成してください。
 
@@ -557,7 +539,7 @@ cargo run -- trip checklist-generate 1
 - 営業時間確認
 ```
 
-## Checklist（持ち物・準備リスト）の使い方
+### Checklist
 
 チェックリストは **Trip ID** に紐づきます。
 
@@ -591,7 +573,7 @@ cargo run -- checklist uncheck 2
 cargo run -- checklist delete 1
 ```
 
-## Timeline（タイムライン）の使い方
+### Timeline
 
 旅行の 1 日の流れを、時系列で見やすく表示します。
 
@@ -619,7 +601,42 @@ Day 1
 - 時刻が未設定の予定: `時刻: 未定` と表示（終了予定は表示しません）
 - 移動時間がある場合: 次の予定の前に `↓ 移動 N分` を表示
 
-## Markdown Export 確認用サンプル
+## JSON 出力について
+
+一部の read 系コマンドは `--json` に対応しています。ツール連携・自動化向けで、現時点では **内部仕様扱い** です（フィールド名・構造は将来変更される可能性があります）。`trip doctor --json` は診断 issue 構造を反映するため、特に変更されやすい形式です。
+
+`--json` 指定時は人間向けの見出しや説明文を出さず、pretty JSON のみ stdout に出力します（`trip::print_json()`）。
+
+| コマンド | 例 |
+|---|---|
+| `trip list` | `cargo run -- trip list --json` |
+| `trip show` | `cargo run -- trip show 1 --json` |
+| `trip stats` | `cargo run -- trip stats 1 --json` |
+| `trip doctor` | `cargo run -- trip doctor 1 --json` |
+| `itinerary list` | `cargo run -- itinerary list 1 --json` |
+| `itinerary show` | `cargo run -- itinerary show 1 --json` |
+| `checklist list` | `cargo run -- checklist list 1 --json` |
+| `checklist show` | `cargo run -- checklist show 1 --json` |
+
+`trip advisor --with-commands` は人間向けの Advice / Try 出力専用で、`--json` には対応していません。
+
+## 開発用コマンド
+
+### 品質チェック（make check）
+
+```bash
+make check
+```
+
+内部では `cargo fmt --check` → `cargo clippy -- -D warnings` → `cargo test` → `cargo build` を順に実行します。
+
+| コマンド | 内容 |
+|---|---|
+| `make test` | テストのみ実行 |
+| `make run` | `cargo run` を実行 |
+| `make clean` | ビルド成果物を削除 |
+
+### Markdown Export 確認用サンプル
 
 `trip export-md` / `trip stats` の見た目確認用に、4日間・日程15件・チェックリスト10件のサンプルデータを一括投入できます。
 
@@ -645,7 +662,7 @@ cargo run -- trip export-md 1 --output sample-trip.md
 
 スクリプト本体は [`samples/markdown_sample_commands.sh`](samples/markdown_sample_commands.sh) です。カテゴリは `itinerary update --category` で設定しています。
 
-## 開発用サンプルシナリオ
+### 開発用サンプルシナリオ
 
 沖縄旅行の 1 日目を登録し、タイムラインで確認する例です。  
 まず DB を空にしてから、順番に実行してください。
@@ -665,6 +682,23 @@ cargo run -- itinerary timeline 1
 cargo run -- trip list
 cargo run -- itinerary list 1
 ```
+
+## リリース履歴
+
+GitHub Release 用ノートは [`docs/releases/`](docs/releases/) にあります。
+
+| バージョン | 概要 |
+|---|---|
+| [v0.9.4](docs/releases/v0.9.4-notes.md) | Command reference polish |
+| [v0.9.3](docs/releases/v0.9.3-notes.md) | Doctor JSON output |
+| [v0.9.2](docs/releases/v0.9.2-notes.md) | Checklist JSON output |
+| [v0.9.1](docs/releases/v0.9.1-notes.md) | JSON output polish（Trip / Itinerary / Stats） |
+| [v0.9.0](docs/releases/v0.9.0-notes.md) | Structured DoctorIssue Targets |
+| [v0.8.1](docs/releases/v0.8.1-notes.md) | Advisor command hints |
+| [v0.8.0](docs/releases/v0.8.0-notes.md) | Trip Advisor |
+| [v0.7.0](docs/releases/v0.7.0-notes.md) | checklist-generate 強化 |
+| [v0.6.1](docs/releases/v0.6.1-notes.md) | trip doctor 出力改善 |
+| [v0.6.0](docs/releases/v0.6.0-notes.md) | trip doctor |
 
 ## プロジェクト構成（現時点）
 
