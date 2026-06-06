@@ -73,15 +73,17 @@ pub(crate) fn list_itinerary_items(conn: &Connection, trip_id: i64) -> Result<Ve
 
 /// ID を指定して1件の日程を取得する
 pub(crate) fn get_itinerary_item(conn: &Connection, id: i64) -> Result<ItineraryItem> {
-    conn.query_row(
-        "SELECT id, trip_id, day, title, note, start_time, sort_order,
+    crate::db::map_query_row(
+        conn.query_row(
+            "SELECT id, trip_id, day, title, note, start_time, sort_order,
                 duration_minutes, travel_minutes, location, category, created_at, updated_at
          FROM itinerary_items
          WHERE id = ?1",
-        params![id],
-        row_to_itinerary_item,
+            params![id],
+            row_to_itinerary_item,
+        ),
+        || anyhow::anyhow!("Itinerary not found: {id}"),
     )
-    .with_context(|| format!("ID {id} の日程が見つかりません"))
 }
 
 /// 日程を更新する（指定されたフィールドのみ上書き）
@@ -1101,5 +1103,15 @@ mod tests {
         assert_eq!(parsed["travel_minutes"], 20);
         assert_eq!(parsed["location"], "那覇市");
         assert_eq!(parsed["category"], "museum");
+    }
+
+    #[test]
+    fn test_get_itinerary_item_not_found() {
+        let conn = test_db();
+        let err = get_itinerary_item(&conn, 9999)
+            .err()
+            .expect("expected error");
+        assert_eq!(err.to_string(), "Itinerary not found: 9999");
+        assert!(!format!("{err:#}").contains("Query returned no rows"));
     }
 }

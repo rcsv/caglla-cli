@@ -4,6 +4,18 @@ use rusqlite::Connection;
 
 pub(crate) const DB_FILE: &str = "caglla.db";
 
+/// `query_row` の結果を変換する。行が無い場合は rusqlite の cause を残さずドメインエラーにする。
+pub(crate) fn map_query_row<T, F>(result: rusqlite::Result<T>, not_found: F) -> Result<T>
+where
+    F: FnOnce() -> anyhow::Error,
+{
+    match result {
+        Ok(value) => Ok(value),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Err(not_found()),
+        Err(err) => Err(err.into()),
+    }
+}
+
 /// 指定パスの DB に接続し、テーブルがなければ作成する
 pub(crate) fn open_db_at(path: &str) -> Result<Connection> {
     let conn = Connection::open(path)

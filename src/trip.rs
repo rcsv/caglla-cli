@@ -42,14 +42,16 @@ pub(crate) fn list_trips(conn: &Connection) -> Result<Vec<Trip>> {
 
 /// ID を指定して1件の旅行を取得する
 pub(crate) fn get_trip(conn: &Connection, id: i64) -> Result<Trip> {
-    conn.query_row(
-        "SELECT id, name, start_date, end_date, created_at, updated_at
+    crate::db::map_query_row(
+        conn.query_row(
+            "SELECT id, name, start_date, end_date, created_at, updated_at
          FROM trips
          WHERE id = ?1",
-        params![id],
-        row_to_trip,
+            params![id],
+            row_to_trip,
+        ),
+        || anyhow::anyhow!("Trip not found: {id}"),
     )
-    .with_context(|| format!("ID {id} の旅行が見つかりません"))
 }
 
 /// 旅行を更新する（指定されたフィールドのみ上書き）
@@ -566,5 +568,13 @@ mod tests {
         assert_eq!(trip.name, "沖縄・瀬底旅行");
         assert_eq!(trip.start_date.as_deref(), Some("2025-06-01"));
         assert_eq!(trip.end_date.as_deref(), Some("2025-06-07"));
+    }
+
+    #[test]
+    fn test_get_trip_not_found() {
+        let conn = test_db();
+        let err = get_trip(&conn, 9999).err().expect("expected error");
+        assert_eq!(err.to_string(), "Trip not found: 9999");
+        assert!(!format!("{err:#}").contains("Query returned no rows"));
     }
 }

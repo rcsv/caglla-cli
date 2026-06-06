@@ -178,14 +178,16 @@ pub(crate) fn list_checklist_items(conn: &Connection, trip_id: i64) -> Result<Ve
 
 /// ID を指定して1件のチェックリスト項目を取得する
 pub(crate) fn get_checklist_item(conn: &Connection, id: i64) -> Result<ChecklistItem> {
-    conn.query_row(
-        "SELECT id, trip_id, title, is_done, sort_order, created_at, updated_at
+    crate::db::map_query_row(
+        conn.query_row(
+            "SELECT id, trip_id, title, is_done, sort_order, created_at, updated_at
          FROM checklist_items
          WHERE id = ?1",
-        params![id],
-        row_to_checklist_item,
+            params![id],
+            row_to_checklist_item,
+        ),
+        || anyhow::anyhow!("Checklist item not found: {id}"),
     )
-    .with_context(|| format!("ID {id} のチェックリスト項目が見つかりません"))
 }
 
 /// チェックリスト項目を更新する（指定されたフィールドのみ上書き）
@@ -779,5 +781,15 @@ mod tests {
         assert_eq!(parsed["title"], "パスポート");
         assert_eq!(parsed["is_done"], false);
         assert_eq!(parsed["sort_order"], 5);
+    }
+
+    #[test]
+    fn test_get_checklist_item_not_found() {
+        let conn = test_db();
+        let err = get_checklist_item(&conn, 9999)
+            .err()
+            .expect("expected error");
+        assert_eq!(err.to_string(), "Checklist item not found: 9999");
+        assert!(!format!("{err:#}").contains("Query returned no rows"));
     }
 }
