@@ -1,0 +1,41 @@
+# Beach Activity Trip
+
+2026-06-03 〜 2026-06-05
+
+## Overview
+
+- Days: 1
+- Itineraries: 2
+- Checklist: 0 / 10 completed
+- Stay Time: 5h00m
+- Travel Time: 50m
+- Total Time: 5h50m
+
+## Day 1
+
+### 09:00 Morning at beach
+
+- Category: beach
+- 場所: Emerald Beach
+- 所要時間: 180分
+- 移動時間: 30分
+
+### 14:00 Snorkeling tour
+
+- Category: activity
+- 場所: Blue Cave Marina
+- 所要時間: 120分
+- 移動時間: 20分
+
+## Checklist
+
+- [ ] 水着
+- [ ] タオル
+- [ ] 日焼け止め
+- [ ] 予約確認
+- [ ] 所要時間確認
+- [ ] 服装確認
+- [ ] サンダル
+- [ ] 着替え
+- [ ] 防水バッグ
+- [ ] 酔い止め

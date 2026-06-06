@@ -229,6 +229,13 @@ pub(crate) fn print_trip_list(trips: &[Trip]) {
     println!("合計: {} 件", trips.len());
 }
 
+/// 値を pretty JSON で標準出力する
+pub(crate) fn print_json<T: serde::Serialize>(value: &T) -> Result<()> {
+    let json = serde_json::to_string_pretty(value).context("JSON の生成に失敗しました")?;
+    println!("{json}");
+    Ok(())
+}
+
 /// 旅行の詳細を表示する
 pub(crate) fn print_trip_detail(trip: &Trip) {
     println!("ID        : {}", trip.id);
@@ -502,6 +509,43 @@ mod tests {
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed["trip"]["name"], "沖縄旅行");
         assert!(parsed["itinerary_items"].is_array());
+    }
+
+    #[test]
+    fn test_print_json_empty_trip_list() {
+        let json = serde_json::to_string_pretty(&Vec::<Trip>::new()).unwrap();
+        assert_eq!(json, "[]");
+    }
+
+    #[test]
+    fn test_print_json_trip_list() {
+        let conn = test_db();
+        add_trip(&conn, "沖縄旅行", Some("2025-06-01"), Some("2025-06-05")).unwrap();
+        add_trip(&conn, "京都旅行", None, None).unwrap();
+
+        let trips = list_trips(&conn).unwrap();
+        let json = serde_json::to_string_pretty(&trips).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+        assert!(parsed.is_array());
+        assert_eq!(parsed.as_array().unwrap().len(), 2);
+        assert_eq!(parsed[0]["name"], "沖縄旅行");
+        assert_eq!(parsed[1]["name"], "京都旅行");
+    }
+
+    #[test]
+    fn test_print_json_trip_show() {
+        let conn = test_db();
+        let id = add_trip(&conn, "北海道旅行", Some("2025-08-01"), Some("2025-08-10")).unwrap();
+
+        let trip = get_trip(&conn, id).unwrap();
+        let json = serde_json::to_string_pretty(&trip).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(parsed["id"], id);
+        assert_eq!(parsed["name"], "北海道旅行");
+        assert_eq!(parsed["start_date"], "2025-08-01");
+        assert_eq!(parsed["end_date"], "2025-08-10");
     }
 
     #[test]

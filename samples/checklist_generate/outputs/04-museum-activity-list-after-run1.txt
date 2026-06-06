@@ -1,0 +1,15 @@
+# checklist-generate validation: 04-museum-activity list after run 1
+# Generated: 2026-06-06T11:12:54Z
+#
+# museum + activity: default_checklist + combination rule
+#
+# Command: cargo run -- checklist list 1
+
+旅行 ID 1 のチェックリスト:
+[ ] 1. 営業時間確認
+[ ] 2. チケット確認
+[ ] 3. 予約確認
+[ ] 4. 所要時間確認
+[ ] 5. 服装確認
+[ ] 6. 事前予約確認
+[ ] 7. 入場チケット

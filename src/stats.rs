@@ -1,11 +1,13 @@
 use std::collections::HashMap;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use rusqlite::Connection;
+use serde::Serialize;
 
 use crate::models::ItineraryCategory;
 
 /// 旅行統計の集計結果
+#[derive(Serialize)]
 pub(crate) struct TripStats {
     pub trip_name: String,
     pub days: i64,
@@ -15,11 +17,12 @@ pub(crate) struct TripStats {
     pub category_counts: HashMap<String, i64>,
     pub stay_minutes: i64,
     pub travel_minutes: i64,
+    pub total_minutes: i64,
 }
 
 impl TripStats {
     pub fn total_minutes(&self) -> i64 {
-        self.stay_minutes + self.travel_minutes
+        self.total_minutes
     }
 }
 
@@ -85,6 +88,7 @@ pub(crate) fn compute_trip_stats(conn: &Connection, trip_id: i64) -> Result<Trip
         category_counts,
         stay_minutes,
         travel_minutes,
+        total_minutes: stay_minutes + travel_minutes,
     })
 }
 
@@ -156,6 +160,12 @@ pub(crate) fn print_trip_stats(conn: &Connection, trip_id: i64) -> Result<()> {
     );
 
     Ok(())
+}
+
+/// 旅行統計を pretty JSON 文字列に変換する
+pub(crate) fn stats_to_json(conn: &Connection, trip_id: i64) -> Result<String> {
+    let stats = compute_trip_stats(conn, trip_id)?;
+    serde_json::to_string_pretty(&stats).context("JSON の生成に失敗しました")
 }
 
 #[cfg(test)]
@@ -339,7 +349,44 @@ mod tests {
         let stats = compute_trip_stats(&conn, trip_id).unwrap();
         assert_eq!(stats.travel_minutes, 65);
         assert_eq!(format_minutes_duration(stats.travel_minutes), "1h05m");
+        assert_eq!(stats.total_minutes, 65);
         assert_eq!(stats.total_minutes(), 65);
+    }
+
+    #[test]
+    fn test_stats_to_json() {
+        let conn = test_db();
+        let trip_id = add_trip(&conn, "沖縄旅行", None, None).unwrap();
+        crate::itinerary::add_itinerary_item(
+            &conn,
+            trip_id,
+            1,
+            "首里城",
+            None,
+            None,
+            None,
+            Some(90),
+            Some(20),
+            None,
+            Some(ItineraryCategory::Activity),
+        )
+        .unwrap();
+        let checklist_id =
+            crate::checklist::add_checklist_item(&conn, trip_id, "パスポート").unwrap();
+        crate::checklist::set_checklist_done(&conn, checklist_id, true).unwrap();
+
+        let json = stats_to_json(&conn, trip_id).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(parsed["trip_name"], "沖縄旅行");
+        assert_eq!(parsed["days"], 1);
+        assert_eq!(parsed["itinerary_count"], 1);
+        assert_eq!(parsed["checklist_total"], 1);
+        assert_eq!(parsed["checklist_completed"], 1);
+        assert_eq!(parsed["category_counts"]["activity"], 1);
+        assert_eq!(parsed["stay_minutes"], 90);
+        assert_eq!(parsed["travel_minutes"], 20);
+        assert_eq!(parsed["total_minutes"], 110);
     }
 
     #[test]
@@ -352,6 +399,7 @@ mod tests {
         assert_eq!(stats.days, 0);
         assert_eq!(stats.stay_minutes, 0);
         assert_eq!(stats.travel_minutes, 0);
+        assert_eq!(stats.total_minutes, 0);
         assert_eq!(stats.checklist_total, 0);
         assert!(stats.category_counts.is_empty());
 

@@ -1010,4 +1010,96 @@ mod tests {
         assert_eq!(item.start_time.as_deref(), Some("09:30"));
         assert_eq!(item.sort_order, 5);
     }
+
+    #[test]
+    fn test_itinerary_list_json_empty() {
+        let conn = test_db();
+        let trip_id = add_trip(&conn, "沖縄旅行", None, None).unwrap();
+
+        let items = list_itinerary_items(&conn, trip_id).unwrap();
+        let json = serde_json::to_string_pretty(&items).unwrap();
+
+        assert_eq!(json, "[]");
+    }
+
+    #[test]
+    fn test_itinerary_list_json() {
+        let conn = test_db();
+        let trip_id = add_trip(&conn, "沖縄旅行", None, None).unwrap();
+        add_itinerary_item(
+            &conn,
+            trip_id,
+            1,
+            "首里城",
+            None,
+            Some("09:00"),
+            None,
+            Some(90),
+            Some(20),
+            Some("那覇市"),
+            Some(ItineraryCategory::Activity),
+        )
+        .unwrap();
+        add_itinerary_item(
+            &conn,
+            trip_id,
+            2,
+            "美ら海",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let items = list_itinerary_items(&conn, trip_id).unwrap();
+        let json = serde_json::to_string_pretty(&items).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+        assert!(parsed.is_array());
+        assert_eq!(parsed.as_array().unwrap().len(), 2);
+        assert_eq!(parsed[0]["title"], "首里城");
+        assert_eq!(parsed[0]["category"], "activity");
+        assert_eq!(parsed[1]["title"], "美ら海");
+        assert!(parsed[1].get("category").is_none());
+    }
+
+    #[test]
+    fn test_itinerary_show_json() {
+        let conn = test_db();
+        let trip_id = add_trip(&conn, "沖縄旅行", None, None).unwrap();
+        let id = add_itinerary_item(
+            &conn,
+            trip_id,
+            1,
+            "首里城",
+            Some("見学"),
+            Some("09:00"),
+            Some(1),
+            Some(90),
+            Some(20),
+            Some("那覇市"),
+            Some(ItineraryCategory::Museum),
+        )
+        .unwrap();
+
+        let item = get_itinerary_item(&conn, id).unwrap();
+        let json = serde_json::to_string_pretty(&item).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(parsed["id"], id);
+        assert_eq!(parsed["trip_id"], trip_id);
+        assert_eq!(parsed["day"], 1);
+        assert_eq!(parsed["title"], "首里城");
+        assert_eq!(parsed["note"], "見学");
+        assert_eq!(parsed["start_time"], "09:00");
+        assert_eq!(parsed["sort_order"], 1);
+        assert_eq!(parsed["duration_minutes"], 90);
+        assert_eq!(parsed["travel_minutes"], 20);
+        assert_eq!(parsed["location"], "那覇市");
+        assert_eq!(parsed["category"], "museum");
+    }
 }

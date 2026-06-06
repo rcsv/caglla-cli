@@ -57,6 +57,22 @@ make check
 | `make run` | `cargo run` を実行 |
 | `make clean` | ビルド成果物を削除 |
 
+## JSON 出力について
+
+一部の読み取り系コマンドは `--json` オプションに対応しています。
+
+```bash
+caglla trip list --json
+caglla trip show <trip_id> --json
+caglla trip stats <trip_id> --json
+caglla itinerary list <trip_id> --json
+caglla itinerary show <itinerary_id> --json
+```
+
+JSON 出力は、`jq` などを使った確認やスクリプト連携を想定しています。
+
+なお、現時点の JSON schema は内部仕様扱いです。フィールド名や構造は、今後の開発状況に応じて変更される可能性があります。
+
 ## データベースについて
 
 - DB ファイル名: `caglla.db`（プロジェクト直下に作成されます）
@@ -96,6 +112,8 @@ cargo run -- trip add "京都旅行" --start 2026-05-01 --end 2026-05-03
 ```bash
 cargo run -- trip list
 cargo run -- trip show 1
+cargo run -- trip list --json
+cargo run -- trip stats 1 --json
 ```
 
 ### 更新・削除
@@ -444,6 +462,8 @@ cargo run -- itinerary add 1 --day 1 "ホテルチェックイン" --order 99
 ```bash
 cargo run -- itinerary list 1
 cargo run -- itinerary show 1
+cargo run -- itinerary list 1 --json
+cargo run -- itinerary show 1 --json
 ```
 
 一覧は **日目 → 時刻 → 並び順** の順で表示されます。時刻がある予定が先、時刻未定が後です。

@@ -17,7 +17,14 @@ use clap::{Parser, Subcommand};
 // ---------------------------------------------------------------------------
 
 #[derive(Parser)]
-#[command(name = "caglla", about = "Caglla.Travel CLI - 旅行管理ツール")]
+#[command(
+    name = "caglla",
+    author,
+    version,
+    about,
+    long_about = None,
+    next_line_help = true
+)]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -67,11 +74,18 @@ enum TripAction {
         end: Option<String>,
     },
     /// 旅行一覧を表示
-    List,
+    List {
+        /// JSON 形式で出力する
+        #[arg(long)]
+        json: bool,
+    },
     /// 旅行の詳細を表示
     Show {
         /// 旅行 ID
         id: i64,
+        /// JSON 形式で出力する
+        #[arg(long)]
+        json: bool,
     },
     /// 旅行を更新
     Update {
@@ -130,6 +144,9 @@ enum TripAction {
     Stats {
         /// 旅行 ID
         trip_id: i64,
+        /// JSON 形式で出力する
+        #[arg(long)]
+        json: bool,
     },
     /// 旅行計画を点検する
     Doctor {
@@ -180,6 +197,9 @@ enum ItineraryAction {
     List {
         /// 旅行 ID
         trip_id: i64,
+        /// JSON 形式で出力する
+        #[arg(long)]
+        json: bool,
     },
     /// 旅行のタイムラインを表示
     Timeline {
@@ -190,6 +210,9 @@ enum ItineraryAction {
     Show {
         /// 日程 ID
         id: i64,
+        /// JSON 形式で出力する
+        #[arg(long)]
+        json: bool,
     },
     /// 日程を更新
     Update {
@@ -326,10 +349,14 @@ fn main() -> Result<()> {
                 println!("  場所    : {}", crate::itinerary::fmt_text(&location));
                 println!("  メモ    : {}", crate::itinerary::fmt_text(&note));
             }
-            ItineraryAction::List { trip_id } => {
+            ItineraryAction::List { trip_id, json } => {
                 let items = crate::itinerary::list_itinerary_items(&conn, trip_id)?;
-                println!("旅行 ID {trip_id} の日程:");
-                crate::itinerary::print_itinerary_list(&items);
+                if json {
+                    crate::trip::print_json(&items)?;
+                } else {
+                    println!("旅行 ID {trip_id} の日程:");
+                    crate::itinerary::print_itinerary_list(&items);
+                }
             }
             ItineraryAction::Timeline { trip_id } => {
                 let items = crate::itinerary::list_itinerary_items(&conn, trip_id)?;
@@ -338,9 +365,13 @@ fn main() -> Result<()> {
                 println!();
                 crate::itinerary::print_itinerary_timeline(&items);
             }
-            ItineraryAction::Show { id } => {
+            ItineraryAction::Show { id, json } => {
                 let item = crate::itinerary::get_itinerary_item(&conn, id)?;
-                crate::itinerary::print_itinerary_detail(&item);
+                if json {
+                    crate::trip::print_json(&item)?;
+                } else {
+                    crate::itinerary::print_itinerary_detail(&item);
+                }
             }
             ItineraryAction::Update {
                 id,
@@ -439,13 +470,21 @@ fn main() -> Result<()> {
                 println!("  開始日 : {}", crate::trip::fmt_date(&start));
                 println!("  終了日 : {}", crate::trip::fmt_date(&end));
             }
-            TripAction::List => {
+            TripAction::List { json } => {
                 let trips = crate::trip::list_trips(&conn)?;
-                crate::trip::print_trip_list(&trips);
+                if json {
+                    crate::trip::print_json(&trips)?;
+                } else {
+                    crate::trip::print_trip_list(&trips);
+                }
             }
-            TripAction::Show { id } => {
+            TripAction::Show { id, json } => {
                 let trip = crate::trip::get_trip(&conn, id)?;
-                crate::trip::print_trip_detail(&trip);
+                if json {
+                    crate::trip::print_json(&trip)?;
+                } else {
+                    crate::trip::print_trip_detail(&trip);
+                }
             }
             TripAction::Update {
                 id,
@@ -491,8 +530,13 @@ fn main() -> Result<()> {
                 let result = crate::checklist::generate_checklist_from_itinerary(&conn, id)?;
                 crate::checklist::print_checklist_generate_result(&result);
             }
-            TripAction::Stats { trip_id } => {
-                crate::stats::print_trip_stats(&conn, trip_id)?;
+            TripAction::Stats { trip_id, json } => {
+                if json {
+                    let json_output = crate::stats::stats_to_json(&conn, trip_id)?;
+                    println!("{json_output}");
+                } else {
+                    crate::stats::print_trip_stats(&conn, trip_id)?;
+                }
             }
             TripAction::Doctor { trip_id } => {
                 crate::doctor::run_trip_doctor(&conn, trip_id)?;

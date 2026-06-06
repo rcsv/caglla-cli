@@ -2,6 +2,13 @@
 name = "caglla-cli"
 version = "0.9.0"
 edition = "2021"
+description = "A local SQLite-based travel planning CLI."
+authors = ["Tomohiro Awane"]
+repository = "https://github.com/rcsv/caglla-cli"
+readme = "README.md"
+license = "MIT"
+keywords = ["travel", "cli", "sqlite", "planner"]
+categories = ["command-line-utilities"]
 
 [dependencies]
 anyhow = "1.0"

@@ -1,0 +1,19 @@
+# checklist-generate validation: 04-museum-activity run 2
+# Generated: 2026-06-06T11:12:54Z
+#
+# 2回目: 既存項目は skip される想定
+#
+# Command: cargo run -- trip checklist-generate 1
+
+チェックリストを自動生成しました
+追加: 0 件
+スキップ: 7 件
+
+スキップされた項目:
+- 営業時間確認
+- チケット確認
+- 予約確認
+- 所要時間確認
+- 服装確認
+- 事前予約確認
+- 入場チケット

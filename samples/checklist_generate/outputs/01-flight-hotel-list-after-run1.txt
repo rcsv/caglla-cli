@@ -1,0 +1,16 @@
+# checklist-generate validation: 01-flight-hotel list after run 1
+# Generated: 2026-06-06T11:12:44Z
+#
+# flight + hotel: default_checklist + combination rule
+#
+# Command: cargo run -- checklist list 1
+
+旅行 ID 1 のチェックリスト:
+[ ] 1. 航空券確認
+[ ] 2. 身分証明書確認
+[ ] 3. 空港到着時刻確認
+[ ] 4. 宿泊予約確認
+[ ] 5. チェックイン時間確認
+[ ] 6. 住所確認
+[ ] 7. 身分証明書
+[ ] 8. 充電器

@@ -1,0 +1,22 @@
+# checklist-generate validation: 03-beach-activity run 2
+# Generated: 2026-06-06T11:12:51Z
+#
+# 2回目: 既存項目は skip される想定
+#
+# Command: cargo run -- trip checklist-generate 1
+
+チェックリストを自動生成しました
+追加: 0 件
+スキップ: 10 件
+
+スキップされた項目:
+- 水着
+- タオル
+- 日焼け止め
+- 予約確認
+- 所要時間確認
+- 服装確認
+- サンダル
+- 着替え
+- 防水バッグ
+- 酔い止め

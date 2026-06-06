@@ -1,0 +1,27 @@
+# checklist-generate validation: 03-beach-activity run 1
+# Generated: 2026-06-06T11:12:50Z
+#
+# beach + activity: default_checklist + combination rule
+#
+# Command: cargo run -- trip checklist-generate 1
+
+チェックリストを自動生成しました
+追加: 10 件
+スキップ: 3 件
+
+追加された項目:
+- 水着
+- タオル
+- 日焼け止め
+- 予約確認
+- 所要時間確認
+- 服装確認
+- サンダル
+- 着替え
+- 防水バッグ
+- 酔い止め
+
+スキップされた項目:
+- 水着
+- タオル
+- 日焼け止め
