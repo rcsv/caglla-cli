@@ -7,7 +7,7 @@
 # 投入後の確認:
 #   cargo run -- trip stats 1
 #   cargo run -- trip export-md 1
-#   cargo run -- trip export-md 1 > sample-trip.md
+#   cargo run -- trip export-md 1 --output sample-trip.md
 
 set -euo pipefail
 
@@ -136,6 +136,6 @@ echo ""
 echo "確認コマンド:"
 echo "  cargo run -- trip stats 1"
 echo "  cargo run -- trip export-md 1"
-echo "  cargo run -- trip export-md 1 > sample-trip.md"
+echo "  cargo run -- trip export-md 1 --output sample-trip.md"
 echo "  cargo run -- checklist list 1"
 echo "  cargo run -- itinerary timeline 1"

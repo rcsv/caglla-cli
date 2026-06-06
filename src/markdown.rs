@@ -130,6 +130,24 @@ pub(crate) fn build_trip_markdown(conn: &Connection, trip_id: i64) -> Result<Str
     Ok(format_trip_markdown(&trip, &items, &checklist))
 }
 
+/// 旅行しおりを Markdown で出力する（ファイルまたは標準出力）
+pub(crate) fn write_trip_markdown(
+    conn: &Connection,
+    trip_id: i64,
+    output: Option<&str>,
+) -> Result<()> {
+    let markdown = build_trip_markdown(conn, trip_id)?;
+    match output {
+        Some(path) => {
+            std::fs::write(path, &markdown)
+                .with_context(|| format!("ファイル '{path}' への書き込みに失敗しました"))?;
+            println!("旅行しおりをエクスポートしました: {path}");
+        }
+        None => println!("{markdown}"),
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -377,5 +395,45 @@ mod tests {
         assert!(md.contains("- 所要時間: 60分"));
         assert!(md.contains("- 移動時間: 30分"));
         assert!(md.contains("- メモ: レンタカー受け取り"));
+    }
+
+    #[test]
+    fn test_write_trip_markdown_to_file() {
+        let conn = test_db();
+        let trip_id = add_trip(&conn, "ファイル出力テスト", None, None).unwrap();
+        add_itinerary_item(
+            &conn,
+            trip_id,
+            1,
+            "首里城",
+            None,
+            Some("09:00"),
+            Some(1),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let path =
+            std::env::temp_dir().join(format!("caglla-export-md-test-{}.md", std::process::id()));
+        let path_str = path.to_str().expect("一時ファイルパスが不正です");
+
+        write_trip_markdown(&conn, trip_id, Some(path_str)).unwrap();
+
+        let content =
+            std::fs::read_to_string(path_str).expect("書き込んだファイルの読み込みに失敗");
+        assert!(content.contains("# ファイル出力テスト"));
+        assert!(content.contains("### 09:00 首里城"));
+
+        std::fs::remove_file(path_str).ok();
+    }
+
+    #[test]
+    fn test_write_trip_markdown_none_succeeds() {
+        let conn = test_db();
+        let trip_id = add_trip(&conn, "標準出力テスト", None, None).unwrap();
+        write_trip_markdown(&conn, trip_id, None).unwrap();
     }
 }

@@ -195,6 +195,12 @@ cargo run -- trip export-md 1
 ファイルに保存する場合:
 
 ```bash
+cargo run -- trip export-md 1 --output sample-trip.md
+```
+
+シェルのリダイレクトでも保存できます。
+
+```bash
 cargo run -- trip export-md 1 > sample-trip.md
 ```
 
@@ -460,7 +466,7 @@ bash samples/markdown_sample_commands.sh
 ```bash
 cargo run -- trip stats 1
 cargo run -- trip export-md 1
-cargo run -- trip export-md 1 > sample-trip.md
+cargo run -- trip export-md 1 --output sample-trip.md
 ```
 
 スクリプト本体は [`samples/markdown_sample_commands.sh`](samples/markdown_sample_commands.sh) です。カテゴリは `itinerary update --category` で設定しています。

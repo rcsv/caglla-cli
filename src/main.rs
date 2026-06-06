@@ -102,6 +102,9 @@ enum TripAction {
     ExportMd {
         /// 旅行 ID
         id: i64,
+        /// 出力先ファイル（省略時は標準出力）
+        #[arg(long)]
+        output: Option<String>,
     },
     /// JSON ファイルから旅行データをインポート
     Import {
@@ -455,9 +458,8 @@ fn main() -> Result<()> {
             TripAction::Export { id, output } => {
                 crate::trip::write_trip_export(&conn, id, output.as_deref())?;
             }
-            TripAction::ExportMd { id } => {
-                let markdown = crate::markdown::build_trip_markdown(&conn, id)?;
-                println!("{markdown}");
+            TripAction::ExportMd { id, output } => {
+                crate::markdown::write_trip_markdown(&conn, id, output.as_deref())?;
             }
             TripAction::Import { file } => {
                 let new_id = crate::trip::import_trip_from_file(&conn, &file)?;
