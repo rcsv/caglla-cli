@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use rusqlite::{params, Connection};
 
 use crate::models::{ChecklistItem, ItineraryItem, Trip};
+use crate::stats::{format_minutes_duration, TripStats};
 
 /// Markdown 出力用に日程一覧を取得する（day → sort_order → id 順）
 pub(crate) fn list_itinerary_items_for_markdown(
@@ -86,11 +87,35 @@ pub(crate) fn format_checklist_markdown(items: &[ChecklistItem]) -> Option<Strin
     Some(format!("\n\n{}\n", lines.join("\n")))
 }
 
+/// Overview セクション（旅行統計サマリー）を Markdown に追記する
+fn append_overview_section(output: &mut String, stats: &TripStats) {
+    output.push_str("\n## Overview\n\n");
+    output.push_str(&format!("- Days: {}\n", stats.days));
+    output.push_str(&format!("- Itineraries: {}\n", stats.itinerary_count));
+    output.push_str(&format!(
+        "- Checklist: {} / {} completed\n",
+        stats.checklist_completed, stats.checklist_total
+    ));
+    output.push_str(&format!(
+        "- Stay Time: {}\n",
+        format_minutes_duration(stats.stay_minutes)
+    ));
+    output.push_str(&format!(
+        "- Travel Time: {}\n",
+        format_minutes_duration(stats.travel_minutes)
+    ));
+    output.push_str(&format!(
+        "- Total Time: {}\n",
+        format_minutes_duration(stats.total_minutes())
+    ));
+}
+
 /// 旅行と日程一覧から Markdown 文字列を組み立てる
 pub(crate) fn format_trip_markdown(
     trip: &Trip,
     items: &[ItineraryItem],
     checklist: &[ChecklistItem],
+    stats: &TripStats,
 ) -> String {
     let mut output = format!("# {}\n", trip.name);
     if let Some(dates) = format_trip_date_range(trip) {
@@ -98,6 +123,8 @@ pub(crate) fn format_trip_markdown(
         output.push_str(&dates);
         output.push('\n');
     }
+
+    append_overview_section(&mut output, stats);
 
     let mut current_day: Option<i64> = None;
     for item in items {
@@ -127,7 +154,8 @@ pub(crate) fn build_trip_markdown(conn: &Connection, trip_id: i64) -> Result<Str
     let trip = crate::trip::get_trip(conn, trip_id)?;
     let items = list_itinerary_items_for_markdown(conn, trip_id)?;
     let checklist = crate::checklist::list_checklist_items(conn, trip_id)?;
-    Ok(format_trip_markdown(&trip, &items, &checklist))
+    let stats = crate::stats::compute_trip_stats(conn, trip_id)?;
+    Ok(format_trip_markdown(&trip, &items, &checklist, &stats))
 }
 
 /// 旅行しおりを Markdown で出力する（ファイルまたは標準出力）
@@ -395,6 +423,68 @@ mod tests {
         assert!(md.contains("- 所要時間: 60分"));
         assert!(md.contains("- 移動時間: 30分"));
         assert!(md.contains("- メモ: レンタカー受け取り"));
+    }
+
+    #[test]
+    fn test_export_md_includes_overview() {
+        let conn = test_db();
+        let trip_id = add_trip(&conn, "沖縄旅行", Some("2026-04-26"), Some("2026-04-29")).unwrap();
+        add_itinerary_item(
+            &conn,
+            trip_id,
+            1,
+            "那覇空港",
+            None,
+            Some("09:00"),
+            Some(1),
+            Some(60),
+            Some(30),
+            None,
+            None,
+        )
+        .unwrap();
+        add_itinerary_item(
+            &conn,
+            trip_id,
+            2,
+            "首里城",
+            None,
+            Some("10:00"),
+            Some(1),
+            Some(90),
+            Some(20),
+            None,
+            None,
+        )
+        .unwrap();
+        add_checklist_item(&conn, trip_id, "パスポート").unwrap();
+        let charger_id = add_checklist_item(&conn, trip_id, "充電器").unwrap();
+        set_checklist_done(&conn, charger_id, true).unwrap();
+
+        let md = build_trip_markdown(&conn, trip_id).unwrap();
+        assert!(md.contains("## Overview"));
+        assert!(md.contains("- Days: 2"));
+        assert!(md.contains("- Itineraries: 2"));
+        assert!(md.contains("- Checklist: 1 / 2 completed"));
+        assert!(md.contains("- Stay Time: 2h30m"));
+        assert!(md.contains("- Travel Time: 50m"));
+        assert!(md.contains("- Total Time: 3h20m"));
+        assert!(!md.contains("Category Breakdown"));
+        assert!(!md.contains("uncategorized"));
+
+        let overview_pos = md.find("## Overview").unwrap();
+        let day1_pos = md.find("## Day 1").unwrap();
+        assert!(overview_pos < day1_pos);
+    }
+
+    #[test]
+    fn test_export_md_overview_checklist_zero() {
+        let conn = test_db();
+        let trip_id = add_trip(&conn, "沖縄旅行", None, None).unwrap();
+
+        let md = build_trip_markdown(&conn, trip_id).unwrap();
+        assert!(md.contains("## Overview"));
+        assert!(md.contains("- Checklist: 0 / 0 completed"));
     }
 
     #[test]

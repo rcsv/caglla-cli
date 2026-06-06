@@ -162,6 +162,15 @@ cargo run -- trip export-md 1
 
 2026-04-26 〜 2026-04-29
 
+## Overview
+
+- Days: 4
+- Itineraries: 15
+- Checklist: 4 / 10 completed
+- Stay Time: 22h15m
+- Travel Time: 6h50m
+- Total Time: 29h05m
+
 ## Day 1
 
 ### 09:00 那覇空港
@@ -179,7 +188,7 @@ cargo run -- trip export-md 1
 - 所要時間: 60分
 ```
 
-日程は **日目 → 並び順（sort_order）** の順で出力されます。日程が登録されていない日目は表示されません。各 Day 見出し・予定ブロック・Checklist セクションの前後には空行が入り、読みやすさを優先しています。
+日程は **日目 → 並び順（sort_order）** の順で出力されます。日程が登録されていない日目は表示されません。冒頭の **Overview** セクションには `trip stats` と同様の集計サマリー（日数・件数・チェックリスト進捗・時間集計）が含まれます。Category Breakdown は含みません。各 Day 見出し・予定ブロック・Checklist セクションの前後には空行が入り、読みやすさを優先しています。
 
 チェックリストが登録されている場合、末尾に以下の形式で出力されます。
 

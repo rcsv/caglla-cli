@@ -1,2 +1,13 @@
 /target
 caglla.db
+
+# ルート直下の試験用 JSON（trip export などの一時ファイル）
+# 先頭 / でサブディレクトリは対象外。一般的な設定ファイルは除外する。
+/*.json
+!package.json
+!package-lock.json
+!tsconfig.json
+!jsconfig.json
+!components.json
+!.eslintrc.json
+!vercel.json
