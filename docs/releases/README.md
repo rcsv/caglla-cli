@@ -4,6 +4,7 @@ GitHub Release 用ノート一覧（新しい順）。
 
 | Version | Title | File |
 |---|---|---|
+| v0.9.5 | CI and release verification polish | [v0.9.5-notes.md](v0.9.5-notes.md) |
 | v0.9.4 | Command reference polish | [v0.9.4-notes.md](v0.9.4-notes.md) |
 | v0.9.3 | Doctor JSON output | [v0.9.3-notes.md](v0.9.3-notes.md) |
 | v0.9.2 | Checklist JSON output | [v0.9.2-notes.md](v0.9.2-notes.md) |
@@ -16,3 +17,19 @@ GitHub Release 用ノート一覧（新しい順）。
 | v0.6.0 | trip doctor | [v0.6.0-notes.md](v0.6.0-notes.md) |
 
 Legacy: [v0.6.0.md](v0.6.0.md)
+
+## Release verification
+
+Before creating a release, run:
+
+- `cargo fmt`
+- `cargo clippy -- -D warnings`
+- `cargo test`
+- `make check`
+
+After creating a release, verify:
+
+- Git tag exists
+- GitHub Release exists
+- Release notes are linked from `docs/releases/README.md`
+- Working tree is clean
