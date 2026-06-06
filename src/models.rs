@@ -13,7 +13,7 @@ pub struct Trip {
 }
 
 /// trip doctor / advisor が検出する問題種別
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 pub enum DoctorIssueCode {
     EmptyItinerary,
     OverloadedDay,
@@ -23,11 +23,28 @@ pub enum DoctorIssueCode {
 }
 
 /// trip doctor / advisor が検出した問題の対象
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum DoctorIssueTarget {
     Trip,
     Day(i64),
     Itinerary(i64),
+}
+
+/// trip doctor JSON 出力用の重要度
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DoctorIssueSeverity {
+    Info,
+    Warning,
+}
+
+/// trip doctor JSON 出力用の1件の問題
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct DoctorIssueJson {
+    pub kind: DoctorIssueCode,
+    pub severity: DoctorIssueSeverity,
+    pub message: String,
+    pub target: DoctorIssueTarget,
 }
 
 /// trip doctor / advisor が扱う1件の問題
@@ -80,6 +97,20 @@ impl DoctorIssue {
                 }
                 _ => "1 itinerary has no duration estimate".to_string(),
             },
+        }
+    }
+
+    /// JSON 出力用の表現に変換する
+    pub fn to_json(&self) -> DoctorIssueJson {
+        let severity = match self.code {
+            DoctorIssueCode::EmptyItinerary => DoctorIssueSeverity::Info,
+            _ => DoctorIssueSeverity::Warning,
+        };
+        DoctorIssueJson {
+            kind: self.code,
+            severity,
+            message: self.warning_message(),
+            target: self.target,
         }
     }
 }

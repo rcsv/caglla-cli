@@ -4,7 +4,8 @@ use anyhow::Result;
 use rusqlite::Connection;
 
 use crate::models::{
-    DoctorIssue, DoctorIssueCode, DoctorIssueTarget, ItineraryCategory, ItineraryItem,
+    DoctorIssue, DoctorIssueCode, DoctorIssueJson, DoctorIssueTarget, ItineraryCategory,
+    ItineraryItem,
 };
 
 const MAX_ITINERARIES_PER_DAY: usize = 7;
@@ -163,8 +164,23 @@ pub(crate) fn analyze_trip(conn: &Connection, trip_id: i64) -> Result<DoctorRepo
     Ok(issues_to_doctor_report(&issues))
 }
 
+/// 旅行計画の問題一覧を JSON 出力用に変換する
+pub(crate) fn trip_doctor_issues_json(
+    conn: &Connection,
+    trip_id: i64,
+) -> Result<Vec<DoctorIssueJson>> {
+    let issues = analyze_trip_issues(conn, trip_id)?;
+    Ok(issues.iter().map(DoctorIssue::to_json).collect())
+}
+
 /// 旅行計画の点検結果を表示する
-pub(crate) fn run_trip_doctor(conn: &Connection, trip_id: i64) -> Result<()> {
+pub(crate) fn run_trip_doctor(conn: &Connection, trip_id: i64, json: bool) -> Result<()> {
+    if json {
+        let json_issues = trip_doctor_issues_json(conn, trip_id)?;
+        crate::trip::print_json(&json_issues)?;
+        return Ok(());
+    }
+
     let trip = crate::trip::get_trip(conn, trip_id)?;
     let report = analyze_trip(conn, trip_id)?;
 
@@ -510,6 +526,134 @@ mod tests {
         let issues = analyze_trip_issues(&conn, trip_id).unwrap();
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, DoctorIssueCode::EmptyItinerary);
-        run_trip_doctor(&conn, trip_id).unwrap();
+        run_trip_doctor(&conn, trip_id, false).unwrap();
+    }
+
+    #[test]
+    fn test_trip_doctor_json_clean() {
+        let conn = test_db();
+        let trip_id = add_trip(&conn, "問題なし旅行", None, None).unwrap();
+        add_itinerary_item(
+            &conn,
+            trip_id,
+            1,
+            "昼食",
+            None,
+            None,
+            Some(1),
+            Some(60),
+            Some(30),
+            None,
+            Some(ItineraryCategory::Restaurant),
+        )
+        .unwrap();
+
+        let json_issues = trip_doctor_issues_json(&conn, trip_id).unwrap();
+        let json = serde_json::to_string_pretty(&json_issues).unwrap();
+
+        assert_eq!(json, "[]");
+    }
+
+    #[test]
+    fn test_trip_doctor_json_missing_duration() {
+        let conn = test_db();
+        let trip_id = add_trip(&conn, "時間未設定旅行", None, None).unwrap();
+        add_itinerary_item(
+            &conn,
+            trip_id,
+            1,
+            "散歩",
+            None,
+            None,
+            Some(1),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let json_issues = trip_doctor_issues_json(&conn, trip_id).unwrap();
+        let json = serde_json::to_string_pretty(&json_issues).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+        let missing = json_issues
+            .iter()
+            .find(|issue| issue.kind == DoctorIssueCode::MissingDuration)
+            .expect("missing duration json issue");
+        assert_eq!(
+            missing.severity,
+            crate::models::DoctorIssueSeverity::Warning
+        );
+        assert!(matches!(missing.target, DoctorIssueTarget::Itinerary(_)));
+
+        assert!(parsed.is_array());
+        assert!(parsed
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|issue| issue["kind"] == "MissingDuration"));
+        assert!(parsed
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|issue| issue.get("target").is_some()));
+    }
+
+    #[test]
+    fn test_trip_doctor_json_combined_issues() {
+        let conn = test_db();
+        let trip_id = add_trip(&conn, "複合問題旅行", None, None).unwrap();
+
+        for i in 0..8 {
+            add_itinerary_item(
+                &conn,
+                trip_id,
+                1,
+                &format!("Activity {i}"),
+                None,
+                None,
+                Some(i),
+                Some(30),
+                Some(25),
+                None,
+                Some(ItineraryCategory::Activity),
+            )
+            .unwrap();
+        }
+        add_itinerary_item(
+            &conn,
+            trip_id,
+            2,
+            "Free time",
+            None,
+            None,
+            Some(1),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let json_issues = trip_doctor_issues_json(&conn, trip_id).unwrap();
+        let json = serde_json::to_string_pretty(&json_issues).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+        assert!(json_issues.len() >= 3);
+        assert!(json_issues
+            .iter()
+            .any(|issue| issue.kind == DoctorIssueCode::OverloadedDay));
+        assert!(json_issues
+            .iter()
+            .any(|issue| issue.kind == DoctorIssueCode::NoRestaurant));
+        assert!(json_issues
+            .iter()
+            .any(|issue| issue.kind == DoctorIssueCode::HighTravelTime));
+        assert!(json_issues
+            .iter()
+            .any(|issue| issue.kind == DoctorIssueCode::MissingDuration));
+        assert!(parsed.is_array());
+        assert!(parsed.as_array().unwrap().len() >= 3);
     }
 }

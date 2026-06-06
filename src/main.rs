@@ -152,6 +152,9 @@ enum TripAction {
     Doctor {
         /// 旅行 ID
         trip_id: i64,
+        /// JSON 形式で出力
+        #[arg(long)]
+        json: bool,
     },
     /// 旅行計画の改善提案を表示する
     Advisor {
@@ -552,8 +555,8 @@ fn main() -> Result<()> {
                     crate::stats::print_trip_stats(&conn, trip_id)?;
                 }
             }
-            TripAction::Doctor { trip_id } => {
-                crate::doctor::run_trip_doctor(&conn, trip_id)?;
+            TripAction::Doctor { trip_id, json } => {
+                crate::doctor::run_trip_doctor(&conn, trip_id, json)?;
             }
             TripAction::Advisor {
                 trip_id,

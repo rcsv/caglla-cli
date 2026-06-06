@@ -69,11 +69,12 @@ caglla itinerary list <trip_id> --json
 caglla itinerary show <itinerary_id> --json
 caglla checklist list <trip_id> --json
 caglla checklist show <checklist_id> --json
+caglla trip doctor <trip_id> --json
 ```
 
 JSON 出力は、`jq` などを使った確認やスクリプト連携を想定しています。`--json` 指定時は人間向けの見出しや説明文は出さず、pretty JSON のみ stdout に出力します。
 
-なお、現時点の JSON schema は内部仕様扱いです。フィールド名や構造は、今後の開発状況に応じて変更される可能性があります。
+なお、現時点の JSON schema は内部仕様扱いです。フィールド名や構造は、今後の開発状況に応じて変更される可能性があります。`trip doctor --json` は診断ロジックの issue 構造をそのまま反映するため、特に変更されやすい内部形式です。
 
 ## データベースについて
 
@@ -292,6 +293,7 @@ Total Time:  29h05m
 
 ```bash
 cargo run -- trip doctor 1
+cargo run -- trip doctor 1 --json
 ```
 
 出力例:
