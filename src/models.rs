@@ -304,9 +304,18 @@ pub struct ChecklistItem {
     pub updated_at: String,
 }
 
+/// trip export 用 JSON の schema バージョン
+pub const TRIP_EXPORT_SCHEMA_VERSION: i32 = 1;
+
 /// trip export 用の JSON 構造
 #[derive(Serialize, Deserialize)]
 pub struct TripExport {
+    /// export 時に付与。旧フォーマット import では省略される。
+    #[serde(default)]
+    pub schema_version: Option<i32>,
+    /// export 実行時刻（RFC3339）。旧フォーマット import では省略される。
+    #[serde(default)]
+    pub exported_at: Option<String>,
     pub trip: Trip,
     pub itinerary_items: Vec<ItineraryItem>,
     /// 旧フォーマットでは省略可能。省略時は空配列として扱う。

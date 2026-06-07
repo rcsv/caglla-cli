@@ -1,8 +1,9 @@
 use anyhow::{Context, Result};
+use chrono::Utc;
 use rusqlite::{params, Connection};
 
 use crate::db::now_string;
-use crate::models::{Trip, TripExport};
+use crate::models::{Trip, TripExport, TRIP_EXPORT_SCHEMA_VERSION};
 
 /// 新しい旅行を追加する
 pub(crate) fn add_trip(
@@ -95,15 +96,28 @@ pub(crate) fn build_trip_export(conn: &Connection, trip_id: i64) -> Result<TripE
     let itinerary_items = crate::itinerary::list_itinerary_items(conn, trip_id)?;
     let checklist_items = crate::checklist::list_checklist_items(conn, trip_id)?;
     Ok(TripExport {
+        schema_version: None,
+        exported_at: None,
         trip,
         itinerary_items,
         checklist_items: Some(checklist_items),
     })
 }
 
+fn export_timestamp_rfc3339() -> String {
+    Utc::now().to_rfc3339()
+}
+
+/// export 用 JSON にメタデータを付与する
+fn finalize_trip_export(mut export: TripExport) -> TripExport {
+    export.schema_version = Some(TRIP_EXPORT_SCHEMA_VERSION);
+    export.exported_at = Some(export_timestamp_rfc3339());
+    export
+}
+
 /// 旅行データを pretty JSON 文字列に変換する
 pub(crate) fn export_trip_to_json(conn: &Connection, trip_id: i64) -> Result<String> {
-    let export = build_trip_export(conn, trip_id)?;
+    let export = finalize_trip_export(build_trip_export(conn, trip_id)?);
     serde_json::to_string_pretty(&export).context("JSON の生成に失敗しました")
 }
 
@@ -784,6 +798,103 @@ mod tests {
             checklist_sem(parsed_before.checklist_items()),
             checklist_sem(parsed_after.checklist_items())
         );
+    }
+
+    #[test]
+    fn test_export_includes_schema_version() {
+        let conn = test_db();
+        let trip_id = add_trip(&conn, "Metadata Trip", None, None).unwrap();
+
+        let json = export_trip_to_json(&conn, trip_id).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert!(parsed.get("schema_version").is_some());
+    }
+
+    #[test]
+    fn test_export_includes_exported_at() {
+        let conn = test_db();
+        let trip_id = add_trip(&conn, "Metadata Trip", None, None).unwrap();
+
+        let json = export_trip_to_json(&conn, trip_id).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert!(parsed.get("exported_at").is_some());
+    }
+
+    #[test]
+    fn test_export_schema_version_is_one() {
+        let conn = test_db();
+        let trip_id = add_trip(&conn, "Metadata Trip", None, None).unwrap();
+
+        let json = export_trip_to_json(&conn, trip_id).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed["schema_version"], 1);
+    }
+
+    #[test]
+    fn test_exported_at_parses_as_rfc3339() {
+        let conn = test_db();
+        let trip_id = add_trip(&conn, "Metadata Trip", None, None).unwrap();
+
+        let json = export_trip_to_json(&conn, trip_id).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        let exported_at = parsed["exported_at"].as_str().expect("exported_at string");
+        chrono::DateTime::parse_from_rfc3339(exported_at).expect("valid RFC3339 timestamp");
+    }
+
+    #[test]
+    fn test_import_new_format_with_metadata() {
+        let conn = test_db();
+        let json = r#"{
+            "schema_version": 1,
+            "exported_at": "2026-06-07T00:00:00Z",
+            "trip": {
+                "id": 1,
+                "name": "Metadata Import Trip",
+                "start_date": "2026-06-01",
+                "end_date": "2026-06-03",
+                "created_at": "2026-01-01 00:00:00",
+                "updated_at": "2026-01-01 00:00:00"
+            },
+            "itinerary_items": [],
+            "checklist_items": []
+        }"#;
+
+        let new_id = import_trip_from_json(&conn, json).unwrap();
+        let imported = get_trip(&conn, new_id).unwrap();
+        assert_eq!(imported.name, "Metadata Import Trip");
+    }
+
+    #[test]
+    fn test_import_legacy_json_without_metadata() {
+        let conn = test_db();
+        let json = r#"{
+            "trip": {
+                "id": 1,
+                "name": "Legacy With Checklist",
+                "start_date": null,
+                "end_date": null,
+                "created_at": "2026-01-01 00:00:00",
+                "updated_at": "2026-01-01 00:00:00"
+            },
+            "itinerary_items": [],
+            "checklist_items": [
+                {
+                    "id": 1,
+                    "trip_id": 1,
+                    "title": "Passport",
+                    "is_done": false,
+                    "sort_order": 0,
+                    "created_at": "2026-01-01 00:00:00",
+                    "updated_at": "2026-01-01 00:00:00"
+                }
+            ]
+        }"#;
+
+        let new_id = import_trip_from_json(&conn, json).unwrap();
+        let imported = build_trip_export(&conn, new_id).unwrap();
+        assert_eq!(imported.trip.name, "Legacy With Checklist");
+        assert_eq!(imported.checklist_items().len(), 1);
+        assert_eq!(imported.checklist_items()[0].title, "Passport");
     }
 
     #[test]

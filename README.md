@@ -202,6 +202,8 @@ Total Time:  29h05m
 
 **export / import の対象:** **Trip**、**Itinerary（`itinerary_items`）**、**Checklist（`checklist_items`）** です。`trip export` → `db reset` → `trip import` で、これら 3 種類のデータをバックアップ／リストアできます。
 
+Export JSON には **`schema_version`**（現在は `1`）と **`exported_at`**（export 実行時刻、RFC3339）が含まれます。Import は **`schema_version` / `exported_at` が無い旧形式** とも後方互換です。
+
 ```bash
 # 標準出力に表示
 cargo run -- trip export 1
@@ -214,6 +216,8 @@ cargo run -- trip export 1 --output trip-1.json
 
 ```json
 {
+  "schema_version": 1,
+  "exported_at": "2026-06-07T00:00:00Z",
   "trip": {
     "id": 1,
     "name": "沖縄旅行",
@@ -248,7 +252,12 @@ cargo run -- trip export 1 --output trip-1.json
 
 `itinerary_items` は一覧表示と同じく、日目・時刻・並び順でソートされた状態で出力されます。`checklist_items` は一覧表示と同じく、未完了 → 完了済み、同状態内では `sort_order` → `id` の順で出力されます。
 
-**旧フォーマットとの互換:** `checklist_items` が無い export JSON（v1.0.2 以前）も import できます。その場合、チェックリストは空として扱われます。
+**旧フォーマットとの互換:** Import は次の旧形式も読み込めます。
+
+| 旧形式 | 扱い |
+|---|---|
+| `schema_version` / `exported_at` なし | メタデータなしとして import（問題なし） |
+| `checklist_items` なし（v1.0.2 以前） | チェックリストは空として import |
 
 #### JSON インポート（trip import）
 
@@ -264,7 +273,8 @@ cargo run -- trip import trip-1.json
 | trip_id の変換 | 日程・チェックリストの `trip_id` は、新しく作成された Trip の ID に置き換わる |
 | 日時 | `created_at` / `updated_at` はインポート時に新しく設定される |
 | Checklist | `checklist_items` があれば復元する。省略時は空配列として扱う |
-| 旧フォーマット | `checklist_items` フィールドが無い JSON も import 可能 |
+| メタデータ | `schema_version` / `exported_at` は import 時に無視される |
+| 旧フォーマット | `checklist_items` やメタデータが無い JSON も import 可能 |
 
 **import 後の Trip ID について:** export JSON 内の `trip.id` は、import 後の DB 上の ID を保証しません（他の Trip が既にある場合、採番は 2, 3, … になることもあります）。import 完了メッセージに表示される ID（例: `旅行をインポートしました (ID: 2)`）を使ってください。確認は `trip list` や `trip show <new_id>`、`itinerary list <new_id>`、`checklist list <new_id>` で行います。export 元の Trip ID をそのまま指定しないでください。
 
