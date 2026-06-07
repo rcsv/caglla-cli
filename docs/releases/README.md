@@ -4,6 +4,7 @@ GitHub Release 用ノート一覧（新しい順）。
 
 | Version | Title | File |
 |---|---|---|
+| v1.1.0 | Itinerary day_id model | [v1.1.0-notes.md](v1.1.0-notes.md) |
 | v1.0.9 | Day model and required trip dates | [v1.0.9-notes.md](v1.0.9-notes.md) |
 | v1.0.8 | Export metadata | [v1.0.8-notes.md](v1.0.8-notes.md) |
 | v1.0.7 | Backup validation and import summary | [v1.0.7-notes.md](v1.0.7-notes.md) |
