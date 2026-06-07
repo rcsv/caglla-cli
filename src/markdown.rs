@@ -11,13 +11,12 @@ pub(crate) fn list_itinerary_items_for_markdown(
 ) -> Result<Vec<ItineraryItem>> {
     crate::trip::get_trip(conn, trip_id)?;
     let mut stmt = conn
-        .prepare(
-            "SELECT id, trip_id, day, title, note, start_time, sort_order,
-                    duration_minutes, travel_minutes, location, category, created_at, updated_at
-             FROM itinerary_items
-             WHERE trip_id = ?1
-             ORDER BY day, sort_order, id",
-        )
+        .prepare(&format!(
+            "{}
+             WHERE i.trip_id = ?1
+             ORDER BY d.day_number, i.sort_order, i.id",
+            crate::itinerary::ITINERARY_ITEM_SELECT_SQL
+        ))
         .context("日程一覧取得の準備に失敗しました")?;
 
     let items = stmt

@@ -233,7 +233,7 @@ mod tests {
     use crate::db::open_db_at;
     use crate::itinerary::add_itinerary_item;
     use crate::models::ItineraryCategory;
-    use crate::trip::add_test_trip;
+    use crate::trip::{add_test_trip, add_trip};
     use rusqlite::Connection;
 
     fn test_db() -> Connection {
@@ -379,7 +379,7 @@ mod tests {
     #[test]
     fn test_doctor_detects_high_travel_time() {
         let conn = test_db();
-        let trip_id = add_test_trip(&conn, "移動多め旅行").unwrap();
+        let trip_id = add_trip(&conn, "移動多め旅行", "2026-01-01", "2026-01-04").unwrap();
         add_itinerary_item(
             &conn,
             trip_id,

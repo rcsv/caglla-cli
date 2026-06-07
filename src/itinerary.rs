@@ -3,6 +3,12 @@ use anyhow::{Context, Result};
 use crate::models::{ItineraryCategory, ItineraryItem};
 use rusqlite::{params, Connection};
 
+pub(crate) const ITINERARY_ITEM_SELECT_SQL: &str = "
+    SELECT i.id, i.trip_id, d.day_number, i.title, i.note, i.start_time, i.sort_order,
+           i.duration_minutes, i.travel_minutes, i.location, i.category, i.created_at, i.updated_at
+    FROM itinerary_items i
+    INNER JOIN days d ON i.day_id = d.id";
+
 /// 新しい日程を追加する
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn add_itinerary_item(
@@ -22,16 +28,18 @@ pub(crate) fn add_itinerary_item(
     if let Some(t) = start_time {
         parse_time_hhmm(t)?;
     }
+    let day_id = crate::day::find_day_id_by_trip_and_day_number(conn, trip_id, day)?;
     let now = crate::db::now_string();
     let sort_order = sort_order.unwrap_or(0);
     let category = category.map(|c| c.as_str().to_string());
     conn.execute(
         "INSERT INTO itinerary_items
-         (trip_id, day, title, note, start_time, sort_order, duration_minutes, travel_minutes,
+         (trip_id, day_id, day, title, note, start_time, sort_order, duration_minutes, travel_minutes,
           location, category, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
         params![
             trip_id,
+            day_id,
             day,
             title,
             note,
@@ -53,13 +61,11 @@ pub(crate) fn add_itinerary_item(
 pub(crate) fn list_itinerary_items(conn: &Connection, trip_id: i64) -> Result<Vec<ItineraryItem>> {
     crate::trip::get_trip(conn, trip_id)?;
     let mut stmt = conn
-        .prepare(
-            "SELECT id, trip_id, day, title, note, start_time, sort_order,
-                    duration_minutes, travel_minutes, location, category, created_at, updated_at
-             FROM itinerary_items
-             WHERE trip_id = ?1
-             ORDER BY day, start_time IS NULL, start_time, sort_order, id",
-        )
+        .prepare(&format!(
+            "{ITINERARY_ITEM_SELECT_SQL}
+             WHERE i.trip_id = ?1
+             ORDER BY d.day_number, i.start_time IS NULL, i.start_time, i.sort_order, i.id"
+        ))
         .context("日程一覧取得の準備に失敗しました")?;
 
     let items = stmt
@@ -75,10 +81,7 @@ pub(crate) fn list_itinerary_items(conn: &Connection, trip_id: i64) -> Result<Ve
 pub(crate) fn get_itinerary_item(conn: &Connection, id: i64) -> Result<ItineraryItem> {
     crate::db::map_query_row(
         conn.query_row(
-            "SELECT id, trip_id, day, title, note, start_time, sort_order,
-                duration_minutes, travel_minutes, location, category, created_at, updated_at
-         FROM itinerary_items
-         WHERE id = ?1",
+            &format!("{ITINERARY_ITEM_SELECT_SQL} WHERE i.id = ?1"),
             params![id],
             row_to_itinerary_item,
         ),
@@ -118,7 +121,9 @@ pub(crate) fn update_itinerary_item(
     }
 
     let mut item = get_itinerary_item(conn, id)?;
+    let mut day_id = crate::day::find_day_id_by_trip_and_day_number(conn, item.trip_id, item.day)?;
     if let Some(d) = day {
+        day_id = crate::day::find_day_id_by_trip_and_day_number(conn, item.trip_id, d)?;
         item.day = d;
     }
     if let Some(t) = title {
@@ -153,11 +158,12 @@ pub(crate) fn update_itinerary_item(
     let category_db = item.category.map(|c| c.as_str().to_string());
     conn.execute(
         "UPDATE itinerary_items
-         SET day = ?1, title = ?2, note = ?3, start_time = ?4, sort_order = ?5,
-             duration_minutes = ?6, travel_minutes = ?7, location = ?8, category = ?9,
-             updated_at = ?10
-         WHERE id = ?11",
+         SET day_id = ?1, day = ?2, title = ?3, note = ?4, start_time = ?5, sort_order = ?6,
+             duration_minutes = ?7, travel_minutes = ?8, location = ?9, category = ?10,
+             updated_at = ?11
+         WHERE id = ?12",
         params![
+            day_id,
             item.day,
             item.title,
             item.note,
@@ -406,6 +412,37 @@ mod tests {
         assert_eq!(item.title, "首里城");
         assert_eq!(item.note.as_deref(), Some("午前"));
         assert_eq!(item.sort_order, 0);
+
+        let day_id: i64 = conn
+            .query_row(
+                "SELECT day_id FROM itinerary_items WHERE id = ?1",
+                rusqlite::params![id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let expected_day_id =
+            crate::day::find_day_id_by_trip_and_day_number(&conn, trip_id, 1).unwrap();
+        assert_eq!(day_id, expected_day_id);
+    }
+
+    #[test]
+    fn test_add_itinerary_item_rejects_day_outside_trip_range() {
+        let conn = test_db();
+        let trip_id = add_test_trip(&conn, "Short Trip").unwrap();
+        assert!(add_itinerary_item(
+            &conn,
+            trip_id,
+            99,
+            "Out of range",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .is_err());
     }
 
     #[test]
@@ -857,6 +894,17 @@ mod tests {
         assert_eq!(item.day, 2);
         assert_eq!(item.title, "美ら海水族館");
         assert_eq!(item.note.as_deref(), Some("終日"));
+
+        let day_id: i64 = conn
+            .query_row(
+                "SELECT day_id FROM itinerary_items WHERE id = ?1",
+                rusqlite::params![id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let expected_day_id =
+            crate::day::find_day_id_by_trip_and_day_number(&conn, trip_id, 2).unwrap();
+        assert_eq!(day_id, expected_day_id);
     }
 
     #[test]

@@ -96,6 +96,34 @@ pub(crate) fn init_db(conn: &Connection) -> Result<()> {
     .context("days テーブルの作成に失敗しました")?;
     migrate_itinerary_items(conn)?;
     migrate_days(conn)?;
+    migrate_itinerary_day_id(conn)?;
+    migrate_indexes(conn)?;
+    Ok(())
+}
+
+fn create_index_if_not_exists(conn: &Connection, name: &str, sql: &str) -> Result<()> {
+    conn.execute(sql, [])
+        .with_context(|| format!("インデックス '{name}' の作成に失敗しました"))?;
+    Ok(())
+}
+
+/// 推奨インデックスを作成する（既にある場合は何もしない）
+pub(crate) fn migrate_indexes(conn: &Connection) -> Result<()> {
+    create_index_if_not_exists(
+        conn,
+        "idx_itinerary_items_day_id",
+        "CREATE INDEX IF NOT EXISTS idx_itinerary_items_day_id ON itinerary_items(day_id)",
+    )?;
+    create_index_if_not_exists(
+        conn,
+        "idx_itinerary_items_trip_id",
+        "CREATE INDEX IF NOT EXISTS idx_itinerary_items_trip_id ON itinerary_items(trip_id)",
+    )?;
+    create_index_if_not_exists(
+        conn,
+        "idx_days_trip_day_number",
+        "CREATE INDEX IF NOT EXISTS idx_days_trip_day_number ON days(trip_id, day_number)",
+    )?;
     Ok(())
 }
 
@@ -126,6 +154,37 @@ fn add_column_if_not_exists(
 /// 既存 DB 向け: Trip ごとに Day 行を backfill する
 pub(crate) fn migrate_days(conn: &Connection) -> Result<()> {
     crate::day::migrate_days(conn)
+}
+
+/// 既存 DB 向け: itinerary_items.day_id を backfill する
+pub(crate) fn migrate_itinerary_day_id(conn: &Connection) -> Result<()> {
+    add_column_if_not_exists(
+        conn,
+        "itinerary_items",
+        "day_id",
+        "INTEGER REFERENCES days(id)",
+    )?;
+    conn.execute(
+        "UPDATE itinerary_items
+         SET day_id = (
+           SELECT d.id FROM days d
+           WHERE d.trip_id = itinerary_items.trip_id
+             AND d.day_number = itinerary_items.day
+         )
+         WHERE day_id IS NULL",
+        [],
+    )
+    .context("itinerary_items.day_id の backfill に失敗しました")?;
+
+    let unresolved: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM itinerary_items WHERE day_id IS NULL",
+        [],
+        |row| row.get(0),
+    )?;
+    if unresolved > 0 {
+        anyhow::bail!("itinerary_items.day_id の backfill が未完了です（{unresolved} 件）");
+    }
+    Ok(())
 }
 
 /// 既存 DB 向け: itinerary_items に不足している列を追加する
@@ -177,7 +236,7 @@ mod tests {
     use crate::db::{init_db, migrate_itinerary_items, open_db_at, reset_db};
     use crate::itinerary::add_itinerary_item;
     use crate::trip::{add_test_trip, list_trips};
-    use rusqlite::Connection;
+    use rusqlite::{params, Connection};
 
     fn test_db() -> Connection {
         open_db_at(":memory:").expect("インメモリ DB の作成に失敗")
@@ -266,6 +325,139 @@ mod tests {
         assert!(columns.contains(&"travel_minutes".to_string()));
         assert!(columns.contains(&"location".to_string()));
         assert!(columns.contains(&"category".to_string()));
+    }
+
+    #[test]
+    fn test_migrate_itinerary_day_id_backfills_from_day_number() {
+        let conn = Connection::open(":memory:").unwrap();
+        init_db(&conn).unwrap();
+        let trip_id = add_test_trip(&conn, "Migrate Day Id Trip").unwrap();
+        add_itinerary_item(
+            &conn, trip_id, 2, "Activity", None, None, None, None, None, None, None,
+        )
+        .unwrap();
+
+        let day_id: i64 = conn
+            .query_row(
+                "SELECT day_id FROM itinerary_items WHERE trip_id = ?1",
+                params![trip_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let expected_day_id: i64 = conn
+            .query_row(
+                "SELECT id FROM days WHERE trip_id = ?1 AND day_number = 2",
+                params![trip_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(day_id, expected_day_id);
+    }
+
+    #[test]
+    fn test_migrate_itinerary_day_id_from_legacy_schema() {
+        let conn = Connection::open(":memory:").unwrap();
+        conn.execute_batch("PRAGMA foreign_keys = ON").unwrap();
+        let now = crate::db::now_string();
+        conn.execute(
+            "CREATE TABLE trips (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                start_date TEXT,
+                end_date TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "CREATE TABLE days (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                trip_id INTEGER NOT NULL,
+                day_number INTEGER NOT NULL,
+                title TEXT NOT NULL DEFAULT '',
+                description TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(trip_id, day_number)
+            )",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "CREATE TABLE itinerary_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                trip_id INTEGER NOT NULL,
+                day INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                note TEXT,
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO trips (name, start_date, end_date, created_at, updated_at)
+             VALUES ('Legacy Trip', '2026-01-01', '2026-01-03', ?1, ?1)",
+            params![&now],
+        )
+        .unwrap();
+        let trip_id = conn.last_insert_rowid();
+        for day_number in 1..=3 {
+            conn.execute(
+                "INSERT INTO days (trip_id, day_number, title, created_at, updated_at)
+                 VALUES (?1, ?2, '', ?3, ?3)",
+                params![trip_id, day_number, &now],
+            )
+            .unwrap();
+        }
+        conn.execute(
+            "INSERT INTO itinerary_items (trip_id, day, title, sort_order, created_at, updated_at)
+             VALUES (?1, 2, 'Legacy Item', 0, ?2, ?2)",
+            params![trip_id, &now],
+        )
+        .unwrap();
+
+        migrate_itinerary_day_id(&conn).unwrap();
+
+        let day_id: i64 = conn
+            .query_row(
+                "SELECT day_id FROM itinerary_items WHERE trip_id = ?1",
+                params![trip_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let expected_day_id: i64 = conn
+            .query_row(
+                "SELECT id FROM days WHERE trip_id = ?1 AND day_number = 2",
+                params![trip_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(day_id, expected_day_id);
+    }
+
+    #[test]
+    fn test_migrate_indexes_creates_recommended_indexes() {
+        let conn = test_db();
+        for name in [
+            "idx_itinerary_items_day_id",
+            "idx_itinerary_items_trip_id",
+            "idx_days_trip_day_number",
+        ] {
+            let count: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM sqlite_master
+                     WHERE type = 'index' AND name = ?1",
+                    params![name],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(count, 1, "missing index {name}");
+        }
     }
 
     #[test]

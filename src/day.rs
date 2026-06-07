@@ -60,7 +60,7 @@ pub(crate) fn sync_days_to_trip_duration(
     }
     if new_count < current_max {
         for day_number in (new_count + 1..=current_max).rev() {
-            let day = get_day_by_number(conn, trip_id, day_number)?;
+            let day = find_day_by_trip_and_day_number(conn, trip_id, day_number)?;
             if day_has_itinerary(conn, trip_id, day_number)? {
                 anyhow::bail!("Day {day_number} に日程があるため、旅行期間を短縮できません");
             }
@@ -89,8 +89,12 @@ fn max_day_number(conn: &Connection, trip_id: i64) -> Result<i64> {
         .unwrap_or(0))
 }
 
-/// day_number を指定して Day を取得する
-pub(crate) fn get_day_by_number(conn: &Connection, trip_id: i64, day_number: i64) -> Result<Day> {
+/// trip_id + day_number から Day を取得する
+pub(crate) fn find_day_by_trip_and_day_number(
+    conn: &Connection,
+    trip_id: i64,
+    day_number: i64,
+) -> Result<Day> {
     crate::db::map_query_row(
         conn.query_row(
             "SELECT id, trip_id, day_number, title, description, created_at, updated_at
@@ -100,6 +104,15 @@ pub(crate) fn get_day_by_number(conn: &Connection, trip_id: i64, day_number: i64
         ),
         || anyhow::anyhow!("Day not found: trip {trip_id} day {day_number}"),
     )
+}
+
+/// trip_id + day_number から Day ID を取得する（Trip 期間外はエラー）
+pub(crate) fn find_day_id_by_trip_and_day_number(
+    conn: &Connection,
+    trip_id: i64,
+    day_number: i64,
+) -> Result<i64> {
+    Ok(find_day_by_trip_and_day_number(conn, trip_id, day_number)?.id)
 }
 
 /// 旅行に紐づく Day 一覧を取得する
@@ -122,7 +135,10 @@ pub(crate) fn list_days(conn: &Connection, trip_id: i64) -> Result<Vec<Day>> {
 
 fn day_has_itinerary(conn: &Connection, trip_id: i64, day_number: i64) -> Result<bool> {
     let count: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM itinerary_items WHERE trip_id = ?1 AND day = ?2",
+        "SELECT COUNT(*) FROM itinerary_items
+         WHERE day_id = (
+           SELECT id FROM days WHERE trip_id = ?1 AND day_number = ?2
+         )",
         params![trip_id, day_number],
         |row| row.get(0),
     )?;

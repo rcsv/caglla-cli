@@ -771,6 +771,16 @@ mod tests {
         assert_eq!(imported.itinerary_items[1].title, "国際通り");
         for item in &imported.itinerary_items {
             assert_eq!(item.trip_id, new_id);
+            let day_id: i64 = conn
+                .query_row(
+                    "SELECT day_id FROM itinerary_items WHERE id = ?1",
+                    rusqlite::params![item.id],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            let expected_day_id =
+                crate::day::find_day_id_by_trip_and_day_number(&conn, new_id, item.day).unwrap();
+            assert_eq!(day_id, expected_day_id);
         }
         assert_ne!(new_id, trip_id);
     }
