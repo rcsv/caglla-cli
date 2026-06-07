@@ -174,6 +174,9 @@ enum TripAction {
         /// 改善提案に加えて次に試せる CLI コマンド例を表示する
         #[arg(long)]
         with_commands: bool,
+        /// JSON 形式で出力
+        #[arg(long)]
+        json: bool,
     },
 }
 
@@ -583,8 +586,9 @@ fn main() -> Result<()> {
             TripAction::Advisor {
                 trip_id,
                 with_commands,
+                json,
             } => {
-                crate::advisor::run_trip_advisor(&conn, trip_id, with_commands)?;
+                crate::advisor::run_trip_advisor(&conn, trip_id, with_commands, json)?;
             }
         },
     }

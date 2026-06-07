@@ -1,7 +1,7 @@
 use anyhow::Result;
 use rusqlite::Connection;
 
-use crate::models::{DoctorIssue, DoctorIssueCode};
+use crate::models::{AdvisorIssueJson, AdvisorReportJson, DoctorIssue, DoctorIssueCode};
 
 /// 1件の issue に対する改善提案を生成する
 pub(crate) fn generate_advice(issue: &DoctorIssue) -> Vec<String> {
@@ -27,22 +27,8 @@ pub(crate) fn generate_advice(issue: &DoctorIssue) -> Vec<String> {
     }
 }
 
-/// issue メッセージから Day N を抽出する（例: `Day 1 has no restaurant`）
-pub(crate) fn extract_day_from_message(message: &str) -> Option<i64> {
-    let rest = message.strip_prefix("Day ")?;
-    let day_str: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
-    if day_str.is_empty() {
-        return None;
-    }
-    day_str.parse().ok()
-}
-
 fn day_for_issue(issue: &DoctorIssue) -> i64 {
-    issue
-        .target_day()
-        .or_else(|| extract_day_from_message(&issue.warning_message()))
-        .filter(|&d| d > 0)
-        .unwrap_or(1)
+    issue.target_day().filter(|&d| d > 0).unwrap_or(1)
 }
 
 /// 1件の issue に対する CLI コマンド例を生成する
@@ -90,8 +76,49 @@ fn format_try_section(issue: &DoctorIssue, trip_id: i64) -> String {
     section
 }
 
+/// 旅行計画の改善提案を JSON envelope として返す
+pub(crate) fn trip_advisor_report_json(
+    conn: &Connection,
+    trip_id: i64,
+    with_commands: bool,
+) -> Result<AdvisorReportJson> {
+    crate::trip::get_trip(conn, trip_id)?;
+    let issues = crate::doctor::analyze_trip_issues(conn, trip_id)?;
+    let advisor_issues = issues
+        .iter()
+        .map(|issue| {
+            let commands = if with_commands {
+                generate_command_hints(issue, trip_id)
+            } else {
+                Vec::new()
+            };
+            AdvisorIssueJson {
+                issue: issue.to_issue_json(trip_id),
+                advice: generate_advice(issue),
+                commands,
+            }
+        })
+        .collect();
+    Ok(AdvisorReportJson::new(
+        trip_id,
+        with_commands,
+        advisor_issues,
+    ))
+}
+
 /// 旅行計画の改善提案を表示する
-pub(crate) fn run_trip_advisor(conn: &Connection, trip_id: i64, with_commands: bool) -> Result<()> {
+pub(crate) fn run_trip_advisor(
+    conn: &Connection,
+    trip_id: i64,
+    with_commands: bool,
+    json: bool,
+) -> Result<()> {
+    if json {
+        let report = trip_advisor_report_json(conn, trip_id, with_commands)?;
+        crate::trip::print_json(&report)?;
+        return Ok(());
+    }
+
     let trip = crate::trip::get_trip(conn, trip_id)?;
     let issues = crate::doctor::analyze_trip_issues(conn, trip_id)?;
 
@@ -218,31 +245,6 @@ mod advisor_tests {
     }
 
     #[test]
-    fn test_extract_day_from_message() {
-        assert_eq!(extract_day_from_message("Day 1 has no restaurant"), Some(1));
-        assert_eq!(
-            extract_day_from_message("Day 3 has high travel time (3h25m)"),
-            Some(3)
-        );
-        assert_eq!(
-            extract_day_from_message("Day 2 has many itineraries (8)"),
-            Some(2)
-        );
-        assert_eq!(
-            extract_day_from_message("Itinerary 3 has no duration estimate"),
-            None
-        );
-        assert_eq!(extract_day_from_message("No itinerary found."), None);
-    }
-
-    #[test]
-    fn test_extract_day_from_message_does_not_panic_on_unexpected_input() {
-        assert_eq!(extract_day_from_message(""), None);
-        assert_eq!(extract_day_from_message("Day has no restaurant"), None);
-        assert_eq!(extract_day_from_message("Unexpected warning"), None);
-    }
-
-    #[test]
     fn test_generate_command_hints_for_each_issue_code() {
         let trip_id = 1;
 
@@ -334,7 +336,7 @@ mod advisor_tests {
     }
 
     #[test]
-    fn test_no_restaurant_falls_back_to_message_parse_without_target_day() {
+    fn test_no_restaurant_defaults_to_day_one_without_target_day() {
         let issue = DoctorIssue {
             code: DoctorIssueCode::NoRestaurant,
             target: DoctorIssueTarget::Trip,
@@ -457,7 +459,7 @@ mod advisor_tests {
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, DoctorIssueCode::EmptyItinerary);
         assert_eq!(generate_advice(&issues[0]).len(), 1);
-        run_trip_advisor(&conn, trip_id, false).unwrap();
+        run_trip_advisor(&conn, trip_id, false, false).unwrap();
     }
 
     #[test]
@@ -528,5 +530,69 @@ mod advisor_tests {
             .suggestions
             .iter()
             .any(|s| s == "Consider adding a lunch or dinner plan to Day 3"));
+    }
+
+    #[test]
+    fn test_trip_advisor_json_clean_trip() {
+        let conn = test_db();
+        let trip_id = add_trip(&conn, "問題なし旅行", None, None).unwrap();
+        add_itinerary_item(
+            &conn,
+            trip_id,
+            1,
+            "昼食",
+            None,
+            None,
+            Some(1),
+            Some(60),
+            Some(20),
+            None,
+            Some(ItineraryCategory::Restaurant),
+        )
+        .unwrap();
+
+        let report = trip_advisor_report_json(&conn, trip_id, false).unwrap();
+        assert_eq!(
+            report.schema_version,
+            crate::models::ADVISOR_REPORT_SCHEMA_VERSION
+        );
+        assert_eq!(report.trip_id, trip_id);
+        assert!(report.issues.is_empty());
+        assert!(!report.with_commands);
+    }
+
+    #[test]
+    fn test_trip_advisor_json_includes_advice_and_optional_commands() {
+        let conn = test_db();
+        let trip_id = add_trip(&conn, "食事なし旅行", None, None).unwrap();
+        add_itinerary_item(
+            &conn,
+            trip_id,
+            2,
+            "観光",
+            None,
+            None,
+            Some(1),
+            Some(90),
+            None,
+            None,
+            Some(ItineraryCategory::Activity),
+        )
+        .unwrap();
+
+        let report = trip_advisor_report_json(&conn, trip_id, true).unwrap();
+        assert!(report.with_commands);
+        assert_eq!(report.issues.len(), 1);
+        assert_eq!(report.issues[0].issue.code, DoctorIssueCode::NoRestaurant);
+        assert!(!report.issues[0].advice.is_empty());
+        assert!(!report.issues[0].commands.is_empty());
+
+        let parsed: serde_json::Value =
+            serde_json::from_str(&serde_json::to_string_pretty(&report).unwrap()).unwrap();
+        assert_eq!(parsed["schema_version"], 1);
+        assert_eq!(parsed["issues"][0]["code"], "no_restaurant");
+        assert_eq!(parsed["issues"][0]["target"]["type"], "day");
+        assert!(parsed["issues"][0]["advice"].is_array());
+        assert!(parsed["issues"][0]["commands"].is_array());
     }
 }

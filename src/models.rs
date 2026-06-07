@@ -13,7 +13,8 @@ pub struct Trip {
 }
 
 /// trip doctor / advisor が検出する問題種別
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum DoctorIssueCode {
     EmptyItinerary,
     OverloadedDay,
@@ -22,16 +23,74 @@ pub enum DoctorIssueCode {
     MissingDuration,
 }
 
-/// trip doctor / advisor が検出した問題の対象
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+/// trip doctor / advisor が検出した問題の対象（内部モデル）
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DoctorIssueTarget {
     Trip,
     Day(i64),
     Itinerary(i64),
 }
 
+/// JSON 出力用の issue 対象種別
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum IssueTargetType {
+    Trip,
+    Day,
+    Itinerary,
+}
+
+/// JSON 出力用の issue 対象（`target.id` の意味は `type` 依存）
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct IssueTarget {
+    #[serde(rename = "type")]
+    pub target_type: IssueTargetType,
+    pub id: i64,
+}
+
+impl IssueTarget {
+    pub fn from_doctor_target(target: DoctorIssueTarget, trip_id: i64) -> Self {
+        match target {
+            DoctorIssueTarget::Trip => Self {
+                target_type: IssueTargetType::Trip,
+                id: trip_id,
+            },
+            DoctorIssueTarget::Day(day) => Self {
+                target_type: IssueTargetType::Day,
+                id: day,
+            },
+            DoctorIssueTarget::Itinerary(id) => Self {
+                target_type: IssueTargetType::Itinerary,
+                id,
+            },
+        }
+    }
+}
+
+/// JSON 出力用の issue 付加情報（`code` ごとに使用フィールドが決まる）
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct IssueDetails {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub day: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub itinerary_id: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub itinerary_count: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub travel_minutes: Option<i64>,
+}
+
+impl IssueDetails {
+    pub fn is_empty(&self) -> bool {
+        self.day.is_none()
+            && self.itinerary_id.is_none()
+            && self.itinerary_count.is_none()
+            && self.travel_minutes.is_none()
+    }
+}
+
 /// trip doctor JSON 出力用の重要度
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum DoctorIssueSeverity {
     Info,
@@ -39,12 +98,66 @@ pub enum DoctorIssueSeverity {
 }
 
 /// trip doctor JSON 出力用の1件の問題
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DoctorIssueJson {
-    pub kind: DoctorIssueCode,
+    pub code: DoctorIssueCode,
     pub severity: DoctorIssueSeverity,
     pub message: String,
-    pub target: DoctorIssueTarget,
+    pub target: IssueTarget,
+    #[serde(skip_serializing_if = "IssueDetails::is_empty")]
+    pub details: IssueDetails,
+}
+
+/// trip doctor `--json` の envelope
+pub const DOCTOR_REPORT_SCHEMA_VERSION: i32 = 1;
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DoctorReportJson {
+    pub schema_version: i32,
+    pub trip_id: i64,
+    pub issues: Vec<DoctorIssueJson>,
+}
+
+impl DoctorReportJson {
+    pub fn new(trip_id: i64, issues: Vec<DoctorIssueJson>) -> Self {
+        Self {
+            schema_version: DOCTOR_REPORT_SCHEMA_VERSION,
+            trip_id,
+            issues,
+        }
+    }
+}
+
+/// trip advisor JSON 出力用の1件（診断 + 改善提案）
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AdvisorIssueJson {
+    #[serde(flatten)]
+    pub issue: DoctorIssueJson,
+    pub advice: Vec<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub commands: Vec<String>,
+}
+
+/// trip advisor `--json` の envelope
+pub const ADVISOR_REPORT_SCHEMA_VERSION: i32 = 1;
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AdvisorReportJson {
+    pub schema_version: i32,
+    pub trip_id: i64,
+    pub with_commands: bool,
+    pub issues: Vec<AdvisorIssueJson>,
+}
+
+impl AdvisorReportJson {
+    pub fn new(trip_id: i64, with_commands: bool, issues: Vec<AdvisorIssueJson>) -> Self {
+        Self {
+            schema_version: ADVISOR_REPORT_SCHEMA_VERSION,
+            trip_id,
+            with_commands,
+            issues,
+        }
+    }
 }
 
 /// trip doctor / advisor が扱う1件の問題
@@ -100,17 +213,46 @@ impl DoctorIssue {
         }
     }
 
-    /// JSON 出力用の表現に変換する
-    pub fn to_json(&self) -> DoctorIssueJson {
-        let severity = match self.code {
+    fn issue_severity(&self) -> DoctorIssueSeverity {
+        match self.code {
             DoctorIssueCode::EmptyItinerary => DoctorIssueSeverity::Info,
             _ => DoctorIssueSeverity::Warning,
-        };
+        }
+    }
+
+    /// JSON 出力用の `details` を組み立てる
+    pub fn to_issue_details(&self) -> IssueDetails {
+        match self.code {
+            DoctorIssueCode::EmptyItinerary => IssueDetails::default(),
+            DoctorIssueCode::OverloadedDay => IssueDetails {
+                day: self.target_day(),
+                itinerary_count: self.itinerary_count,
+                ..IssueDetails::default()
+            },
+            DoctorIssueCode::NoRestaurant => IssueDetails {
+                day: self.target_day(),
+                ..IssueDetails::default()
+            },
+            DoctorIssueCode::HighTravelTime => IssueDetails {
+                day: self.target_day(),
+                travel_minutes: self.travel_minutes,
+                ..IssueDetails::default()
+            },
+            DoctorIssueCode::MissingDuration => IssueDetails {
+                itinerary_id: self.target_itinerary_id(),
+                ..IssueDetails::default()
+            },
+        }
+    }
+
+    /// JSON 出力用の表現に変換する
+    pub fn to_issue_json(&self, trip_id: i64) -> DoctorIssueJson {
         DoctorIssueJson {
-            kind: self.code,
-            severity,
+            code: self.code,
+            severity: self.issue_severity(),
             message: self.warning_message(),
-            target: self.target,
+            target: IssueTarget::from_doctor_target(self.target, trip_id),
+            details: self.to_issue_details(),
         }
     }
 }
@@ -330,7 +472,11 @@ impl TripExport {
 
 #[cfg(test)]
 mod tests {
-    use crate::models::{parse_itinerary_category, CategoryDefinition, ItineraryCategory};
+    use crate::models::{
+        parse_itinerary_category, CategoryDefinition, DoctorIssue, DoctorIssueCode,
+        DoctorIssueSeverity, DoctorIssueTarget, IssueTargetType, ItineraryCategory,
+        DOCTOR_REPORT_SCHEMA_VERSION,
+    };
 
     #[test]
     fn test_parse_invalid_itinerary_category() {
@@ -389,5 +535,86 @@ mod tests {
             assert_eq!(parsed, category);
             let _def: CategoryDefinition = parsed.definition();
         }
+    }
+
+    #[test]
+    fn test_issue_json_uses_snake_case_code_and_envelope_fields() {
+        let trip_id = 42;
+        let issue = DoctorIssue {
+            code: DoctorIssueCode::NoRestaurant,
+            target: DoctorIssueTarget::Day(3),
+            day: Some(3),
+            itinerary_count: None,
+            travel_minutes: None,
+        };
+        let json = issue.to_issue_json(trip_id);
+        assert_eq!(json.code, DoctorIssueCode::NoRestaurant);
+        assert_eq!(json.severity, DoctorIssueSeverity::Warning);
+        assert_eq!(json.target.target_type, IssueTargetType::Day);
+        assert_eq!(json.target.id, 3);
+        assert_eq!(json.details.day, Some(3));
+
+        let serialized = serde_json::to_value(&json).unwrap();
+        assert_eq!(serialized["code"], "no_restaurant");
+        assert_eq!(serialized["target"]["type"], "day");
+        assert_eq!(serialized["target"]["id"], 3);
+        assert_eq!(serialized["details"]["day"], 3);
+    }
+
+    #[test]
+    fn test_issue_json_trip_target_uses_trip_id() {
+        let issue = DoctorIssue {
+            code: DoctorIssueCode::EmptyItinerary,
+            target: DoctorIssueTarget::Trip,
+            day: None,
+            itinerary_count: None,
+            travel_minutes: None,
+        };
+        let json = issue.to_issue_json(7);
+        assert_eq!(json.target.target_type, IssueTargetType::Trip);
+        assert_eq!(json.target.id, 7);
+        assert!(json.details.is_empty());
+        assert_eq!(json.severity, DoctorIssueSeverity::Info);
+
+        let serialized = serde_json::to_value(&json).unwrap();
+        assert!(serialized.get("details").is_none());
+    }
+
+    #[test]
+    fn test_issue_json_details_for_all_codes() {
+        let overloaded = DoctorIssue {
+            code: DoctorIssueCode::OverloadedDay,
+            target: DoctorIssueTarget::Day(2),
+            day: Some(2),
+            itinerary_count: Some(8),
+            travel_minutes: None,
+        };
+        let details = overloaded.to_issue_details();
+        assert_eq!(details.day, Some(2));
+        assert_eq!(details.itinerary_count, Some(8));
+
+        let travel = DoctorIssue {
+            code: DoctorIssueCode::HighTravelTime,
+            target: DoctorIssueTarget::Day(4),
+            day: Some(4),
+            itinerary_count: None,
+            travel_minutes: Some(190),
+        };
+        let details = travel.to_issue_details();
+        assert_eq!(details.day, Some(4));
+        assert_eq!(details.travel_minutes, Some(190));
+
+        let missing = DoctorIssue {
+            code: DoctorIssueCode::MissingDuration,
+            target: DoctorIssueTarget::Itinerary(11),
+            day: None,
+            itinerary_count: None,
+            travel_minutes: None,
+        };
+        let details = missing.to_issue_details();
+        assert_eq!(details.itinerary_id, Some(11));
+
+        let report = crate::models::DoctorReportJson::new(1, vec![]);
+        assert_eq!(report.schema_version, DOCTOR_REPORT_SCHEMA_VERSION);
     }
 }

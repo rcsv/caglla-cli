@@ -4,7 +4,7 @@ use anyhow::Result;
 use rusqlite::Connection;
 
 use crate::models::{
-    DoctorIssue, DoctorIssueCode, DoctorIssueJson, DoctorIssueTarget, ItineraryCategory,
+    DoctorIssue, DoctorIssueCode, DoctorIssueTarget, DoctorReportJson, ItineraryCategory,
     ItineraryItem,
 };
 
@@ -164,20 +164,21 @@ pub(crate) fn analyze_trip(conn: &Connection, trip_id: i64) -> Result<DoctorRepo
     Ok(issues_to_doctor_report(&issues))
 }
 
-/// 旅行計画の問題一覧を JSON 出力用に変換する
-pub(crate) fn trip_doctor_issues_json(
-    conn: &Connection,
-    trip_id: i64,
-) -> Result<Vec<DoctorIssueJson>> {
+/// 旅行計画の問題一覧を JSON envelope として返す
+pub(crate) fn trip_doctor_report_json(conn: &Connection, trip_id: i64) -> Result<DoctorReportJson> {
     let issues = analyze_trip_issues(conn, trip_id)?;
-    Ok(issues.iter().map(DoctorIssue::to_json).collect())
+    let json_issues = issues
+        .iter()
+        .map(|issue| issue.to_issue_json(trip_id))
+        .collect();
+    Ok(DoctorReportJson::new(trip_id, json_issues))
 }
 
 /// 旅行計画の点検結果を表示する
 pub(crate) fn run_trip_doctor(conn: &Connection, trip_id: i64, json: bool) -> Result<()> {
     if json {
-        let json_issues = trip_doctor_issues_json(conn, trip_id)?;
-        crate::trip::print_json(&json_issues)?;
+        let report = trip_doctor_report_json(conn, trip_id)?;
+        crate::trip::print_json(&report)?;
         return Ok(());
     }
 
@@ -548,10 +549,14 @@ mod tests {
         )
         .unwrap();
 
-        let json_issues = trip_doctor_issues_json(&conn, trip_id).unwrap();
-        let json = serde_json::to_string_pretty(&json_issues).unwrap();
+        let report = trip_doctor_report_json(&conn, trip_id).unwrap();
+        let json = serde_json::to_string_pretty(&report).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
 
-        assert_eq!(json, "[]");
+        assert_eq!(report.issues.len(), 0);
+        assert_eq!(parsed["schema_version"], 1);
+        assert_eq!(parsed["trip_id"], trip_id);
+        assert_eq!(parsed["issues"], serde_json::json!([]));
     }
 
     #[test]
@@ -573,31 +578,36 @@ mod tests {
         )
         .unwrap();
 
-        let json_issues = trip_doctor_issues_json(&conn, trip_id).unwrap();
-        let json = serde_json::to_string_pretty(&json_issues).unwrap();
+        let report = trip_doctor_report_json(&conn, trip_id).unwrap();
+        let json = serde_json::to_string_pretty(&report).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
 
-        let missing = json_issues
+        let missing = report
+            .issues
             .iter()
-            .find(|issue| issue.kind == DoctorIssueCode::MissingDuration)
+            .find(|issue| issue.code == DoctorIssueCode::MissingDuration)
             .expect("missing duration json issue");
         assert_eq!(
             missing.severity,
             crate::models::DoctorIssueSeverity::Warning
         );
-        assert!(matches!(missing.target, DoctorIssueTarget::Itinerary(_)));
+        assert_eq!(
+            missing.target.target_type,
+            crate::models::IssueTargetType::Itinerary
+        );
+        assert_eq!(missing.details.itinerary_id, Some(missing.target.id));
 
-        assert!(parsed.is_array());
-        assert!(parsed
+        assert_eq!(parsed["schema_version"], 1);
+        assert!(parsed["issues"]
             .as_array()
             .unwrap()
             .iter()
-            .any(|issue| issue["kind"] == "MissingDuration"));
-        assert!(parsed
+            .any(|issue| issue["code"] == "missing_duration"));
+        assert!(parsed["issues"]
             .as_array()
             .unwrap()
             .iter()
-            .any(|issue| issue.get("target").is_some()));
+            .any(|issue| issue["target"]["type"] == "itinerary"));
     }
 
     #[test]
@@ -636,24 +646,28 @@ mod tests {
         )
         .unwrap();
 
-        let json_issues = trip_doctor_issues_json(&conn, trip_id).unwrap();
-        let json = serde_json::to_string_pretty(&json_issues).unwrap();
-        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        let report = trip_doctor_report_json(&conn, trip_id).unwrap();
+        let parsed: serde_json::Value =
+            serde_json::from_str(&serde_json::to_string_pretty(&report).unwrap()).unwrap();
 
-        assert!(json_issues.len() >= 3);
-        assert!(json_issues
+        assert!(report.issues.len() >= 3);
+        assert!(report
+            .issues
             .iter()
-            .any(|issue| issue.kind == DoctorIssueCode::OverloadedDay));
-        assert!(json_issues
+            .any(|issue| issue.code == DoctorIssueCode::OverloadedDay));
+        assert!(report
+            .issues
             .iter()
-            .any(|issue| issue.kind == DoctorIssueCode::NoRestaurant));
-        assert!(json_issues
+            .any(|issue| issue.code == DoctorIssueCode::NoRestaurant));
+        assert!(report
+            .issues
             .iter()
-            .any(|issue| issue.kind == DoctorIssueCode::HighTravelTime));
-        assert!(json_issues
+            .any(|issue| issue.code == DoctorIssueCode::HighTravelTime));
+        assert!(report
+            .issues
             .iter()
-            .any(|issue| issue.kind == DoctorIssueCode::MissingDuration));
-        assert!(parsed.is_array());
-        assert!(parsed.as_array().unwrap().len() >= 3);
+            .any(|issue| issue.code == DoctorIssueCode::MissingDuration));
+        assert_eq!(parsed["schema_version"], 1);
+        assert!(parsed["issues"].as_array().unwrap().len() >= 3);
     }
 }
