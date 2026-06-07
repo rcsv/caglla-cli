@@ -39,6 +39,10 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
+      - name: Show runner architecture
+        if: matrix.os == 'macos-latest'
+        run: uname -m
+
       - name: Build release binary
         run: cargo build --release
 
