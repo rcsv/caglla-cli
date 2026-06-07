@@ -150,12 +150,25 @@ pub(crate) fn format_trip_markdown(
 }
 
 /// 旅行しおりを Markdown 文字列として組み立てる
-pub(crate) fn build_trip_markdown(conn: &Connection, trip_id: i64) -> Result<String> {
+pub(crate) fn generate_trip_markdown(conn: &Connection, trip_id: i64) -> Result<String> {
     let trip = crate::trip::get_trip(conn, trip_id)?;
     let items = list_itinerary_items_for_markdown(conn, trip_id)?;
     let checklist = crate::checklist::list_checklist_items(conn, trip_id)?;
     let stats = crate::stats::compute_trip_stats(conn, trip_id)?;
     Ok(format_trip_markdown(&trip, &items, &checklist, &stats))
+}
+
+/// Markdown を標準出力に出力する
+pub(crate) fn print_markdown_to_stdout(markdown: &str) {
+    println!("{markdown}");
+}
+
+/// Markdown をファイルに書き込む（既存ファイルは上書き）
+pub(crate) fn write_markdown_to_file(path: &str, markdown: &str) -> Result<()> {
+    std::fs::write(path, markdown)
+        .with_context(|| format!("ファイル '{path}' への書き込みに失敗しました"))?;
+    println!("Markdown exported: {path}");
+    Ok(())
 }
 
 /// 旅行しおりを Markdown で出力する（ファイルまたは標準出力）
@@ -164,16 +177,14 @@ pub(crate) fn write_trip_markdown(
     trip_id: i64,
     output: Option<&str>,
 ) -> Result<()> {
-    let markdown = build_trip_markdown(conn, trip_id)?;
+    let markdown = generate_trip_markdown(conn, trip_id)?;
     match output {
-        Some(path) => {
-            std::fs::write(path, &markdown)
-                .with_context(|| format!("ファイル '{path}' への書き込みに失敗しました"))?;
-            println!("旅行しおりをエクスポートしました: {path}");
+        Some(path) => write_markdown_to_file(path, &markdown),
+        None => {
+            print_markdown_to_stdout(&markdown);
+            Ok(())
         }
-        None => println!("{markdown}"),
     }
-    Ok(())
 }
 
 #[cfg(test)]
@@ -238,7 +249,7 @@ mod tests {
         )
         .unwrap();
 
-        let md = build_trip_markdown(&conn, trip_id).unwrap();
+        let md = generate_trip_markdown(&conn, trip_id).unwrap();
         let day1_pos = md.find("## Day 1").unwrap();
         let day2_pos = md.find("## Day 2").unwrap();
         let first_item_pos = md.find("### 10:00 1日目").unwrap();
@@ -269,7 +280,7 @@ mod tests {
         )
         .unwrap();
 
-        let md = build_trip_markdown(&conn, trip_id).unwrap();
+        let md = generate_trip_markdown(&conn, trip_id).unwrap();
         assert!(md.contains("### Hilton Hawaiian Village"));
         assert!(md.contains("- Category: hotel"));
         assert!(md.contains("- 場所: Waikiki"));
@@ -286,7 +297,7 @@ mod tests {
         let charger_id = add_checklist_item(&conn, trip_id, "充電器").unwrap();
         set_checklist_done(&conn, charger_id, true).unwrap();
 
-        let md = build_trip_markdown(&conn, trip_id).unwrap();
+        let md = generate_trip_markdown(&conn, trip_id).unwrap();
         assert!(md.contains("## Checklist"));
         assert!(md.contains("- [ ] パスポート"));
         assert!(md.contains("- [x] 充電器"));
@@ -303,7 +314,7 @@ mod tests {
         let conn = test_db();
         let trip_id = add_trip(&conn, "沖縄旅行", None, None).unwrap();
 
-        let md = build_trip_markdown(&conn, trip_id).unwrap();
+        let md = generate_trip_markdown(&conn, trip_id).unwrap();
         assert!(!md.contains("## Checklist"));
     }
     #[test]
@@ -325,7 +336,7 @@ mod tests {
         )
         .unwrap();
 
-        let md = build_trip_markdown(&conn, trip_id).unwrap();
+        let md = generate_trip_markdown(&conn, trip_id).unwrap();
         assert!(!md.contains("- Category:"));
     }
 
@@ -348,7 +359,7 @@ mod tests {
         )
         .unwrap();
 
-        let md = build_trip_markdown(&conn, trip_id).unwrap();
+        let md = generate_trip_markdown(&conn, trip_id).unwrap();
         assert!(md.contains("### 散歩"));
         assert!(!md.contains("- 場所:"));
         assert!(!md.contains("- 所要時間:"));
@@ -389,7 +400,7 @@ mod tests {
         )
         .unwrap();
 
-        let md = build_trip_markdown(&conn, trip_id).unwrap();
+        let md = generate_trip_markdown(&conn, trip_id).unwrap();
         assert!(md.contains("### 08:00 朝食"));
         assert!(md.contains("### 自由時間"));
         assert!(!md.contains("### 自由時間 自由時間"));
@@ -414,7 +425,7 @@ mod tests {
         )
         .unwrap();
 
-        let md = build_trip_markdown(&conn, trip_id).unwrap();
+        let md = generate_trip_markdown(&conn, trip_id).unwrap();
         assert!(md.contains("# 沖縄旅行"));
         assert!(md.contains("2026-04-26 〜 2026-04-29"));
         assert!(md.contains("## Day 1"));
@@ -461,7 +472,7 @@ mod tests {
         let charger_id = add_checklist_item(&conn, trip_id, "充電器").unwrap();
         set_checklist_done(&conn, charger_id, true).unwrap();
 
-        let md = build_trip_markdown(&conn, trip_id).unwrap();
+        let md = generate_trip_markdown(&conn, trip_id).unwrap();
         assert!(md.contains("## Overview"));
         assert!(md.contains("- Days: 2"));
         assert!(md.contains("- Itineraries: 2"));
@@ -482,7 +493,7 @@ mod tests {
         let conn = test_db();
         let trip_id = add_trip(&conn, "沖縄旅行", None, None).unwrap();
 
-        let md = build_trip_markdown(&conn, trip_id).unwrap();
+        let md = generate_trip_markdown(&conn, trip_id).unwrap();
         assert!(md.contains("## Overview"));
         assert!(md.contains("- Checklist: 0 / 0 completed"));
     }

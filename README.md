@@ -294,16 +294,32 @@ cargo run -- trip export-md 1
 
 チェックリストがない場合は `## Checklist` セクション自体を出力しません。
 
-ファイルに保存する場合:
+#### 標準出力（デフォルト）
+
+`--output` を省略すると、Markdown 本体のみ stdout に出力されます。
 
 ```bash
-cargo run -- trip export-md 1 --output sample-trip.md
+cargo run -- trip export-md 1
 ```
 
 シェルのリダイレクトでも保存できます。
 
 ```bash
-cargo run -- trip export-md 1 > sample-trip.md
+cargo run -- trip export-md 1 > trip.md
+```
+
+#### ファイル出力（`--output`）
+
+`--output` を指定すると、指定ファイルへ保存します（既存ファイルは確認なしで上書き）。
+
+```bash
+cargo run -- trip export-md 1 --output trip.md
+```
+
+成功時の表示例:
+
+```text
+Markdown exported: trip.md
 ```
 
 手動確認用のサンプルデータ投入は [Markdown Export 確認用サンプル](#markdown-export-確認用サンプル) を参照してください。
