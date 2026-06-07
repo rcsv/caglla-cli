@@ -470,6 +470,77 @@ impl TripExport {
     }
 }
 
+/// export 検証レポート JSON の schema バージョン
+pub const EXPORT_VALIDATION_REPORT_SCHEMA_VERSION: i32 = 1;
+
+/// `trip validate-export` の構造チェック ID
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ExportValidationCheckId {
+    JsonFormat,
+    SchemaVersion,
+    Trip,
+    ItineraryItems,
+    ChecklistItems,
+}
+
+/// export 検証の1項目チェック結果
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExportValidationCheck {
+    pub id: ExportValidationCheckId,
+    pub passed: bool,
+}
+
+/// export ファイル検証結果（`trip validate-export --json`）
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExportValidationReport {
+    /// レポート形式の schema バージョン
+    pub schema_version: i32,
+    pub file: String,
+    /// import 可能か（`errors` が空）
+    pub valid: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trip_name: Option<String>,
+    /// 検査対象ファイル内の `schema_version`
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub export_schema_version: Option<i32>,
+    pub itinerary_count: usize,
+    pub checklist_count: usize,
+    pub checks: Vec<ExportValidationCheck>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
+    pub errors: Vec<String>,
+}
+
+impl ExportValidationReport {
+    pub fn new(file: impl Into<String>) -> Self {
+        Self {
+            schema_version: EXPORT_VALIDATION_REPORT_SCHEMA_VERSION,
+            file: file.into(),
+            valid: false,
+            trip_name: None,
+            export_schema_version: None,
+            itinerary_count: 0,
+            checklist_count: 0,
+            checks: Vec::new(),
+            warnings: Vec::new(),
+            errors: Vec::new(),
+        }
+    }
+}
+
+/// `trip import` 完了時のサマリー
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TripImportSummary {
+    pub trip_id: i64,
+    pub trip_name: String,
+    pub itinerary_count: usize,
+    pub checklist_count: usize,
+    /// export JSON に `schema_version` キーが存在するか
+    pub schema_version_present: bool,
+    pub export_schema_version: Option<i32>,
+}
+
 #[cfg(test)]
 mod tests {
     use crate::models::{

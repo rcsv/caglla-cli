@@ -3,7 +3,10 @@ use chrono::Utc;
 use rusqlite::{params, Connection};
 
 use crate::db::now_string;
-use crate::models::{Trip, TripExport, TRIP_EXPORT_SCHEMA_VERSION};
+use crate::models::{
+    ExportValidationCheck, ExportValidationCheckId, ExportValidationReport, Trip, TripExport,
+    TripImportSummary, TRIP_EXPORT_SCHEMA_VERSION,
+};
 
 /// 新しい旅行を追加する
 pub(crate) fn add_trip(
@@ -156,7 +159,230 @@ pub(crate) fn validate_trip_export(export: &TripExport) -> Result<()> {
     Ok(())
 }
 
+fn push_check(checks: &mut Vec<ExportValidationCheck>, id: ExportValidationCheckId, passed: bool) {
+    checks.push(ExportValidationCheck { id, passed });
+}
+
+/// export JSON 文字列を検証する（`valid` = import 可能か）
+pub(crate) fn analyze_trip_export_json(file: &str, json: &str) -> ExportValidationReport {
+    let mut report = ExportValidationReport::new(file);
+
+    let root: serde_json::Value = match serde_json::from_str(json) {
+        Ok(value) => value,
+        Err(error) => {
+            push_check(
+                &mut report.checks,
+                ExportValidationCheckId::JsonFormat,
+                false,
+            );
+            report
+                .errors
+                .push(format!("JSON の形式が不正です: {error}"));
+            return report;
+        }
+    };
+    push_check(
+        &mut report.checks,
+        ExportValidationCheckId::JsonFormat,
+        true,
+    );
+
+    let export: TripExport = match serde_json::from_value(root.clone()) {
+        Ok(export) => export,
+        Err(error) => {
+            push_check(&mut report.checks, ExportValidationCheckId::Trip, false);
+            push_check(
+                &mut report.checks,
+                ExportValidationCheckId::ItineraryItems,
+                root.get("itinerary_items").is_some(),
+            );
+            push_check(
+                &mut report.checks,
+                ExportValidationCheckId::ChecklistItems,
+                root.get("checklist_items").is_some(),
+            );
+            push_check(
+                &mut report.checks,
+                ExportValidationCheckId::SchemaVersion,
+                root.get("schema_version").is_some()
+                    && root.get("schema_version").and_then(|v| v.as_i64())
+                        == Some(i64::from(TRIP_EXPORT_SCHEMA_VERSION)),
+            );
+            report
+                .errors
+                .push(format!("export JSON の構造が不正です: {error}"));
+            return report;
+        }
+    };
+
+    let has_schema_version = root.get("schema_version").is_some();
+    let export_schema_version = export.schema_version;
+    report.export_schema_version = export_schema_version;
+    let schema_check_passed =
+        has_schema_version && export_schema_version == Some(TRIP_EXPORT_SCHEMA_VERSION);
+    push_check(
+        &mut report.checks,
+        ExportValidationCheckId::SchemaVersion,
+        schema_check_passed,
+    );
+    if !has_schema_version {
+        report
+            .warnings
+            .push("schema_version がありません（旧形式）".to_string());
+    } else if export_schema_version != Some(TRIP_EXPORT_SCHEMA_VERSION) {
+        report.warnings.push(format!(
+            "schema_version {} は未対応です。import は試行可能ですが、正式サポート外の形式です。",
+            export_schema_version.unwrap_or_default()
+        ));
+    }
+
+    let trip_passed = !export.trip.name.trim().is_empty();
+    push_check(
+        &mut report.checks,
+        ExportValidationCheckId::Trip,
+        trip_passed,
+    );
+
+    let has_itinerary_items = root.get("itinerary_items").is_some();
+    push_check(
+        &mut report.checks,
+        ExportValidationCheckId::ItineraryItems,
+        has_itinerary_items,
+    );
+
+    let has_checklist_items = root.get("checklist_items").is_some();
+    push_check(
+        &mut report.checks,
+        ExportValidationCheckId::ChecklistItems,
+        has_checklist_items,
+    );
+    if !has_checklist_items {
+        report
+            .warnings
+            .push("checklist_items がありません（旧形式）".to_string());
+    }
+
+    if let Some(exported_at) = export.exported_at.as_deref() {
+        if chrono::DateTime::parse_from_rfc3339(exported_at).is_err() {
+            report.warnings.push(format!(
+                "exported_at の形式が RFC3339 ではありません: {exported_at}"
+            ));
+        }
+    }
+
+    report.trip_name = Some(export.trip.name.clone());
+    report.itinerary_count = export.itinerary_items.len();
+    report.checklist_count = export.checklist_items().len();
+
+    if let Err(error) = validate_trip_export(&export) {
+        report.errors.push(error.to_string());
+    }
+
+    report.valid = report.errors.is_empty();
+    report
+}
+
+/// export JSON ファイルを検証する（DB は使わない）
+pub(crate) fn analyze_trip_export(path: &str) -> Result<ExportValidationReport> {
+    let json = std::fs::read_to_string(path)
+        .with_context(|| format!("ファイル '{path}' を読み込めませんでした"))?;
+    Ok(analyze_trip_export_json(path, &json))
+}
+
+const EXPORT_VALIDATION_CHECK_ORDER: [ExportValidationCheckId; 5] = [
+    ExportValidationCheckId::JsonFormat,
+    ExportValidationCheckId::SchemaVersion,
+    ExportValidationCheckId::Trip,
+    ExportValidationCheckId::ItineraryItems,
+    ExportValidationCheckId::ChecklistItems,
+];
+
+fn export_validation_check_label(id: ExportValidationCheckId) -> &'static str {
+    match id {
+        ExportValidationCheckId::JsonFormat => "JSON形式",
+        ExportValidationCheckId::SchemaVersion => "schema_version",
+        ExportValidationCheckId::Trip => "trip",
+        ExportValidationCheckId::ItineraryItems => "itinerary_items",
+        ExportValidationCheckId::ChecklistItems => "checklist_items",
+    }
+}
+
+fn export_validation_error_line(error: &str) -> String {
+    if error.starts_with("JSON の形式が不正です") {
+        "JSON形式が不正です".to_string()
+    } else if error.starts_with("export JSON の構造が不正です") {
+        "export JSON の構造が不正です".to_string()
+    } else {
+        error.to_string()
+    }
+}
+
+/// export 検証結果を人間向けに表示する
+pub(crate) fn print_export_validation_report(report: &ExportValidationReport) {
+    println!("Export file: {}", report.file);
+    println!();
+    println!("Checks:");
+    for id in EXPORT_VALIDATION_CHECK_ORDER {
+        if let Some(check) = report.checks.iter().find(|check| check.id == id) {
+            let mark = if check.passed { "✓" } else { "✗" };
+            println!("  {mark} {}", export_validation_check_label(id));
+        }
+    }
+
+    if report.trip_name.is_some() {
+        println!();
+        println!("Summary:");
+        println!(
+            "  Trip         : {}",
+            report.trip_name.as_deref().unwrap_or("-")
+        );
+        println!("  Itineraries  : {} 件", report.itinerary_count);
+        println!("  Checklists   : {} 件", report.checklist_count);
+    }
+
+    println!();
+    println!("Warnings:");
+    if report.warnings.is_empty() {
+        println!("  なし");
+    } else {
+        for warning in &report.warnings {
+            println!("  - {warning}");
+        }
+    }
+
+    if !report.errors.is_empty() {
+        println!();
+        println!("Errors:");
+        for error in &report.errors {
+            println!("  - {}", export_validation_error_line(error));
+        }
+    }
+
+    println!();
+    println!("Result:");
+    if report.valid {
+        println!("  有効な export ファイル");
+    } else {
+        println!("  無効な export ファイル");
+    }
+}
+
+/// export JSON ファイルを検証して結果を表示する
+pub(crate) fn run_trip_validate_export(path: &str, json: bool) -> Result<()> {
+    let report = analyze_trip_export(path)?;
+    if json {
+        print_json(&report)?;
+    } else {
+        print_export_validation_report(&report);
+    }
+    if !report.valid {
+        anyhow::bail!("無効な export ファイルです");
+    }
+    Ok(())
+}
+
 /// JSON 文字列から旅行をインポートする（ID は新規採番）
+#[cfg(test)]
 pub(crate) fn import_trip_from_json(conn: &Connection, json: &str) -> Result<i64> {
     let export: TripExport = serde_json::from_str(json).context("JSON の形式が不正です")?;
     import_trip_from_export(conn, &export)
@@ -206,6 +432,78 @@ pub(crate) fn import_trip_from_export(conn: &Connection, export: &TripExport) ->
     Ok(new_trip_id)
 }
 
+fn trip_import_summary_from_export(
+    new_trip_id: i64,
+    export: &TripExport,
+    schema_version_present: bool,
+) -> TripImportSummary {
+    TripImportSummary {
+        trip_id: new_trip_id,
+        trip_name: export.trip.name.clone(),
+        itinerary_count: export.itinerary_items.len(),
+        checklist_count: export.checklist_items().len(),
+        schema_version_present,
+        export_schema_version: export.schema_version,
+    }
+}
+
+/// import 結果の Schema 行を返す
+pub(crate) fn import_schema_display_line(summary: &TripImportSummary) -> String {
+    if summary.schema_version_present {
+        format!(
+            "  version {}",
+            summary.export_schema_version.unwrap_or_default()
+        )
+    } else {
+        "  未指定（旧形式）".to_string()
+    }
+}
+
+/// import 完了サマリーを表示する
+pub(crate) fn print_trip_import_summary(summary: &TripImportSummary) {
+    println!("旅行をインポートしました");
+    println!();
+    println!("Trip:");
+    println!("  {} (ID: {})", summary.trip_name, summary.trip_id);
+    println!();
+    println!("Created:");
+    println!("  日程           : {} 件", summary.itinerary_count);
+    println!("  チェックリスト : {} 件", summary.checklist_count);
+    println!();
+    println!("Schema:");
+    println!("{}", import_schema_display_line(summary));
+}
+
+fn parse_trip_export_for_import(json: &str) -> Result<(TripExport, bool)> {
+    let root: serde_json::Value = serde_json::from_str(json).context("JSON の形式が不正です")?;
+    let schema_version_present = root.get("schema_version").is_some();
+    let export: TripExport = serde_json::from_value(root).context("JSON の形式が不正です")?;
+    Ok((export, schema_version_present))
+}
+
+/// JSON 文字列から旅行をインポートし、サマリーを返す
+pub(crate) fn import_trip_from_json_with_summary(
+    conn: &Connection,
+    json: &str,
+) -> Result<TripImportSummary> {
+    let (export, schema_version_present) = parse_trip_export_for_import(json)?;
+    let new_trip_id = import_trip_from_export(conn, &export)?;
+    Ok(trip_import_summary_from_export(
+        new_trip_id,
+        &export,
+        schema_version_present,
+    ))
+}
+
+/// JSON ファイルから旅行をインポートし、サマリーを表示する
+pub(crate) fn run_trip_import(conn: &Connection, path: &str) -> Result<()> {
+    let json = std::fs::read_to_string(path)
+        .with_context(|| format!("ファイル '{path}' を読み込めませんでした"))?;
+    let summary = import_trip_from_json_with_summary(conn, &json)?;
+    print_trip_import_summary(&summary);
+    Ok(())
+}
+
 /// 旅行を複製する（Trip / Itinerary / Checklist を新しい ID でコピー）
 pub(crate) fn duplicate_trip(conn: &Connection, trip_id: i64, name: Option<&str>) -> Result<i64> {
     let source = get_trip(conn, trip_id)?;
@@ -218,6 +516,7 @@ pub(crate) fn duplicate_trip(conn: &Connection, trip_id: i64, name: Option<&str>
 }
 
 /// JSON ファイルから旅行をインポートする
+#[cfg(test)]
 pub(crate) fn import_trip_from_file(conn: &Connection, path: &str) -> Result<i64> {
     let json = std::fs::read_to_string(path)
         .with_context(|| format!("ファイル '{path}' を読み込めませんでした"))?;
@@ -1019,5 +1318,388 @@ mod tests {
             comparable_trip_export(&parsed_before),
             comparable_trip_export(&parsed_after)
         );
+    }
+
+    fn check_passed(report: &ExportValidationReport, id: ExportValidationCheckId) -> bool {
+        report
+            .checks
+            .iter()
+            .find(|check| check.id == id)
+            .expect("check should exist")
+            .passed
+    }
+
+    #[test]
+    fn test_analyze_trip_export_current_format_is_valid() {
+        let conn = test_db();
+        let trip_id = add_trip(&conn, "沖縄家族旅行", None, None).unwrap();
+        add_itinerary_item(
+            &conn,
+            trip_id,
+            1,
+            "首里城",
+            None,
+            None,
+            None,
+            Some(90),
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        add_checklist_item(&conn, trip_id, "Passport").unwrap();
+
+        let json = export_trip_to_json(&conn, trip_id).unwrap();
+        let report = analyze_trip_export_json("backup.json", &json);
+
+        assert!(report.valid);
+        assert_eq!(
+            report.schema_version,
+            crate::models::EXPORT_VALIDATION_REPORT_SCHEMA_VERSION
+        );
+        assert_eq!(
+            report.export_schema_version,
+            Some(TRIP_EXPORT_SCHEMA_VERSION)
+        );
+        assert_eq!(report.trip_name.as_deref(), Some("沖縄家族旅行"));
+        assert_eq!(report.itinerary_count, 1);
+        assert_eq!(report.checklist_count, 1);
+        assert!(report.warnings.is_empty());
+        assert!(report.errors.is_empty());
+        assert!(check_passed(&report, ExportValidationCheckId::JsonFormat));
+        assert!(check_passed(
+            &report,
+            ExportValidationCheckId::SchemaVersion
+        ));
+        assert!(check_passed(&report, ExportValidationCheckId::Trip));
+        assert!(check_passed(
+            &report,
+            ExportValidationCheckId::ItineraryItems
+        ));
+        assert!(check_passed(
+            &report,
+            ExportValidationCheckId::ChecklistItems
+        ));
+    }
+
+    #[test]
+    fn test_analyze_trip_export_legacy_format_is_valid_with_warnings() {
+        let json = r#"{
+            "trip": {
+                "id": 1,
+                "name": "Legacy Trip",
+                "start_date": null,
+                "end_date": null,
+                "created_at": "2026-01-01 00:00:00",
+                "updated_at": "2026-01-01 00:00:00"
+            },
+            "itinerary_items": []
+        }"#;
+
+        let report = analyze_trip_export_json("legacy.json", json);
+
+        assert!(report.valid);
+        assert!(report.errors.is_empty());
+        assert_eq!(report.warnings.len(), 2);
+        assert!(report.warnings.iter().any(|w| w.contains("schema_version")));
+        assert!(report
+            .warnings
+            .iter()
+            .any(|w| w.contains("checklist_items")));
+        assert!(!check_passed(
+            &report,
+            ExportValidationCheckId::SchemaVersion
+        ));
+        assert!(!check_passed(
+            &report,
+            ExportValidationCheckId::ChecklistItems
+        ));
+        assert!(check_passed(&report, ExportValidationCheckId::Trip));
+    }
+
+    #[test]
+    fn test_analyze_trip_export_empty_checklist_items_key_passes_check() {
+        let json = r#"{
+            "schema_version": 1,
+            "exported_at": "2026-06-07T00:00:00Z",
+            "trip": {
+                "id": 1,
+                "name": "Empty Checklist Trip",
+                "start_date": null,
+                "end_date": null,
+                "created_at": "2026-01-01 00:00:00",
+                "updated_at": "2026-01-01 00:00:00"
+            },
+            "itinerary_items": [],
+            "checklist_items": []
+        }"#;
+
+        let report = analyze_trip_export_json("empty-checklist.json", json);
+
+        assert!(report.valid);
+        assert!(check_passed(
+            &report,
+            ExportValidationCheckId::ChecklistItems
+        ));
+        assert_eq!(report.checklist_count, 0);
+    }
+
+    #[test]
+    fn test_analyze_trip_export_unsupported_schema_version_is_valid_with_warning() {
+        let json = r#"{
+            "schema_version": 99,
+            "trip": {
+                "id": 1,
+                "name": "Future Schema Trip",
+                "start_date": null,
+                "end_date": null,
+                "created_at": "2026-01-01 00:00:00",
+                "updated_at": "2026-01-01 00:00:00"
+            },
+            "itinerary_items": [],
+            "checklist_items": []
+        }"#;
+
+        let report = analyze_trip_export_json("future.json", json);
+
+        assert!(report.valid);
+        assert!(!check_passed(
+            &report,
+            ExportValidationCheckId::SchemaVersion
+        ));
+        assert!(report.warnings.iter().any(|w| w.contains("正式サポート外")));
+    }
+
+    #[test]
+    fn test_analyze_trip_export_empty_trip_name_is_invalid() {
+        let json = r#"{
+            "schema_version": 1,
+            "trip": {
+                "id": 1,
+                "name": "   ",
+                "start_date": null,
+                "end_date": null,
+                "created_at": "2026-01-01 00:00:00",
+                "updated_at": "2026-01-01 00:00:00"
+            },
+            "itinerary_items": [],
+            "checklist_items": []
+        }"#;
+
+        let report = analyze_trip_export_json("bad-trip.json", json);
+
+        assert!(!report.valid);
+        assert!(!check_passed(&report, ExportValidationCheckId::Trip));
+        assert!(report.errors.iter().any(|e| e.contains("trip.name")));
+    }
+
+    #[test]
+    fn test_analyze_trip_export_empty_itinerary_title_is_invalid() {
+        let json = r#"{
+            "schema_version": 1,
+            "trip": {
+                "id": 1,
+                "name": "Bad Itinerary Trip",
+                "start_date": null,
+                "end_date": null,
+                "created_at": "2026-01-01 00:00:00",
+                "updated_at": "2026-01-01 00:00:00"
+            },
+            "itinerary_items": [
+                {
+                    "id": 1,
+                    "trip_id": 1,
+                    "day": 1,
+                    "title": " ",
+                    "note": null,
+                    "start_time": null,
+                    "sort_order": 0,
+                    "duration_minutes": null,
+                    "travel_minutes": null,
+                    "location": null,
+                    "created_at": "2026-01-01 00:00:00",
+                    "updated_at": "2026-01-01 00:00:00"
+                }
+            ],
+            "checklist_items": []
+        }"#;
+
+        let report = analyze_trip_export_json("bad-itinerary.json", json);
+
+        assert!(!report.valid);
+        assert!(report
+            .errors
+            .iter()
+            .any(|e| e.contains("itinerary_items[0].title")));
+    }
+
+    #[test]
+    fn test_analyze_trip_export_invalid_json_is_invalid() {
+        let report = analyze_trip_export_json("broken.json", "not json");
+
+        assert!(!report.valid);
+        assert!(!check_passed(&report, ExportValidationCheckId::JsonFormat));
+        assert_eq!(report.checks.len(), 1);
+        assert!(report.errors.iter().any(|e| e.contains("JSON")));
+    }
+
+    #[test]
+    fn test_analyze_trip_export_missing_itinerary_items_is_invalid() {
+        let json = r#"{
+            "schema_version": 1,
+            "trip": {
+                "id": 1,
+                "name": "No Itinerary Key",
+                "start_date": null,
+                "end_date": null,
+                "created_at": "2026-01-01 00:00:00",
+                "updated_at": "2026-01-01 00:00:00"
+            },
+            "checklist_items": []
+        }"#;
+
+        let report = analyze_trip_export_json("no-itinerary-key.json", json);
+
+        assert!(!report.valid);
+        assert!(!check_passed(
+            &report,
+            ExportValidationCheckId::ItineraryItems
+        ));
+    }
+
+    #[test]
+    fn test_analyze_trip_export_file_not_found() {
+        assert!(analyze_trip_export("nonexistent-export.json").is_err());
+    }
+
+    #[test]
+    fn test_analyze_trip_export_legacy_matches_import_success() {
+        let conn = test_db();
+        let json = r#"{
+            "trip": {
+                "id": 1,
+                "name": "Legacy Import Trip",
+                "start_date": null,
+                "end_date": null,
+                "created_at": "2026-01-01 00:00:00",
+                "updated_at": "2026-01-01 00:00:00"
+            },
+            "itinerary_items": []
+        }"#;
+
+        let report = analyze_trip_export_json("legacy.json", json);
+        assert!(report.valid);
+        assert!(import_trip_from_json(&conn, json).is_ok());
+    }
+
+    #[test]
+    fn test_analyze_trip_export_json_report_serializes_schema_fields() {
+        let json = r#"{
+            "schema_version": 1,
+            "trip": {
+                "id": 1,
+                "name": "Serialize Trip",
+                "start_date": null,
+                "end_date": null,
+                "created_at": "2026-01-01 00:00:00",
+                "updated_at": "2026-01-01 00:00:00"
+            },
+            "itinerary_items": [],
+            "checklist_items": []
+        }"#;
+
+        let report = analyze_trip_export_json("serialize.json", json);
+        let value = serde_json::to_value(&report).unwrap();
+        assert_eq!(value["schema_version"], 1);
+        assert_eq!(value["export_schema_version"], 1);
+        assert!(value["checks"].is_array());
+        assert_eq!(value["errors"], serde_json::json!([]));
+    }
+
+    #[test]
+    fn test_import_summary_new_format_schema_version() {
+        let conn = test_db();
+        let json = r#"{
+            "schema_version": 1,
+            "exported_at": "2026-06-07T00:00:00Z",
+            "trip": {
+                "id": 1,
+                "name": "沖縄家族旅行",
+                "start_date": null,
+                "end_date": null,
+                "created_at": "2026-01-01 00:00:00",
+                "updated_at": "2026-01-01 00:00:00"
+            },
+            "itinerary_items": [
+                {
+                    "id": 1,
+                    "trip_id": 1,
+                    "day": 1,
+                    "title": "首里城",
+                    "note": null,
+                    "start_time": null,
+                    "sort_order": 0,
+                    "duration_minutes": null,
+                    "travel_minutes": null,
+                    "location": null,
+                    "created_at": "2026-01-01 00:00:00",
+                    "updated_at": "2026-01-01 00:00:00"
+                }
+            ],
+            "checklist_items": [
+                {
+                    "id": 1,
+                    "trip_id": 1,
+                    "title": "Passport",
+                    "is_done": false,
+                    "sort_order": 0,
+                    "created_at": "2026-01-01 00:00:00",
+                    "updated_at": "2026-01-01 00:00:00"
+                }
+            ]
+        }"#;
+
+        let summary = import_trip_from_json_with_summary(&conn, json).unwrap();
+        assert_eq!(summary.trip_name, "沖縄家族旅行");
+        assert_eq!(summary.trip_id, 1);
+        assert_eq!(summary.itinerary_count, 1);
+        assert_eq!(summary.checklist_count, 1);
+        assert!(summary.schema_version_present);
+        assert_eq!(summary.export_schema_version, Some(1));
+        assert_eq!(import_schema_display_line(&summary), "  version 1");
+    }
+
+    #[test]
+    fn test_import_summary_legacy_schema_display() {
+        let conn = test_db();
+        let json = r#"{
+            "trip": {
+                "id": 1,
+                "name": "Legacy Trip",
+                "start_date": null,
+                "end_date": null,
+                "created_at": "2026-01-01 00:00:00",
+                "updated_at": "2026-01-01 00:00:00"
+            },
+            "itinerary_items": []
+        }"#;
+
+        let summary = import_trip_from_json_with_summary(&conn, json).unwrap();
+        assert!(!summary.schema_version_present);
+        assert_eq!(summary.export_schema_version, None);
+        assert_eq!(import_schema_display_line(&summary), "  未指定（旧形式）");
+    }
+
+    #[test]
+    fn test_import_trip_from_json_with_summary_matches_import_only() {
+        let conn = test_db();
+        let json = export_trip_to_json(&conn, add_trip(&conn, "Compare Trip", None, None).unwrap())
+            .unwrap();
+
+        reset_db(&conn).unwrap();
+        let id_only = import_trip_from_json(&conn, &json).unwrap();
+        reset_db(&conn).unwrap();
+        let summary = import_trip_from_json_with_summary(&conn, &json).unwrap();
+        assert_eq!(summary.trip_id, id_only);
     }
 }

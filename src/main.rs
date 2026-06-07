@@ -135,6 +135,15 @@ enum TripAction {
         /// 読み込む JSON ファイル
         file: String,
     },
+    /// export JSON ファイルの健全性を検証する
+    #[command(name = "validate-export")]
+    ValidateExport {
+        /// 検証する JSON ファイル
+        file: String,
+        /// JSON 形式で出力
+        #[arg(long)]
+        json: bool,
+    },
     /// 2つの旅行 JSON を比較
     Diff {
         /// 比較元 JSON ファイル
@@ -551,14 +560,10 @@ fn main() -> Result<()> {
                 crate::markdown::write_trip_markdown(&conn, id, output.as_deref())?;
             }
             TripAction::Import { file } => {
-                let new_id = crate::trip::import_trip_from_file(&conn, &file)?;
-                let trip = crate::trip::get_trip(&conn, new_id)?;
-                let items = crate::itinerary::list_itinerary_items(&conn, new_id)?;
-                let checklist = crate::checklist::list_checklist_items(&conn, new_id)?;
-                println!("旅行をインポートしました (ID: {new_id})");
-                println!("  名前: {}", trip.name);
-                println!("  日程: {} 件", items.len());
-                println!("  チェックリスト: {} 件", checklist.len());
+                crate::trip::run_trip_import(&conn, &file)?;
+            }
+            TripAction::ValidateExport { file, json } => {
+                crate::trip::run_trip_validate_export(&file, json)?;
             }
             TripAction::Diff { old_file, new_file } => {
                 crate::diff::run_trip_diff(&old_file, &new_file)?;
