@@ -166,6 +166,8 @@ Total Time:  29h05m
 
 旅行 1 件と、紐づく日程を JSON で出力します。将来の Web 版や Firebase / Firestore への移行を想定した形式です。
 
+**export / import の対象:** 現時点では **Trip** と **Itinerary（`itinerary_items`）** のみです。**Checklist は export / import 対象外** で、JSON にも含まれません。import 後もチェックリストは復元されません。
+
 ```bash
 # 標準出力に表示
 cargo run -- trip export 1
@@ -216,6 +218,9 @@ cargo run -- trip import trip-1.json
 | ID の扱い | JSON 内の `id` / `trip_id` は無視し、DB の AUTOINCREMENT で新規採番 |
 | trip_id の変換 | 日程の `trip_id` は、新しく作成された Trip の ID に置き換わる |
 | 日時 | `created_at` / `updated_at` はインポート時に新しく設定される |
+| Checklist | **復元されない**（export JSON に含まれない） |
+
+**import 後の Trip ID について:** export JSON 内の `trip.id` は、import 後の DB 上の ID を保証しません（他の Trip が既にある場合、採番は 2, 3, … になることもあります）。import 完了メッセージに表示される ID（例: `旅行をインポートしました (ID: 2)`）を使ってください。確認は `trip list` や `trip show <new_id>`、`itinerary list <new_id>` で行います。export 元の Trip ID をそのまま指定しないでください。
 
 完了時の表示例:
 
