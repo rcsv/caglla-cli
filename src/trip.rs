@@ -145,7 +145,12 @@ pub(crate) fn validate_trip_export(export: &TripExport) -> Result<()> {
 /// JSON 文字列から旅行をインポートする（ID は新規採番）
 pub(crate) fn import_trip_from_json(conn: &Connection, json: &str) -> Result<i64> {
     let export: TripExport = serde_json::from_str(json).context("JSON の形式が不正です")?;
-    validate_trip_export(&export)?;
+    import_trip_from_export(conn, &export)
+}
+
+/// TripExport から旅行をインポートする（ID は新規採番）
+pub(crate) fn import_trip_from_export(conn: &Connection, export: &TripExport) -> Result<i64> {
+    validate_trip_export(export)?;
 
     // JSON 内の id / trip_id は無視し、新しい Trip として登録する
     // created_at / updated_at は add_trip / add_itinerary_item で現在時刻に作り直す
@@ -158,7 +163,7 @@ pub(crate) fn import_trip_from_json(conn: &Connection, json: &str) -> Result<i64
 
     let checklist_items: Vec<_> = export.checklist_items().to_vec();
 
-    for item in export.itinerary_items {
+    for item in &export.itinerary_items {
         crate::itinerary::add_itinerary_item(
             conn,
             new_trip_id,
@@ -187,6 +192,17 @@ pub(crate) fn import_trip_from_json(conn: &Connection, json: &str) -> Result<i64
     Ok(new_trip_id)
 }
 
+/// 旅行を複製する（Trip / Itinerary / Checklist を新しい ID でコピー）
+pub(crate) fn duplicate_trip(conn: &Connection, trip_id: i64, name: Option<&str>) -> Result<i64> {
+    let source = get_trip(conn, trip_id)?;
+    let mut export = build_trip_export(conn, trip_id)?;
+    export.trip.name = match name {
+        Some(value) => value.to_string(),
+        None => format!("{} (Copy)", source.name),
+    };
+    import_trip_from_export(conn, &export)
+}
+
 /// JSON ファイルから旅行をインポートする
 pub(crate) fn import_trip_from_file(conn: &Connection, path: &str) -> Result<i64> {
     let json = std::fs::read_to_string(path)
@@ -200,6 +216,7 @@ pub(crate) fn load_trip_export_from_file(path: &str) -> Result<TripExport> {
         .with_context(|| format!("ファイル '{path}' を読み込めませんでした"))?;
     serde_json::from_str(&json).context("JSON の形式が不正です")
 }
+
 /// 旅行を削除する
 pub(crate) fn delete_trip(conn: &Connection, id: i64) -> Result<()> {
     // 存在確認（見つからなければエラー）
@@ -607,6 +624,67 @@ mod tests {
             .collect()
     }
 
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    struct ComparableTripExport {
+        trip_name: String,
+        trip_start_date: Option<String>,
+        trip_end_date: Option<String>,
+        itinerary_items: Vec<ComparableItineraryItem>,
+        checklist_items: Vec<ComparableChecklistItem>,
+    }
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    struct ComparableItineraryItem {
+        day: i64,
+        title: String,
+        note: Option<String>,
+        start_time: Option<String>,
+        sort_order: i64,
+        duration_minutes: Option<i64>,
+        travel_minutes: Option<i64>,
+        location: Option<String>,
+        category: Option<crate::models::ItineraryCategory>,
+    }
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    struct ComparableChecklistItem {
+        title: String,
+        is_done: bool,
+        sort_order: i64,
+    }
+
+    fn comparable_trip_export(export: &TripExport) -> ComparableTripExport {
+        ComparableTripExport {
+            trip_name: export.trip.name.clone(),
+            trip_start_date: export.trip.start_date.clone(),
+            trip_end_date: export.trip.end_date.clone(),
+            itinerary_items: export
+                .itinerary_items
+                .iter()
+                .map(|item| ComparableItineraryItem {
+                    day: item.day,
+                    title: item.title.clone(),
+                    note: item.note.clone(),
+                    start_time: item.start_time.clone(),
+                    sort_order: item.sort_order,
+                    duration_minutes: item.duration_minutes,
+                    travel_minutes: item.travel_minutes,
+                    location: item.location.clone(),
+                    category: item.category,
+                })
+                .collect(),
+            checklist_items: export
+                .checklist_items()
+                .iter()
+                .map(|item| ComparableChecklistItem {
+                    title: item.title.clone(),
+                    is_done: item.is_done,
+                    sort_order: item.sort_order,
+                })
+                .collect(),
+        }
+    }
+
     #[test]
     fn test_export_includes_checklist_items() {
         let conn = test_db();
@@ -714,5 +792,121 @@ mod tests {
         let err = get_trip(&conn, 9999).err().expect("expected error");
         assert_eq!(err.to_string(), "Trip not found: 9999");
         assert!(!format!("{err:#}").contains("Query returned no rows"));
+    }
+
+    #[test]
+    fn test_duplicate_trip_copies_trip_itinerary_and_checklist() {
+        let conn = test_db();
+        let trip_id = add_trip(
+            &conn,
+            "Okinawa Trip",
+            Some("2026-06-01"),
+            Some("2026-06-03"),
+        )
+        .unwrap();
+        add_itinerary_item(
+            &conn,
+            trip_id,
+            1,
+            "Shuri Castle",
+            Some("World heritage"),
+            Some("09:00"),
+            Some(1),
+            Some(90),
+            Some(20),
+            Some("Naha"),
+            None,
+        )
+        .unwrap();
+        add_checklist_item(&conn, trip_id, "Passport").unwrap();
+        let charger_id = add_checklist_item(&conn, trip_id, "Charger").unwrap();
+        set_checklist_done(&conn, charger_id, true).unwrap();
+
+        let before = build_trip_export(&conn, trip_id).unwrap();
+        let new_id = duplicate_trip(&conn, trip_id, None).unwrap();
+
+        assert_ne!(new_id, trip_id);
+        let duplicated = build_trip_export(&conn, new_id).unwrap();
+        assert_eq!(duplicated.trip.name, "Okinawa Trip (Copy)");
+        assert_eq!(duplicated.trip.start_date, before.trip.start_date);
+        assert_eq!(duplicated.trip.end_date, before.trip.end_date);
+        assert_eq!(
+            itinerary_sem(&before.itinerary_items),
+            itinerary_sem(&duplicated.itinerary_items)
+        );
+        assert_eq!(
+            checklist_sem(before.checklist_items()),
+            checklist_sem(duplicated.checklist_items())
+        );
+    }
+
+    #[test]
+    fn test_duplicate_trip_with_custom_name() {
+        let conn = test_db();
+        let trip_id = add_trip(&conn, "Original", None, None).unwrap();
+        add_itinerary_item(
+            &conn, trip_id, 1, "Lunch", None, None, None, None, None, None, None,
+        )
+        .unwrap();
+
+        let new_id = duplicate_trip(&conn, trip_id, Some("Okinawa Copy")).unwrap();
+        let duplicated = get_trip(&conn, new_id).unwrap();
+        assert_eq!(duplicated.name, "Okinawa Copy");
+    }
+
+    #[test]
+    fn test_duplicate_trip_not_found() {
+        let conn = test_db();
+        let err = duplicate_trip(&conn, 9999, None)
+            .err()
+            .expect("expected error");
+        assert_eq!(err.to_string(), "Trip not found: 9999");
+    }
+
+    #[test]
+    fn test_export_import_reexport_structural_roundtrip_with_checklist() {
+        let conn = test_db();
+        let trip_id = add_trip(
+            &conn,
+            "Roundtrip Trip",
+            Some("2026-07-01"),
+            Some("2026-07-05"),
+        )
+        .unwrap();
+        add_itinerary_item(
+            &conn,
+            trip_id,
+            1,
+            "Museum",
+            Some("Ticket required"),
+            Some("10:00"),
+            Some(0),
+            Some(120),
+            Some(15),
+            Some("Downtown"),
+            Some(crate::models::ItineraryCategory::Museum),
+        )
+        .unwrap();
+        add_checklist_item(&conn, trip_id, "Passport").unwrap();
+        let ticket_id = add_checklist_item(&conn, trip_id, "Museum ticket").unwrap();
+        set_checklist_done(&conn, ticket_id, true).unwrap();
+
+        let before = build_trip_export(&conn, trip_id).unwrap();
+        let before_compare = comparable_trip_export(&before);
+        let json = export_trip_to_json(&conn, trip_id).unwrap();
+
+        reset_db(&conn).unwrap();
+
+        let imported_id = import_trip_from_json(&conn, &json).unwrap();
+        let after = build_trip_export(&conn, imported_id).unwrap();
+        assert_eq!(before_compare, comparable_trip_export(&after));
+
+        let re_json = export_trip_to_json(&conn, imported_id).unwrap();
+        let parsed_before: TripExport = serde_json::from_str(&json).unwrap();
+        let parsed_after: TripExport = serde_json::from_str(&re_json).unwrap();
+        assert_eq!(
+            comparable_trip_export(&parsed_before),
+            comparable_trip_export(&parsed_after)
+        );
     }
 }

@@ -106,6 +106,14 @@ enum TripAction {
         /// 旅行 ID
         id: i64,
     },
+    /// 旅行を複製（Trip / Itinerary / Checklist）
+    Duplicate {
+        /// 複製元の旅行 ID
+        id: i64,
+        /// 複製後の旅行名（省略時は「元の名前 (Copy)」）
+        #[arg(long)]
+        name: Option<String>,
+    },
     /// 旅行データを JSON でエクスポート
     Export {
         /// 旅行 ID
@@ -139,6 +147,9 @@ enum TripAction {
     ChecklistGenerate {
         /// 旅行 ID
         id: i64,
+        /// DB を更新せず、追加・スキップ候補のみ表示する
+        #[arg(long)]
+        dry_run: bool,
     },
     /// 旅行の統計を表示
     Stats {
@@ -526,6 +537,10 @@ fn main() -> Result<()> {
                 println!("旅行を削除しました (ID: {id})");
                 println!("  名前: {}", trip.name);
             }
+            TripAction::Duplicate { id, name } => {
+                let new_id = crate::trip::duplicate_trip(&conn, id, name.as_deref())?;
+                println!("Created trip {new_id} from trip {id}");
+            }
             TripAction::Export { id, output } => {
                 crate::trip::write_trip_export(&conn, id, output.as_deref())?;
             }
@@ -545,9 +560,14 @@ fn main() -> Result<()> {
             TripAction::Diff { old_file, new_file } => {
                 crate::diff::run_trip_diff(&old_file, &new_file)?;
             }
-            TripAction::ChecklistGenerate { id } => {
-                let result = crate::checklist::generate_checklist_from_itinerary(&conn, id)?;
-                crate::checklist::print_checklist_generate_result(&result);
+            TripAction::ChecklistGenerate { id, dry_run } => {
+                if dry_run {
+                    let result = crate::checklist::plan_checklist_generation(&conn, id)?;
+                    crate::checklist::print_checklist_generate_dry_run_result(&result);
+                } else {
+                    let result = crate::checklist::generate_checklist_from_itinerary(&conn, id)?;
+                    crate::checklist::print_checklist_generate_result(&result);
+                }
             }
             TripAction::Stats { trip_id, json } => {
                 if json {

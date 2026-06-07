@@ -63,7 +63,7 @@ cargo build
 
 | カテゴリ | 主なコマンド |
 |---|---|
-| Trip | `trip add`, `trip list`, `trip show`, `trip update`, `trip delete` |
+| Trip | `trip add`, `trip list`, `trip show`, `trip update`, `trip delete`, `trip duplicate` |
 | Itinerary | `itinerary add`, `itinerary list`, `itinerary show`, `itinerary update`, `itinerary delete` |
 | Checklist | `checklist add`, `checklist list`, `checklist show`, `checklist update`, `checklist check`, `checklist uncheck`, `checklist delete` |
 | Timeline | `itinerary timeline` |
@@ -124,6 +124,26 @@ cargo run -- trip delete 1
 ```
 
 更新時は `--name` / `--start` / `--end` のうち、変更したい項目だけ指定します。
+
+### 複製（trip duplicate）
+
+既存の Trip と、紐づく Itinerary / Checklist を新しい ID で複製します。
+
+```bash
+cargo run -- trip duplicate 1
+cargo run -- trip duplicate 1 --name "Okinawa Copy"
+```
+
+| オプション | 説明 |
+|---|---|
+| `id` | 複製元の旅行 ID |
+| `--name` | 複製後の旅行名（省略時は `元の名前 (Copy)`） |
+
+出力例:
+
+```text
+Created trip 12 from trip 1
+```
 
 ### Stats
 
@@ -561,7 +581,15 @@ Rust 側では `CategoryDefinition` 構造体として `display_name` と `defau
 
 ```bash
 cargo run -- trip checklist-generate 1
+cargo run -- trip checklist-generate 1 --dry-run
 ```
+
+| オプション | 説明 |
+|---|---|
+| `id` | 旅行 ID |
+| `--dry-run` | DB を更新せず、追加・スキップ候補のみ表示 |
+
+`--dry-run` では DB を更新しません。追加候補とスキップ候補、それぞれの件数を表示します。
 
 | ルール | 説明 |
 |---|---|
@@ -599,6 +627,19 @@ cargo run -- trip checklist-generate 1
 - 日焼け止め
 
 スキップされた項目:
+- 住所確認
+- 営業時間確認
+```
+
+`--dry-run` 出力例:
+
+```text
+Would add: 3
+- 宿泊予約確認
+- チェックイン時間確認
+- 水着
+
+Would skip: 2
 - 住所確認
 - 営業時間確認
 ```

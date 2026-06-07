@@ -35,8 +35,8 @@ pub(crate) fn add_checklist_item_with_sort_order(
     Ok(conn.last_insert_rowid())
 }
 
-/// 日程のカテゴリ定義からチェックリスト項目を自動生成する
-pub(crate) fn generate_checklist_from_itinerary(
+/// 日程のカテゴリ定義から追加候補を計算する（DB は更新しない）
+pub(crate) fn plan_checklist_generation(
     conn: &Connection,
     trip_id: i64,
 ) -> Result<ChecklistGenerateResult> {
@@ -48,12 +48,6 @@ pub(crate) fn generate_checklist_from_itinerary(
         .iter()
         .map(|item| item.title.clone())
         .collect();
-    let mut next_sort_order = existing_items
-        .iter()
-        .map(|item| item.sort_order)
-        .max()
-        .unwrap_or(-1)
-        + 1;
 
     let mut added = Vec::new();
     let mut skipped = Vec::new();
@@ -64,15 +58,7 @@ pub(crate) fn generate_checklist_from_itinerary(
         };
         let definition = category.definition();
         for &title in definition.default_checklist {
-            try_add_generated_checklist_item(
-                conn,
-                trip_id,
-                title,
-                &mut known_titles,
-                &mut next_sort_order,
-                &mut added,
-                &mut skipped,
-            )?;
+            try_plan_generated_checklist_item(title, &mut known_titles, &mut added, &mut skipped);
         }
     }
 
@@ -84,20 +70,48 @@ pub(crate) fn generate_checklist_from_itinerary(
     for rule in crate::models::checklist_combination_rules() {
         if checklist_rule_matches(&trip_categories, rule) {
             for &title in rule.checklist {
-                try_add_generated_checklist_item(
-                    conn,
-                    trip_id,
+                try_plan_generated_checklist_item(
                     title,
                     &mut known_titles,
-                    &mut next_sort_order,
                     &mut added,
                     &mut skipped,
-                )?;
+                );
             }
         }
     }
 
     Ok(ChecklistGenerateResult { added, skipped })
+}
+
+/// 日程のカテゴリ定義からチェックリスト項目を自動生成する
+pub(crate) fn generate_checklist_from_itinerary(
+    conn: &Connection,
+    trip_id: i64,
+) -> Result<ChecklistGenerateResult> {
+    let result = plan_checklist_generation(conn, trip_id)?;
+    apply_planned_checklist_items(conn, trip_id, &result.added)?;
+    Ok(result)
+}
+
+fn apply_planned_checklist_items(conn: &Connection, trip_id: i64, added: &[String]) -> Result<()> {
+    if added.is_empty() {
+        return Ok(());
+    }
+
+    let existing_items = list_checklist_items(conn, trip_id)?;
+    let mut next_sort_order = existing_items
+        .iter()
+        .map(|item| item.sort_order)
+        .max()
+        .unwrap_or(-1)
+        + 1;
+
+    for title in added {
+        add_checklist_item_with_sort_order(conn, trip_id, title, next_sort_order)?;
+        next_sort_order += 1;
+    }
+
+    Ok(())
 }
 
 fn checklist_rule_matches(
@@ -109,27 +123,39 @@ fn checklist_rule_matches(
         .all(|category| trip_categories.contains(category))
 }
 
-fn try_add_generated_checklist_item(
-    conn: &Connection,
-    trip_id: i64,
+fn try_plan_generated_checklist_item(
     title: &str,
     known_titles: &mut HashSet<String>,
-    next_sort_order: &mut i64,
     added: &mut Vec<String>,
     skipped: &mut Vec<String>,
-) -> Result<()> {
+) {
     if known_titles.contains(title) {
         if !skipped.iter().any(|existing| existing == title) {
             skipped.push(title.to_string());
         }
-        return Ok(());
+        return;
     }
 
-    add_checklist_item_with_sort_order(conn, trip_id, title, *next_sort_order)?;
     known_titles.insert(title.to_string());
     added.push(title.to_string());
-    *next_sort_order += 1;
-    Ok(())
+}
+
+/// チェックリスト自動生成の dry-run 結果を表示する
+pub(crate) fn print_checklist_generate_dry_run_result(result: &ChecklistGenerateResult) {
+    println!("Would add: {}", result.added.len());
+    if !result.added.is_empty() {
+        for title in &result.added {
+            println!("- {title}");
+        }
+    }
+
+    println!();
+    println!("Would skip: {}", result.skipped.len());
+    if !result.skipped.is_empty() {
+        for title in &result.skipped {
+            println!("- {title}");
+        }
+    }
 }
 
 /// チェックリスト自動生成の結果を表示する
@@ -810,5 +836,86 @@ mod tests {
             .expect("expected error");
         assert_eq!(err.to_string(), "Checklist item not found: 9999");
         assert!(!format!("{err:#}").contains("Query returned no rows"));
+    }
+
+    #[test]
+    fn test_dry_run_does_not_modify_db() {
+        let conn = test_db();
+        let trip_id = add_trip(&conn, "Dry Run Trip", None, None).unwrap();
+        crate::itinerary::add_itinerary_item(
+            &conn,
+            trip_id,
+            1,
+            "ホテル",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(crate::models::ItineraryCategory::Hotel),
+        )
+        .unwrap();
+
+        let before = list_checklist_items(&conn, trip_id).unwrap();
+        let result = plan_checklist_generation(&conn, trip_id).unwrap();
+        let after = list_checklist_items(&conn, trip_id).unwrap();
+
+        assert!(!result.added.is_empty());
+        assert_eq!(before.len(), after.len());
+        for (before_item, after_item) in before.iter().zip(after.iter()) {
+            assert_eq!(before_item.title, after_item.title);
+            assert_eq!(before_item.is_done, after_item.is_done);
+            assert_eq!(before_item.sort_order, after_item.sort_order);
+        }
+    }
+
+    #[test]
+    fn test_dry_run_shows_added_candidates() {
+        let conn = test_db();
+        let trip_id = add_trip(&conn, "Dry Run Added", None, None).unwrap();
+        crate::itinerary::add_itinerary_item(
+            &conn,
+            trip_id,
+            1,
+            "ビーチ",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(crate::models::ItineraryCategory::Beach),
+        )
+        .unwrap();
+
+        let result = plan_checklist_generation(&conn, trip_id).unwrap();
+        assert!(result.added.contains(&"水着".to_string()));
+        assert!(result.added.contains(&"タオル".to_string()));
+    }
+
+    #[test]
+    fn test_dry_run_shows_skipped_candidates() {
+        let conn = test_db();
+        let trip_id = add_trip(&conn, "Dry Run Skipped", None, None).unwrap();
+        add_checklist_item(&conn, trip_id, "宿泊予約確認").unwrap();
+        crate::itinerary::add_itinerary_item(
+            &conn,
+            trip_id,
+            1,
+            "ホテル",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(crate::models::ItineraryCategory::Hotel),
+        )
+        .unwrap();
+
+        let result = plan_checklist_generation(&conn, trip_id).unwrap();
+        assert!(result.skipped.contains(&"宿泊予約確認".to_string()));
+        assert!(!result.added.contains(&"宿泊予約確認".to_string()));
     }
 }
