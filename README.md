@@ -37,6 +37,20 @@ v1.0.0 時点で README に記載している CLI の範囲外、または将来
 
 ## インストール
 
+### GitHub Release からダウンロード
+
+[GitHub Releases](https://github.com/rcsv/caglla-cli/releases) から、OS 向けのアーカイブ（Linux / macOS: `.tar.gz`、Windows: `.zip`）をダウンロードできます。中身の `caglla-cli`（Windows は `caglla-cli.exe`）を PATH の通った場所に置いて実行してください。
+
+| OS | Asset 名（例: v1.0.2） |
+|---|---|
+| Linux (x86_64) | `caglla-cli-1.0.2-linux-amd64.tar.gz` |
+| macOS (Apple Silicon) | `caglla-cli-1.0.2-macos-arm64.tar.gz` |
+| Windows (x86_64) | `caglla-cli-1.0.2-windows-amd64.zip` |
+
+`v*` タグを push すると、GitHub Actions が release build を作成し、上記アセットを Release に添付します。
+
+### ソースからビルド
+
 リポジトリをクローンしたあと、プロジェクト直下でビルドします。
 
 ```bash
