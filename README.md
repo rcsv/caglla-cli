@@ -221,7 +221,7 @@ Export JSON には **`schema_version`**（現在は `1`）、**`generator`**（`
 cargo run -- trip export 1
 
 # ファイルに保存
-cargo run -- trip export 1 --output trip-1.json
+cargo run -- trip export 1 --output backup.json
 ```
 
 出力例（構造）:
@@ -280,7 +280,7 @@ cargo run -- trip export 1 --output trip-1.json
 `export` で出力した JSON を読み込み、**新しい Trip として**登録します。
 
 ```bash
-cargo run -- trip import trip-1.json
+cargo run -- trip import backup.json
 ```
 
 | 動作 | 説明 |
@@ -338,9 +338,9 @@ Export:
 エクスポートとインポートの流れ:
 
 ```bash
-cargo run -- trip export 1 --output trip-1.json
-cargo run -- trip validate-export trip-1.json
-cargo run -- trip import trip-1.json
+cargo run -- trip export 1 --output backup.json
+cargo run -- trip validate-export backup.json
+cargo run -- trip import backup.json
 ```
 
 #### export ファイルの検証（trip validate-export）
