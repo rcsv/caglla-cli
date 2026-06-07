@@ -53,6 +53,11 @@ enum Command {
         #[command(subcommand)]
         action: DbAction,
     },
+    /// 日 (Day) の閲覧・入れ替え
+    Day {
+        #[command(subcommand)]
+        action: DayAction,
+    },
 }
 
 #[derive(Subcommand)]
@@ -333,6 +338,37 @@ enum ChecklistAction {
     },
 }
 
+#[derive(Subcommand)]
+enum DayAction {
+    /// 旅行の Day 一覧を表示
+    List {
+        /// 旅行 ID
+        trip_id: i64,
+        /// JSON 形式で出力する
+        #[arg(long)]
+        json: bool,
+    },
+    /// Day 詳細と配下の Itinerary を表示
+    Show {
+        /// 旅行 ID
+        trip_id: i64,
+        /// 何日目か
+        day_number: i64,
+        /// JSON 形式で出力する
+        #[arg(long)]
+        json: bool,
+    },
+    /// 2 つの Day 配下の Itinerary を入れ替える
+    Swap {
+        /// 旅行 ID
+        trip_id: i64,
+        /// 入れ替え元の日目
+        day_a: i64,
+        /// 入れ替え先の日目
+        day_b: i64,
+    },
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
     let conn = crate::db::open_db()?;
@@ -501,6 +537,27 @@ fn main() -> Result<()> {
                 crate::checklist::delete_checklist_item(&conn, id)?;
                 println!("チェックリスト項目を削除しました (ID: {id})");
                 println!("  タイトル: {}", item.title);
+            }
+        },
+        Command::Day { action } => match action {
+            DayAction::List { trip_id, json } => {
+                crate::day::run_day_list(&conn, trip_id, json)?;
+            }
+            DayAction::Show {
+                trip_id,
+                day_number,
+                json,
+            } => {
+                crate::day::run_day_show(&conn, trip_id, day_number, json)?;
+            }
+            DayAction::Swap {
+                trip_id,
+                day_a,
+                day_b,
+            } => {
+                let updated = crate::day::swap_day_itineraries(&conn, trip_id, day_a, day_b)?;
+                println!("Day {day_a} と Day {day_b} の日程を入れ替えました");
+                println!("  更新件数: {updated}");
             }
         },
         Command::Trip { action } => match action {

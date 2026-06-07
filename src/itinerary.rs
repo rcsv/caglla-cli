@@ -77,6 +77,31 @@ pub(crate) fn list_itinerary_items(conn: &Connection, trip_id: i64) -> Result<Ve
     Ok(items)
 }
 
+/// 指定 Day に属する日程一覧を取得する（timeline と同じ並び順）
+pub(crate) fn list_itinerary_items_for_day(
+    conn: &Connection,
+    trip_id: i64,
+    day_number: i64,
+) -> Result<Vec<ItineraryItem>> {
+    crate::trip::get_trip(conn, trip_id)?;
+    let _day = crate::day::find_day_by_trip_and_day_number(conn, trip_id, day_number)?;
+    let mut stmt = conn
+        .prepare(&format!(
+            "{ITINERARY_ITEM_SELECT_SQL}
+             WHERE i.trip_id = ?1 AND d.day_number = ?2
+             ORDER BY d.day_number, i.start_time IS NULL, i.start_time, i.sort_order, i.id"
+        ))
+        .context("日程一覧取得の準備に失敗しました")?;
+
+    let items = stmt
+        .query_map(params![trip_id, day_number], row_to_itinerary_item)
+        .context("日程一覧取得に失敗しました")?
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .context("日程一覧の読み込みに失敗しました")?;
+
+    Ok(items)
+}
+
 /// ID を指定して1件の日程を取得する
 pub(crate) fn get_itinerary_item(conn: &Connection, id: i64) -> Result<ItineraryItem> {
     crate::db::map_query_row(

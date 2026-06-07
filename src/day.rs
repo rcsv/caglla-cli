@@ -1,9 +1,10 @@
 use anyhow::{Context, Result};
 use chrono::NaiveDate;
 use rusqlite::{params, Connection};
+use serde::Serialize;
 
 use crate::db::now_string;
-use crate::models::Day;
+use crate::models::{Day, ItineraryItem, Trip};
 
 /// YYYY-MM-DD 形式の日付文字列をパースする
 pub(crate) fn parse_trip_date(date: &str) -> Result<NaiveDate> {
@@ -113,6 +114,171 @@ pub(crate) fn find_day_id_by_trip_and_day_number(
     day_number: i64,
 ) -> Result<i64> {
     Ok(find_day_by_trip_and_day_number(conn, trip_id, day_number)?.id)
+}
+
+/// Trip 開始日と day_number からカレンダー日付 (YYYY-MM-DD) を導出する
+pub(crate) fn day_date_for_trip(trip: &Trip, day_number: i64) -> Result<String> {
+    let start = trip
+        .start_date
+        .as_deref()
+        .ok_or_else(|| anyhow::anyhow!("Trip {} has no start_date", trip.id))?;
+    let date = parse_trip_date(start)? + chrono::Duration::days(day_number - 1);
+    Ok(date.format("%Y-%m-%d").to_string())
+}
+
+#[derive(Serialize)]
+struct DayListEntryJson {
+    id: i64,
+    day_number: i64,
+    date: String,
+    title: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    description: Option<String>,
+}
+
+#[derive(Serialize)]
+struct DayListJson {
+    trip_id: i64,
+    trip_name: String,
+    days: Vec<DayListEntryJson>,
+}
+
+#[derive(Serialize)]
+struct DayShowJson {
+    trip_id: i64,
+    trip_name: String,
+    day_number: i64,
+    date: String,
+    day_id: i64,
+    itineraries: Vec<ItineraryItem>,
+}
+
+/// Day 一覧を表示する
+pub(crate) fn run_day_list(conn: &Connection, trip_id: i64, json: bool) -> Result<()> {
+    let trip = crate::trip::get_trip(conn, trip_id)?;
+    let days = list_days(conn, trip_id)?;
+    if json {
+        let entries = days
+            .iter()
+            .map(|day| {
+                Ok(DayListEntryJson {
+                    id: day.id,
+                    day_number: day.day_number,
+                    date: day_date_for_trip(&trip, day.day_number)?,
+                    title: day.title.clone(),
+                    description: day.description.clone(),
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+        crate::trip::print_json(&DayListJson {
+            trip_id,
+            trip_name: trip.name,
+            days: entries,
+        })?;
+    } else {
+        print_day_list(&trip, &days)?;
+    }
+    Ok(())
+}
+
+/// Day 詳細（配下 Itinerary 含む）を表示する
+pub(crate) fn run_day_show(
+    conn: &Connection,
+    trip_id: i64,
+    day_number: i64,
+    json: bool,
+) -> Result<()> {
+    let trip = crate::trip::get_trip(conn, trip_id)?;
+    let day = find_day_by_trip_and_day_number(conn, trip_id, day_number)?;
+    let date = day_date_for_trip(&trip, day_number)?;
+    let items = crate::itinerary::list_itinerary_items_for_day(conn, trip_id, day_number)?;
+    if json {
+        crate::trip::print_json(&DayShowJson {
+            trip_id,
+            trip_name: trip.name,
+            day_number,
+            date,
+            day_id: day.id,
+            itineraries: items,
+        })?;
+    } else {
+        print_day_show(&trip, day_number, &date, &items);
+    }
+    Ok(())
+}
+
+/// 2 つの Day 配下の Itinerary を入れ替える（day_number / Trip 日付は変更しない）
+pub(crate) fn swap_day_itineraries(
+    conn: &Connection,
+    trip_id: i64,
+    day_a: i64,
+    day_b: i64,
+) -> Result<usize> {
+    if day_a == day_b {
+        anyhow::bail!("同じ Day を指定しています: Day {day_a}");
+    }
+    crate::trip::get_trip(conn, trip_id)?;
+    let day_a_row = find_day_by_trip_and_day_number(conn, trip_id, day_a)?;
+    let day_b_row = find_day_by_trip_and_day_number(conn, trip_id, day_b)?;
+    let now = now_string();
+    let tx = conn
+        .unchecked_transaction()
+        .context("Day swap トランザクションの開始に失敗しました")?;
+    let updated = tx
+        .execute(
+            "UPDATE itinerary_items SET
+               day_id = CASE
+                 WHEN day_id = ?1 THEN ?2
+                 WHEN day_id = ?3 THEN ?4
+               END,
+               day = CASE
+                 WHEN day_id = ?1 THEN ?5
+                 WHEN day_id = ?3 THEN ?6
+               END,
+               updated_at = ?7
+             WHERE day_id IN (?1, ?3)",
+            params![
+                day_a_row.id,
+                day_b_row.id,
+                day_b_row.id,
+                day_a_row.id,
+                day_b,
+                day_a,
+                &now,
+            ],
+        )
+        .context("Day swap の更新に失敗しました")?;
+    tx.commit()
+        .context("Day swap トランザクションの確定に失敗しました")?;
+    Ok(updated)
+}
+
+fn print_day_list(trip: &Trip, days: &[Day]) -> Result<()> {
+    println!("Trip: {}", trip.name);
+    println!();
+    for day in days {
+        let date = day_date_for_trip(trip, day.day_number)?;
+        println!("Day {}  {}", day.day_number, date);
+    }
+    Ok(())
+}
+
+fn print_day_show(trip: &Trip, day_number: i64, date: &str, items: &[ItineraryItem]) {
+    println!("Trip: {}", trip.name);
+    println!();
+    println!("Day {day_number}");
+    println!("Date: {date}");
+    println!();
+    println!("Itineraries:");
+    if items.is_empty() {
+        return;
+    }
+    for item in items {
+        match &item.start_time {
+            Some(time) => println!("- {time} {}", item.title),
+            None => println!("- {}", item.title),
+        }
+    }
 }
 
 /// 旅行に紐づく Day 一覧を取得する
@@ -261,5 +427,256 @@ mod tests {
         )
         .unwrap();
         assert!(sync_days_to_trip_duration(&conn, trip_id, 2).is_err());
+    }
+
+    #[test]
+    fn test_day_date_for_trip() {
+        let conn = test_db();
+        let trip_id = add_trip(&conn, "Okinawa", "2026-04-26", "2026-04-29").unwrap();
+        let trip = crate::trip::get_trip(&conn, trip_id).unwrap();
+        assert_eq!(day_date_for_trip(&trip, 1).unwrap(), "2026-04-26");
+        assert_eq!(day_date_for_trip(&trip, 4).unwrap(), "2026-04-29");
+    }
+
+    #[test]
+    fn test_day_list_includes_derived_dates() {
+        let conn = test_db();
+        let trip_id = add_trip(&conn, "Okinawa Family Trip", "2026-04-26", "2026-04-29").unwrap();
+        let trip = crate::trip::get_trip(&conn, trip_id).unwrap();
+        let days = list_days(&conn, trip_id).unwrap();
+        assert_eq!(days.len(), 4);
+        assert_eq!(day_date_for_trip(&trip, 1).unwrap(), "2026-04-26");
+        assert_eq!(day_date_for_trip(&trip, 2).unwrap(), "2026-04-27");
+    }
+
+    #[test]
+    fn test_run_day_show_empty_day() {
+        let conn = test_db();
+        let trip_id = add_trip(&conn, "Empty Day Trip", "2026-04-26", "2026-04-29").unwrap();
+        let items = crate::itinerary::list_itinerary_items_for_day(&conn, trip_id, 2).unwrap();
+        assert!(items.is_empty());
+    }
+
+    #[test]
+    fn test_run_day_show_rejects_invalid_day_number() {
+        let conn = test_db();
+        let trip_id = add_trip(&conn, "Range Trip", "2026-04-26", "2026-04-29").unwrap();
+        assert!(run_day_show(&conn, trip_id, 99, false).is_err());
+    }
+
+    #[test]
+    fn test_swap_day_itineraries_exchanges_day2_and_day3() {
+        let conn = test_db();
+        let trip_id = add_trip(&conn, "Swap Trip", "2026-04-26", "2026-04-29").unwrap();
+        add_itinerary_item(
+            &conn,
+            trip_id,
+            2,
+            "Aquarium",
+            None,
+            Some("09:00"),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        add_itinerary_item(
+            &conn,
+            trip_id,
+            2,
+            "Beach",
+            None,
+            Some("13:00"),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        add_itinerary_item(
+            &conn,
+            trip_id,
+            3,
+            "Castle",
+            None,
+            Some("10:00"),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let updated = swap_day_itineraries(&conn, trip_id, 2, 3).unwrap();
+        assert_eq!(updated, 3);
+
+        let day2 = crate::itinerary::list_itinerary_items_for_day(&conn, trip_id, 2).unwrap();
+        let day3 = crate::itinerary::list_itinerary_items_for_day(&conn, trip_id, 3).unwrap();
+        assert_eq!(day2.len(), 1);
+        assert_eq!(day3.len(), 2);
+        assert_eq!(day2[0].title, "Castle");
+        assert_eq!(day3[0].title, "Aquarium");
+        assert_eq!(day3[1].title, "Beach");
+    }
+
+    #[test]
+    fn test_swap_preserves_total_itinerary_count() {
+        let conn = test_db();
+        let trip_id = add_trip(&conn, "Count Trip", "2026-04-26", "2026-04-29").unwrap();
+        add_itinerary_item(
+            &conn, trip_id, 2, "A", None, None, None, None, None, None, None,
+        )
+        .unwrap();
+        add_itinerary_item(
+            &conn, trip_id, 3, "B", None, None, None, None, None, None, None,
+        )
+        .unwrap();
+        add_itinerary_item(
+            &conn, trip_id, 3, "C", None, None, None, None, None, None, None,
+        )
+        .unwrap();
+        let before = crate::itinerary::list_itinerary_items(&conn, trip_id).unwrap();
+        swap_day_itineraries(&conn, trip_id, 2, 3).unwrap();
+        let after = crate::itinerary::list_itinerary_items(&conn, trip_id).unwrap();
+        assert_eq!(before.len(), after.len());
+        assert_eq!(after.iter().filter(|item| item.day == 2).count(), 2);
+        assert_eq!(after.iter().filter(|item| item.day == 3).count(), 1);
+    }
+
+    #[test]
+    fn test_swap_rejects_same_day() {
+        let conn = test_db();
+        let trip_id = add_trip(&conn, "Same Day Trip", "2026-04-26", "2026-04-29").unwrap();
+        add_itinerary_item(
+            &conn, trip_id, 2, "Plan", None, None, None, None, None, None, None,
+        )
+        .unwrap();
+        let before = crate::itinerary::list_itinerary_items_for_day(&conn, trip_id, 2).unwrap();
+        let err = swap_day_itineraries(&conn, trip_id, 2, 2).unwrap_err();
+        assert!(err.to_string().contains("同じ Day"));
+        let after = crate::itinerary::list_itinerary_items_for_day(&conn, trip_id, 2).unwrap();
+        assert_eq!(before.len(), after.len());
+        assert_eq!(before[0].title, after[0].title);
+    }
+
+    #[test]
+    fn test_swap_leaves_data_unchanged_on_invalid_day() {
+        let conn = test_db();
+        let trip_id = add_trip(&conn, "Invalid Day Trip", "2026-04-26", "2026-04-29").unwrap();
+        add_itinerary_item(
+            &conn, trip_id, 2, "Plan", None, None, None, None, None, None, None,
+        )
+        .unwrap();
+        let before = crate::itinerary::list_itinerary_items_for_day(&conn, trip_id, 2).unwrap();
+        assert!(swap_day_itineraries(&conn, trip_id, 2, 99).is_err());
+        let after = crate::itinerary::list_itinerary_items_for_day(&conn, trip_id, 2).unwrap();
+        assert_eq!(before.len(), after.len());
+        assert_eq!(before[0].title, after[0].title);
+    }
+
+    #[test]
+    fn test_swap_transaction_rollback_on_failed_commit() {
+        let conn = test_db();
+        let trip_id = add_trip(&conn, "Rollback Trip", "2026-04-26", "2026-04-29").unwrap();
+        add_itinerary_item(
+            &conn, trip_id, 2, "A", None, None, None, None, None, None, None,
+        )
+        .unwrap();
+        add_itinerary_item(
+            &conn, trip_id, 3, "B", None, None, None, None, None, None, None,
+        )
+        .unwrap();
+        let day_a = find_day_by_trip_and_day_number(&conn, trip_id, 2).unwrap();
+        let day_b = find_day_by_trip_and_day_number(&conn, trip_id, 3).unwrap();
+        let before_day2 =
+            crate::itinerary::list_itinerary_items_for_day(&conn, trip_id, 2).unwrap();
+        let before_day3 =
+            crate::itinerary::list_itinerary_items_for_day(&conn, trip_id, 3).unwrap();
+
+        let tx = conn.unchecked_transaction().unwrap();
+        tx.execute(
+            "UPDATE itinerary_items SET day_id = ?1 WHERE day_id = ?2",
+            params![day_b.id, day_a.id],
+        )
+        .unwrap();
+        drop(tx);
+
+        let after_day2 = crate::itinerary::list_itinerary_items_for_day(&conn, trip_id, 2).unwrap();
+        let after_day3 = crate::itinerary::list_itinerary_items_for_day(&conn, trip_id, 3).unwrap();
+        assert_eq!(before_day2[0].title, after_day2[0].title);
+        assert_eq!(before_day3[0].title, after_day3[0].title);
+    }
+
+    #[test]
+    fn test_day_list_json_payload() {
+        let conn = test_db();
+        let trip_id = add_trip(&conn, "JSON Trip", "2026-04-26", "2026-04-28").unwrap();
+        let trip = crate::trip::get_trip(&conn, trip_id).unwrap();
+        let days = list_days(&conn, trip_id).unwrap();
+        let entries = days
+            .iter()
+            .map(|day| {
+                Ok(DayListEntryJson {
+                    id: day.id,
+                    day_number: day.day_number,
+                    date: day_date_for_trip(&trip, day.day_number)?,
+                    title: day.title.clone(),
+                    description: day.description.clone(),
+                })
+            })
+            .collect::<Result<Vec<_>>>()
+            .unwrap();
+        let json = serde_json::to_string_pretty(&DayListJson {
+            trip_id,
+            trip_name: trip.name,
+            days: entries,
+        })
+        .unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed["trip_id"], trip_id);
+        assert_eq!(parsed["days"].as_array().unwrap().len(), 3);
+        assert_eq!(parsed["days"][0]["date"], "2026-04-26");
+    }
+
+    #[test]
+    fn test_day_show_json_payload() {
+        let conn = test_db();
+        let trip_id = add_trip(&conn, "JSON Show Trip", "2026-04-26", "2026-04-28").unwrap();
+        add_itinerary_item(
+            &conn,
+            trip_id,
+            2,
+            "Museum",
+            None,
+            Some("09:00"),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        let trip = crate::trip::get_trip(&conn, trip_id).unwrap();
+        let day = find_day_by_trip_and_day_number(&conn, trip_id, 2).unwrap();
+        let items = crate::itinerary::list_itinerary_items_for_day(&conn, trip_id, 2).unwrap();
+        let date = day_date_for_trip(&trip, 2).unwrap();
+        let json = serde_json::to_string_pretty(&DayShowJson {
+            trip_id,
+            trip_name: trip.name,
+            day_number: 2,
+            date,
+            day_id: day.id,
+            itineraries: items,
+        })
+        .unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed["day_number"], 2);
+        assert_eq!(parsed["date"], "2026-04-27");
+        assert_eq!(parsed["itineraries"].as_array().unwrap().len(), 1);
+        assert_eq!(parsed["itineraries"][0]["title"], "Museum");
     }
 }

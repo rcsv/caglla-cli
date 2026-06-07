@@ -241,7 +241,7 @@ fn cli_validate_export_invalid_json_json_output_includes_errors() {
     assert!(!output.status.success());
     let parsed: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(parsed["valid"], false);
-    assert!(parsed["errors"].as_array().unwrap().len() >= 1);
+    assert!(!parsed["errors"].as_array().unwrap().is_empty());
 }
 
 #[test]

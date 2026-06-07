@@ -91,3 +91,15 @@ fn cli_trip_doctor_not_found() {
     let output = run_cli(&["trip", "doctor", "9999"]);
     assert_not_found(&output, "Trip not found: 9999");
 }
+
+#[test]
+fn cli_day_list_not_found() {
+    let output = run_cli(&["day", "list", "9999"]);
+    assert_not_found(&output, "Trip not found: 9999");
+}
+
+#[test]
+fn cli_day_show_not_found_json() {
+    let output = run_cli(&["day", "show", "9999", "1", "--json"]);
+    assert_not_found(&output, "Trip not found: 9999");
+}

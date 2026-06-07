@@ -1467,9 +1467,7 @@ mod tests {
     #[test]
     fn test_duplicate_trip_not_found() {
         let conn = test_db();
-        let err = duplicate_trip(&conn, 9999, None)
-            .err()
-            .expect("expected error");
+        let err = duplicate_trip(&conn, 9999, None).expect_err("expected error");
         assert_eq!(err.to_string(), "Trip not found: 9999");
     }
 
