@@ -99,16 +99,16 @@ fn apply_planned_checklist_items(conn: &Connection, trip_id: i64, added: &[Strin
     }
 
     let existing_items = list_checklist_items(conn, trip_id)?;
-    let mut next_sort_order = existing_items
+    let base_sort_order = existing_items
         .iter()
         .map(|item| item.sort_order)
         .max()
         .unwrap_or(-1)
         + 1;
 
-    for title in added {
-        add_checklist_item_with_sort_order(conn, trip_id, title, next_sort_order)?;
-        next_sort_order += 1;
+    for (offset, title) in added.iter().enumerate() {
+        let sort_order = base_sort_order + offset as i64;
+        add_checklist_item_with_sort_order(conn, trip_id, title, sort_order)?;
     }
 
     Ok(())
