@@ -482,11 +482,29 @@ legacy ファイルの `--json` では `"generator": null`, `"generator_version"
 
 #### 旅行 JSON の比較（trip diff）
 
-2 つの `trip export` JSON を比較し、Trip 名・日程の追加・削除・フィールド変更を表示します。
+2 つの `trip export` JSON を比較し、Trip 名・日程・Note の追加・削除・変更を表示します。
 
 ```bash
 cargo run -- trip diff trip-old.json trip-new.json
 ```
+
+比較対象:
+
+| 種別 | 表示例 |
+|---|---|
+| Trip | `- name: 旧名` / `+ name: 新名` |
+| Itinerary | `- Day1 09:00 首里城` / `+ ...` / `~ ...`（フィールド変更） |
+| Note | `- Note removed: Day 2 / 夕食候補` / `+ Note added: Trip / 持ち物メモ` / `~ Note changed: Itinerary / Day 2 / 美ら海水族館` |
+
+Note の比較キー:
+
+| 種別 | キー |
+|---|---|
+| Trip Note | `owner_type=trip` + `title` |
+| Day Note | `owner_type=day` + `day_number` + `title` |
+| Itinerary Note | `owner_type=itinerary` + `day_number` + `sort_order` + itinerary の `title` |
+
+v1 export（`notes` なし）と v2 export（`notes: []` 含む）を比較しても異常終了しません。
 
 ### Markdown Export
 

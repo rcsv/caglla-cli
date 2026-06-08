@@ -3,7 +3,24 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 
-use crate::models::{ItineraryCategory, ItineraryItem, TripExport};
+use crate::models::{ExportNote, ItineraryCategory, ItineraryItem, TripExport};
+
+/// export Note の比較キー
+#[derive(Clone, Eq, PartialEq, Hash, PartialOrd, Ord)]
+enum NoteKey {
+    Trip {
+        title: Option<String>,
+    },
+    Day {
+        day_number: i64,
+        title: Option<String>,
+    },
+    Itinerary {
+        day_number: i64,
+        sort_order: i64,
+        title: String,
+    },
+}
 
 /// itinerary_items の比較キー（day + start_time + title）
 #[derive(Clone, Eq, PartialEq, Hash)]
@@ -29,6 +46,9 @@ pub(crate) struct TripDiff {
     itinerary_added: Vec<ItineraryItem>,
     itinerary_removed: Vec<ItineraryItem>,
     itinerary_modified: Vec<ItineraryFieldChange>,
+    note_added: Vec<ExportNote>,
+    note_removed: Vec<ExportNote>,
+    note_changed: Vec<ExportNote>,
 }
 
 fn itinerary_key(item: &ItineraryItem) -> ItineraryKey {
@@ -75,6 +95,106 @@ fn compare_itinerary_items(a: &ItineraryItem, b: &ItineraryItem) -> Ordering {
         },
         other => other,
     }
+}
+
+fn note_key(note: &ExportNote) -> NoteKey {
+    match note {
+        ExportNote::Trip { title, .. } => NoteKey::Trip {
+            title: title.clone(),
+        },
+        ExportNote::Day {
+            day_number, title, ..
+        } => NoteKey::Day {
+            day_number: *day_number,
+            title: title.clone(),
+        },
+        ExportNote::Itinerary { itinerary_key, .. } => NoteKey::Itinerary {
+            day_number: itinerary_key.day_number,
+            sort_order: itinerary_key.sort_order,
+            title: itinerary_key.title.clone(),
+        },
+    }
+}
+
+fn compare_export_notes(a: &ExportNote, b: &ExportNote) -> Ordering {
+    note_key(a).cmp(&note_key(b))
+}
+
+fn format_note_line(note: &ExportNote) -> String {
+    match note {
+        ExportNote::Trip { title, .. } => {
+            format!("Trip / {}", title.as_deref().unwrap_or("-"))
+        }
+        ExportNote::Day {
+            day_number, title, ..
+        } => format!("Day {day_number} / {}", title.as_deref().unwrap_or("-")),
+        ExportNote::Itinerary { itinerary_key, .. } => format!(
+            "Itinerary / Day {} / {}",
+            itinerary_key.day_number, itinerary_key.title
+        ),
+    }
+}
+
+fn note_body(note: &ExportNote) -> &str {
+    match note {
+        ExportNote::Trip { body, .. }
+        | ExportNote::Day { body, .. }
+        | ExportNote::Itinerary { body, .. } => body,
+    }
+}
+
+fn note_content_changed(old: &ExportNote, new: &ExportNote) -> bool {
+    if note_body(old) != note_body(new) {
+        return true;
+    }
+    matches!(
+        (old, new),
+        (
+            ExportNote::Itinerary { title: old_title, .. },
+            ExportNote::Itinerary { title: new_title, .. }
+        ) if old_title != new_title
+    )
+}
+
+fn compute_notes_diff(
+    old_notes: &[ExportNote],
+    new_notes: &[ExportNote],
+) -> (Vec<ExportNote>, Vec<ExportNote>, Vec<ExportNote>) {
+    let old_map: HashMap<NoteKey, &ExportNote> = old_notes
+        .iter()
+        .map(|note| (note_key(note), note))
+        .collect();
+    let new_map: HashMap<NoteKey, &ExportNote> = new_notes
+        .iter()
+        .map(|note| (note_key(note), note))
+        .collect();
+
+    let mut note_removed: Vec<ExportNote> = old_notes
+        .iter()
+        .filter(|note| !new_map.contains_key(&note_key(note)))
+        .cloned()
+        .collect();
+    let mut note_added: Vec<ExportNote> = new_notes
+        .iter()
+        .filter(|note| !old_map.contains_key(&note_key(note)))
+        .cloned()
+        .collect();
+
+    let mut note_changed = Vec::new();
+    for (key, old_note) in &old_map {
+        let Some(new_note) = new_map.get(key) else {
+            continue;
+        };
+        if note_content_changed(old_note, new_note) {
+            note_changed.push((*new_note).clone());
+        }
+    }
+
+    note_removed.sort_by(compare_export_notes);
+    note_added.sort_by(compare_export_notes);
+    note_changed.sort_by(compare_export_notes);
+
+    (note_added, note_removed, note_changed)
 }
 
 /// 2つの export JSON の差分を計算する（厳密比較）
@@ -214,11 +334,16 @@ pub(crate) fn compute_trip_diff(old: &TripExport, new: &TripExport) -> TripDiff 
         .then_with(|| a.field.cmp(&b.field))
     });
 
+    let (note_added, note_removed, note_changed) = compute_notes_diff(old.notes(), new.notes());
+
     TripDiff {
         trip_changes,
         itinerary_added,
         itinerary_removed,
         itinerary_modified,
+        note_added,
+        note_removed,
+        note_changed,
     }
 }
 
@@ -241,42 +366,57 @@ pub(crate) fn print_trip_diff(diff: &TripDiff) {
         && diff.itinerary_modified.is_empty()
     {
         println!("  （変更なし）");
-        return;
-    }
-
-    for item in &diff.itinerary_removed {
-        println!("- {}", format_itinerary_line(item));
-    }
-    for item in &diff.itinerary_added {
-        println!("+ {}", format_itinerary_line(item));
-    }
-
-    let mut current_key: Option<(i64, Option<String>, String)> = None;
-    for change in &diff.itinerary_modified {
-        let key = (change.day, change.start_time.clone(), change.title.clone());
-        if current_key.as_ref() != Some(&key) {
-            let line_item = ItineraryItem {
-                id: 0,
-                trip_id: 0,
-                day: change.day,
-                title: change.title.clone(),
-                note: None,
-                start_time: change.start_time.clone(),
-                sort_order: 0,
-                duration_minutes: None,
-                travel_minutes: None,
-                location: None,
-                category: None,
-                created_at: String::new(),
-                updated_at: String::new(),
-            };
-            println!("~ {}", format_itinerary_line(&line_item));
-            current_key = Some(key);
+    } else {
+        for item in &diff.itinerary_removed {
+            println!("- {}", format_itinerary_line(item));
         }
-        println!(
-            "  {}: {} -> {}",
-            change.field, change.old_value, change.new_value
-        );
+        for item in &diff.itinerary_added {
+            println!("+ {}", format_itinerary_line(item));
+        }
+
+        let mut current_key: Option<(i64, Option<String>, String)> = None;
+        for change in &diff.itinerary_modified {
+            let key = (change.day, change.start_time.clone(), change.title.clone());
+            if current_key.as_ref() != Some(&key) {
+                let line_item = ItineraryItem {
+                    id: 0,
+                    trip_id: 0,
+                    day: change.day,
+                    title: change.title.clone(),
+                    note: None,
+                    start_time: change.start_time.clone(),
+                    sort_order: 0,
+                    duration_minutes: None,
+                    travel_minutes: None,
+                    location: None,
+                    category: None,
+                    created_at: String::new(),
+                    updated_at: String::new(),
+                };
+                println!("~ {}", format_itinerary_line(&line_item));
+                current_key = Some(key);
+            }
+            println!(
+                "  {}: {} -> {}",
+                change.field, change.old_value, change.new_value
+            );
+        }
+    }
+
+    println!();
+    println!("Notes:");
+    if diff.note_added.is_empty() && diff.note_removed.is_empty() && diff.note_changed.is_empty() {
+        println!("  （変更なし）");
+    } else {
+        for note in &diff.note_removed {
+            println!("- Note removed: {}", format_note_line(note));
+        }
+        for note in &diff.note_added {
+            println!("+ Note added: {}", format_note_line(note));
+        }
+        for note in &diff.note_changed {
+            println!("~ Note changed: {}", format_note_line(note));
+        }
     }
 }
 
@@ -292,7 +432,7 @@ pub(crate) fn run_trip_diff(old_path: &str, new_path: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{ItineraryItem, Trip, TripExport};
+    use crate::models::{ExportNote, ItineraryItem, ItineraryNoteKey, Trip, TripExport};
 
     fn make_test_trip(name: &str) -> Trip {
         Trip {
@@ -468,5 +608,184 @@ mod tests {
         assert_eq!(diff.trip_changes[0].0, "name");
         assert_eq!(diff.trip_changes[0].1, "沖縄旅行");
         assert_eq!(diff.trip_changes[0].2, "沖縄・瀬底旅行");
+    }
+
+    fn make_base_export(trip: Trip) -> TripExport {
+        TripExport {
+            schema_version: None,
+            generator: None,
+            generator_version: None,
+            exported_at: None,
+            trip,
+            itinerary_items: vec![],
+            checklist_items: None,
+            notes: None,
+        }
+    }
+
+    #[test]
+    fn test_diff_notes_v1_vs_v2_empty_does_not_panic() {
+        let old = make_base_export(make_test_trip("Trip"));
+        let mut new = make_base_export(make_test_trip("Trip"));
+        new.schema_version = Some(2);
+        new.notes = Some(vec![]);
+
+        let diff = compute_trip_diff(&old, &new);
+        assert!(diff.note_added.is_empty());
+        assert!(diff.note_removed.is_empty());
+        assert!(diff.note_changed.is_empty());
+    }
+
+    #[test]
+    fn test_diff_trip_note_added_removed_body_changed() {
+        let old = make_base_export(make_test_trip("Trip"));
+        let mut new = make_base_export(make_test_trip("Trip"));
+
+        let added = ExportNote::Trip {
+            title: Some("持ち物メモ".to_string()),
+            body: "passport".to_string(),
+        };
+        new.notes = Some(vec![added.clone()]);
+
+        let diff = compute_trip_diff(&old, &new);
+        assert_eq!(diff.note_added.len(), 1);
+        assert!(diff.note_removed.is_empty());
+        assert!(diff.note_changed.is_empty());
+
+        let diff = compute_trip_diff(&new, &old);
+        assert_eq!(diff.note_removed.len(), 1);
+        assert_eq!(diff.note_removed[0], added);
+
+        let mut changed_old = make_base_export(make_test_trip("Trip"));
+        changed_old.notes = Some(vec![ExportNote::Trip {
+            title: Some("持ち物メモ".to_string()),
+            body: "before".to_string(),
+        }]);
+        let mut changed_new = make_base_export(make_test_trip("Trip"));
+        changed_new.notes = Some(vec![ExportNote::Trip {
+            title: Some("持ち物メモ".to_string()),
+            body: "after".to_string(),
+        }]);
+
+        let diff = compute_trip_diff(&changed_old, &changed_new);
+        assert!(diff.note_added.is_empty());
+        assert!(diff.note_removed.is_empty());
+        assert_eq!(diff.note_changed.len(), 1);
+    }
+
+    #[test]
+    fn test_diff_day_note_added_removed_body_changed() {
+        let old = make_base_export(make_test_trip("Trip"));
+        let mut new = make_base_export(make_test_trip("Trip"));
+
+        let added = ExportNote::Day {
+            day_number: 2,
+            title: Some("夕食候補".to_string()),
+            body: "steak".to_string(),
+        };
+        new.notes = Some(vec![added.clone()]);
+
+        let diff = compute_trip_diff(&old, &new);
+        assert_eq!(diff.note_added.len(), 1);
+
+        let diff = compute_trip_diff(&new, &old);
+        assert_eq!(diff.note_removed.len(), 1);
+
+        let mut changed_old = make_base_export(make_test_trip("Trip"));
+        changed_old.notes = Some(vec![ExportNote::Day {
+            day_number: 2,
+            title: Some("夕食候補".to_string()),
+            body: "before".to_string(),
+        }]);
+        let mut changed_new = make_base_export(make_test_trip("Trip"));
+        changed_new.notes = Some(vec![ExportNote::Day {
+            day_number: 2,
+            title: Some("夕食候補".to_string()),
+            body: "after".to_string(),
+        }]);
+
+        let diff = compute_trip_diff(&changed_old, &changed_new);
+        assert_eq!(diff.note_changed.len(), 1);
+    }
+
+    #[test]
+    fn test_diff_itinerary_note_added_removed_body_changed() {
+        let old = make_base_export(make_test_trip("Trip"));
+        let mut new = make_base_export(make_test_trip("Trip"));
+
+        let added = ExportNote::Itinerary {
+            itinerary_key: ItineraryNoteKey {
+                day_number: 2,
+                sort_order: 3,
+                start_time: Some("09:00".to_string()),
+                title: "美ら海水族館".to_string(),
+            },
+            title: Some("水族館メモ".to_string()),
+            body: "ticket info".to_string(),
+        };
+        new.notes = Some(vec![added.clone()]);
+
+        let diff = compute_trip_diff(&old, &new);
+        assert_eq!(diff.note_added.len(), 1);
+
+        let diff = compute_trip_diff(&new, &old);
+        assert_eq!(diff.note_removed.len(), 1);
+
+        let mut changed_old = make_base_export(make_test_trip("Trip"));
+        changed_old.notes = Some(vec![ExportNote::Itinerary {
+            itinerary_key: ItineraryNoteKey {
+                day_number: 2,
+                sort_order: 3,
+                start_time: Some("09:00".to_string()),
+                title: "美ら海水族館".to_string(),
+            },
+            title: Some("水族館メモ".to_string()),
+            body: "before".to_string(),
+        }]);
+        let mut changed_new = make_base_export(make_test_trip("Trip"));
+        changed_new.notes = Some(vec![ExportNote::Itinerary {
+            itinerary_key: ItineraryNoteKey {
+                day_number: 2,
+                sort_order: 3,
+                start_time: Some("09:00".to_string()),
+                title: "美ら海水族館".to_string(),
+            },
+            title: Some("水族館メモ".to_string()),
+            body: "after".to_string(),
+        }]);
+
+        let diff = compute_trip_diff(&changed_old, &changed_new);
+        assert_eq!(diff.note_changed.len(), 1);
+    }
+
+    #[test]
+    fn test_diff_itinerary_note_title_field_change() {
+        let mut old = make_base_export(make_test_trip("Trip"));
+        old.notes = Some(vec![ExportNote::Itinerary {
+            itinerary_key: ItineraryNoteKey {
+                day_number: 2,
+                sort_order: 3,
+                start_time: None,
+                title: "美ら海水族館".to_string(),
+            },
+            title: Some("旧タイトル".to_string()),
+            body: "same body".to_string(),
+        }]);
+        let mut new = make_base_export(make_test_trip("Trip"));
+        new.notes = Some(vec![ExportNote::Itinerary {
+            itinerary_key: ItineraryNoteKey {
+                day_number: 2,
+                sort_order: 3,
+                start_time: None,
+                title: "美ら海水族館".to_string(),
+            },
+            title: Some("新タイトル".to_string()),
+            body: "same body".to_string(),
+        }]);
+
+        let diff = compute_trip_diff(&old, &new);
+        assert_eq!(diff.note_changed.len(), 1);
+        assert!(diff.note_added.is_empty());
+        assert!(diff.note_removed.is_empty());
     }
 }

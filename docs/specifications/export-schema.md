@@ -110,6 +110,26 @@ Import 時の `itinerary_key` 解決優先順位:
 
 解決不能な Note は validation error です。
 
+## trip diff (v1.4.1+)
+
+`trip diff` は export JSON 2 件を比較し、`notes[]` の差分も表示します。
+
+| 表示 | 意味 |
+|---|---|
+| `+ Note added: ...` | 新側にのみ存在 |
+| `- Note removed: ...` | 旧側にのみ存在 |
+| `~ Note changed: ...` | 同一キーで `body` または（Itinerary Note の）`title` が変化 |
+
+比較キー:
+
+| 種別 | キー |
+|---|---|
+| Trip Note | `owner_type=trip`, `title` |
+| Day Note | `owner_type=day`, `day_number`, `title` |
+| Itinerary Note | `owner_type=itinerary`, `day_number`, `sort_order`, `itinerary_key.title` |
+
+v1 export（`notes` 省略）と v2 export（`notes: []`）の比較は空配列同士として扱い、panic しません。
+
 ## 非対象（将来バージョン）
 
 以下は schema v2 では含めません:
