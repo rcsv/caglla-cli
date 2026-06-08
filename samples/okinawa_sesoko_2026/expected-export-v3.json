@@ -1,0 +1,933 @@
+{
+  "schema_version": 3,
+  "trip": {
+    "name": "沖縄 瀬底 4日間",
+    "start_date": "2026-04-26",
+    "end_date": "2026-04-29"
+  },
+  "days": [
+    {
+      "day_number": 1,
+      "itineraries": [
+        {
+          "title": "出発、せっちゃんやっちゃんピックアップ",
+          "start_time": "06:00",
+          "sort_order": 1,
+          "location": "粟根家",
+          "category": "transport",
+          "expenses": []
+        },
+        {
+          "title": "高速道路 東浦→セントレア",
+          "start_time": "06:30",
+          "sort_order": 2,
+          "location": "東浦→セントレア",
+          "category": "transport",
+          "expenses": [
+            {
+              "amount": 630,
+              "currency": "JPY",
+              "expense_date": "2026-04-26",
+              "note": "費用区分: 旅費 / 領収書: なし / 備考: 東浦→知多半島道路→セントレア",
+              "sort_order": 0
+            }
+          ]
+        },
+        {
+          "title": "P1 G Parking",
+          "start_time": "06:50",
+          "sort_order": 3,
+          "location": "セントレア駐車場",
+          "category": "transport",
+          "expenses": [
+            {
+              "amount": 13000,
+              "currency": "JPY",
+              "expense_date": "2026-04-26",
+              "note": "費用区分: 旅費 / 領収書: R-007 / 備考: 予約番号 : 655098, 含 予約料 ¥1,000",
+              "sort_order": 0
+            }
+          ]
+        },
+        {
+          "title": "チェックイン",
+          "start_time": "07:30",
+          "sort_order": 4,
+          "location": "セントレア空港",
+          "category": "flight",
+          "expenses": []
+        },
+        {
+          "title": "朝食 スタンダードコーヒー",
+          "start_time": "07:44",
+          "sort_order": 5,
+          "location": "セントレア3F",
+          "category": "restaurant",
+          "expenses": [
+            {
+              "amount": 4940,
+              "currency": "JPY",
+              "expense_date": "2026-04-26",
+              "note": "費用区分: 食費 / 領収書: R-025",
+              "sort_order": 0
+            },
+            {
+              "title": "ジュース買い足し",
+              "amount": 400,
+              "currency": "JPY",
+              "expense_date": "2026-04-26",
+              "note": "費用区分: 食費 / 領収書: R-020 / 備考: ジャスミン茶、おーいお茶",
+              "sort_order": 0
+            }
+          ]
+        },
+        {
+          "title": "NU045 NGO ⇒ OKA (11:00着)",
+          "start_time": "08:30",
+          "sort_order": 6,
+          "location": "中部国際空港",
+          "category": "flight",
+          "expenses": [
+            {
+              "amount": 210240,
+              "currency": "JPY",
+              "expense_date": "2026-04-26",
+              "note": "費用区分: 旅費",
+              "sort_order": 0
+            }
+          ]
+        },
+        {
+          "title": "昼食",
+          "start_time": "11:30",
+          "sort_order": 7,
+          "location": "那覇国際空港 食堂",
+          "category": "restaurant",
+          "expenses": [
+            {
+              "amount": 9040,
+              "currency": "JPY",
+              "expense_date": "2026-04-26",
+              "note": "費用区分: 食費 / 領収書: R-003 / 備考: 一人1000円程度",
+              "sort_order": 0
+            }
+          ]
+        },
+        {
+          "title": "レンタカー屋へのシャトルバス乗車",
+          "note": "スタッフに電話 : +81 80 6489 6688。エレベーターで3階に移動。[出口5番]。",
+          "start_time": "12:30",
+          "sort_order": 8,
+          "location": "那覇国際空港",
+          "category": "transport",
+          "expenses": []
+        },
+        {
+          "title": "Toyota Alphard 又は同等車種",
+          "note": "要：ETCカード",
+          "start_time": "13:00",
+          "sort_order": 9,
+          "location": "Ks Rent A Car",
+          "category": "transport",
+          "expenses": [
+            {
+              "amount": 51562,
+              "currency": "JPY",
+              "expense_date": "2026-04-26",
+              "note": "費用区分: 旅費 / 備考: 要：ETCカード",
+              "sort_order": 0
+            }
+          ]
+        },
+        {
+          "title": "夕食の買い出し",
+          "start_time": "16:00",
+          "sort_order": 12,
+          "location": "ザ・ビッグもとぶ店",
+          "category": "shopping",
+          "expenses": [
+            {
+              "amount": 15371,
+              "currency": "JPY",
+              "expense_date": "2026-04-26",
+              "note": "費用区分: 食費 / 領収書: R-016",
+              "sort_order": 0
+            },
+            {
+              "title": "休息時間とか",
+              "amount": 2110,
+              "currency": "JPY",
+              "paid_by_name": "知弘",
+              "expense_date": "2026-04-26",
+              "note": "費用区分: 個別：知弘",
+              "sort_order": 0
+            }
+          ]
+        },
+        {
+          "title": "瀬底島に入る",
+          "start_time": "16:30",
+          "sort_order": 13,
+          "location": "瀬底大橋",
+          "category": "transport",
+          "expenses": []
+        },
+        {
+          "title": "チェックイン",
+          "note": "管理費など",
+          "start_time": "16:40",
+          "sort_order": 14,
+          "location": "ヒルトン瀬底",
+          "category": "hotel",
+          "expenses": [
+            {
+              "amount": 15000,
+              "currency": "JPY",
+              "expense_date": "2026-04-26",
+              "note": "費用区分: 旅費 / 備考: 管理費など",
+              "sort_order": 0
+            }
+          ]
+        },
+        {
+          "title": "夕食 部屋",
+          "start_time": "18:00",
+          "sort_order": 15,
+          "category": "restaurant",
+          "expenses": [
+            {
+              "title": "食材追加 CHIM DON DON",
+              "amount": 2110,
+              "currency": "JPY",
+              "expense_date": "2026-04-26",
+              "note": "費用区分: 食費 / 領収書: R-004 / 備考: 塩、しょうゆなど",
+              "sort_order": 0
+            }
+          ]
+        },
+        {
+          "title": "観光:首里城",
+          "sort_order": 10,
+          "location": "首里城",
+          "category": "activity",
+          "expenses": [
+            {
+              "amount": 1760,
+              "currency": "JPY",
+              "expense_date": "2026-04-26",
+              "note": "費用区分: 旅費 / 領収書: R-012 / 備考: 大人:¥400, 子供: ¥160",
+              "sort_order": 0
+            },
+            {
+              "title": "御城印、ロルバーンメモ帳",
+              "amount": 3405,
+              "currency": "JPY",
+              "paid_by_name": "知弘",
+              "expense_date": "2026-04-26",
+              "note": "費用区分: 個別：知弘 / 領収書: R-002",
+              "sort_order": 0
+            },
+            {
+              "title": "アイスクリーム",
+              "amount": 600,
+              "currency": "JPY",
+              "paid_by_name": "知弘",
+              "expense_date": "2026-04-26",
+              "note": "費用区分: 個別：知弘 / 領収書: R-026",
+              "sort_order": 0
+            }
+          ]
+        },
+        {
+          "title": "移動 高速道路",
+          "sort_order": 11,
+          "category": "transport",
+          "expenses": [
+            {
+              "amount": 1000,
+              "currency": "JPY",
+              "expense_date": "2026-04-26",
+              "note": "費用区分: 旅費 / 備考: 高速道路の大体の費用",
+              "sort_order": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "day_number": 2,
+      "itineraries": [
+        {
+          "title": "出発",
+          "start_time": "07:00",
+          "sort_order": 1,
+          "location": "ヒルトン瀬底",
+          "category": "transport",
+          "expenses": []
+        },
+        {
+          "title": "朝食 ローソン",
+          "start_time": "07:10",
+          "sort_order": 2,
+          "location": "海洋公園前店",
+          "category": "restaurant",
+          "expenses": [
+            {
+              "amount": 1253,
+              "currency": "JPY",
+              "expense_date": "2026-04-27",
+              "note": "費用区分: 食費 / 領収書: R-008 / 備考: ファミリーマート 本部山川もある",
+              "sort_order": 0
+            }
+          ]
+        },
+        {
+          "title": "水族館の駐車場に到着",
+          "note": "手続きを早々に済ませカフェ準備",
+          "start_time": "07:30",
+          "sort_order": 3,
+          "location": "美ら海水族館駐車場",
+          "category": "transport",
+          "expenses": []
+        },
+        {
+          "title": "水族館に入館",
+          "start_time": "08:30",
+          "sort_order": 4,
+          "location": "美ら海水族館",
+          "category": "museum",
+          "expenses": [
+            {
+              "amount": 9430,
+              "currency": "JPY",
+              "expense_date": "2026-04-27",
+              "note": "費用区分: 旅費 / 備考: 大人:¥2180, 子供:¥710",
+              "sort_order": 0
+            }
+          ]
+        },
+        {
+          "title": "軽食＆ジンベイザメ",
+          "start_time": "08:40",
+          "sort_order": 5,
+          "location": "カフェ オーシャンブルー",
+          "category": "restaurant",
+          "expenses": [
+            {
+              "amount": 7500,
+              "currency": "JPY",
+              "expense_date": "2026-04-27",
+              "note": "費用区分: 食費 / 備考: 館内カフェに先にいく。一人1500円",
+              "sort_order": 0
+            }
+          ]
+        },
+        {
+          "title": "昼食",
+          "start_time": "11:00",
+          "sort_order": 7,
+          "location": "スナックスコール",
+          "category": "restaurant",
+          "expenses": [
+            {
+              "amount": 7600,
+              "currency": "JPY",
+              "expense_date": "2026-04-27",
+              "note": "費用区分: 食費 / 領収書: R-010 / 備考: カレー中心。",
+              "sort_order": 0
+            },
+            {
+              "title": "昼食追加",
+              "amount": 600,
+              "currency": "JPY",
+              "expense_date": "2026-04-27",
+              "note": "費用区分: 食費 / 領収書: R-011 / 備考: もちもちドーナツを追加",
+              "sort_order": 0
+            }
+          ]
+        },
+        {
+          "title": "砂浜見学",
+          "start_time": "13:00",
+          "sort_order": 9,
+          "location": "古宇利島",
+          "category": "beach",
+          "expenses": []
+        },
+        {
+          "title": "お土産 古宇利島",
+          "start_time": "14:15",
+          "sort_order": 10,
+          "location": "物販ソラハシ",
+          "category": "shopping",
+          "expenses": [
+            {
+              "title": "お土産",
+              "amount": 2780,
+              "currency": "JPY",
+              "paid_by_name": "知弘",
+              "expense_date": "2026-04-27",
+              "note": "費用区分: 個別：知弘 / 領収書: R-032",
+              "sort_order": 0
+            }
+          ]
+        },
+        {
+          "title": "スタバる",
+          "start_time": "14:30",
+          "sort_order": 11,
+          "location": "沖縄ハナサキマルシェ",
+          "category": "restaurant",
+          "expenses": [
+            {
+              "title": "スタバ",
+              "amount": 7160,
+              "currency": "JPY",
+              "paid_by_name": "知弘",
+              "expense_date": "2026-04-27",
+              "note": "費用区分: 個別：知弘 / 領収書: R-006 / 備考: 3人ぐらい1000円の飲み物",
+              "sort_order": 0
+            }
+          ]
+        },
+        {
+          "title": "夕食",
+          "start_time": "19:30",
+          "sort_order": 12,
+          "location": "AMAHAJI",
+          "category": "restaurant",
+          "expenses": [
+            {
+              "amount": 24375,
+              "currency": "JPY",
+              "expense_date": "2026-04-27",
+              "note": "費用区分: 食費 / 領収書: R-019",
+              "sort_order": 0
+            }
+          ]
+        },
+        {
+          "title": "ドリームセンター入館",
+          "sort_order": 6,
+          "location": "ドリームセンター",
+          "category": "activity",
+          "expenses": [
+            {
+              "amount": 3040,
+              "currency": "JPY",
+              "expense_date": "2026-04-27",
+              "note": "費用区分: 旅費 / 領収書: R-015 / 備考: 大人:¥760, 子供: 無料",
+              "sort_order": 0
+            },
+            {
+              "title": "ツノガエルくじ",
+              "amount": 1000,
+              "currency": "JPY",
+              "paid_by_name": "知弘",
+              "expense_date": "2026-04-27",
+              "note": "費用区分: 個別：知弘 / 領収書: R-014",
+              "sort_order": 0
+            }
+          ]
+        },
+        {
+          "title": "周遊バス乗車",
+          "sort_order": 8,
+          "location": "ドリームセンター入口",
+          "category": "transport",
+          "expenses": [
+            {
+              "amount": 1500,
+              "currency": "JPY",
+              "expense_date": "2026-04-27",
+              "note": "費用区分: 旅費 / 領収書: R-027 / 備考: 遊覧車１回券 ¥300x5 子供も一律",
+              "sort_order": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "day_number": 3,
+      "itineraries": [
+        {
+          "title": "朝食",
+          "start_time": "07:30",
+          "sort_order": 1,
+          "location": "ヒルトン瀬底",
+          "category": "restaurant",
+          "expenses": []
+        },
+        {
+          "title": "フェリー乗船",
+          "start_time": "08:30",
+          "sort_order": 2,
+          "location": "本部港フェリーターミナル",
+          "category": "transport",
+          "expenses": [
+            {
+              "amount": 6270,
+              "currency": "JPY",
+              "expense_date": "2026-04-28",
+              "note": "費用区分: 旅費 / 領収書: R-018",
+              "sort_order": 0
+            }
+          ]
+        },
+        {
+          "title": "出港",
+          "start_time": "09:00",
+          "sort_order": 3,
+          "category": "transport",
+          "expenses": []
+        },
+        {
+          "title": "伊江島着",
+          "start_time": "09:30",
+          "sort_order": 4,
+          "category": "transport",
+          "expenses": []
+        },
+        {
+          "title": "リリー園着",
+          "start_time": "09:45",
+          "sort_order": 5,
+          "location": "リリー園",
+          "category": "activity",
+          "expenses": []
+        },
+        {
+          "title": "朝食の焼きそば",
+          "start_time": "10:00",
+          "sort_order": 6,
+          "location": "リリー園売店",
+          "category": "restaurant",
+          "expenses": [
+            {
+              "title": "焼きそば",
+              "amount": 1000,
+              "currency": "JPY",
+              "paid_by_name": "知弘",
+              "expense_date": "2026-04-28",
+              "note": "費用区分: 個別:知弘 / 備考: ジュースもろもろ",
+              "sort_order": 0
+            }
+          ]
+        },
+        {
+          "title": "昼食以降の食材調達",
+          "start_time": "14:20",
+          "sort_order": 8,
+          "location": "ザ・ビッグもとぶ店",
+          "category": "shopping",
+          "expenses": [
+            {
+              "amount": 9440,
+              "currency": "JPY",
+              "expense_date": "2026-04-28",
+              "note": "費用区分: 食費 / 領収書: R-013",
+              "sort_order": 0
+            }
+          ]
+        },
+        {
+          "title": "昼食",
+          "start_time": "14:30",
+          "sort_order": 9,
+          "location": "ヒルトン瀬底",
+          "category": "restaurant",
+          "expenses": []
+        },
+        {
+          "title": "海水浴",
+          "start_time": "16:00",
+          "sort_order": 10,
+          "location": "ヒルトン瀬底",
+          "category": "beach",
+          "expenses": [
+            {
+              "title": "ビーチセット",
+              "amount": 4500,
+              "currency": "JPY",
+              "paid_by_name": "知弘",
+              "expense_date": "2026-04-28",
+              "note": "費用区分: 個別:知弘 / 備考: ビーチセット",
+              "sort_order": 0
+            }
+          ]
+        },
+        {
+          "title": "入園料 ハイビスカス園",
+          "sort_order": 7,
+          "location": "ハイビスカス園",
+          "category": "activity",
+          "expenses": [
+            {
+              "amount": 1300,
+              "currency": "JPY",
+              "expense_date": "2026-04-28",
+              "note": "費用区分: 旅費 / 領収書: R-034 / 備考: 子供:100円、大人:300円",
+              "sort_order": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "day_number": 4,
+      "itineraries": [
+        {
+          "title": "朝食",
+          "start_time": "07:30",
+          "sort_order": 1,
+          "location": "AMAHAJI",
+          "category": "restaurant",
+          "expenses": [
+            {
+              "amount": 16500,
+              "currency": "JPY",
+              "expense_date": "2026-04-29",
+              "note": "費用区分: 食費 / 領収書: R-001 / 備考: 予約受付なし",
+              "sort_order": 0
+            }
+          ]
+        },
+        {
+          "title": "土産屋さん",
+          "start_time": "07:50",
+          "sort_order": 2,
+          "category": "shopping",
+          "expenses": [
+            {
+              "title": "土産屋さん",
+              "amount": 3700,
+              "currency": "JPY",
+              "paid_by_name": "節子",
+              "expense_date": "2026-04-29",
+              "note": "費用区分: 個別：節子 / 領収書: R-005",
+              "sort_order": 0
+            },
+            {
+              "title": "土産屋さん",
+              "amount": 8380,
+              "currency": "JPY",
+              "paid_by_name": "知弘",
+              "expense_date": "2026-04-29",
+              "note": "費用区分: 個別:知弘 / 領収書: R-021 / 備考: マスコットクジラ、フェイスマスク、ポストカード",
+              "sort_order": 0
+            },
+            {
+              "title": "SAGAWA BOX",
+              "amount": 3200,
+              "currency": "JPY",
+              "paid_by_name": "知弘",
+              "expense_date": "2026-04-29",
+              "note": "費用区分: 個別:知弘 / 領収書: R-001",
+              "sort_order": 0
+            },
+            {
+              "title": "宅配便",
+              "amount": 286,
+              "currency": "JPY",
+              "paid_by_name": "知弘",
+              "expense_date": "2026-04-29",
+              "note": "費用区分: 個別:知弘 / 領収書: R-001",
+              "sort_order": 0
+            }
+          ]
+        },
+        {
+          "title": "出発",
+          "note": "チェックアウトリミット：10:00",
+          "start_time": "10:00",
+          "sort_order": 3,
+          "location": "ヒルトン瀬底",
+          "category": "hotel",
+          "expenses": []
+        },
+        {
+          "title": "万座毛見学",
+          "start_time": "11:00",
+          "sort_order": 5,
+          "location": "万座毛",
+          "category": "activity",
+          "expenses": [
+            {
+              "amount": 500,
+              "currency": "JPY",
+              "expense_date": "2026-04-29",
+              "note": "費用区分: 旅費 / 備考: 入場料 ¥100/人",
+              "sort_order": 0
+            }
+          ]
+        },
+        {
+          "title": "昼食 元祖海ブドウ丼",
+          "start_time": "11:24",
+          "sort_order": 6,
+          "location": "万座毛",
+          "category": "restaurant",
+          "expenses": [
+            {
+              "amount": 6760,
+              "currency": "JPY",
+              "expense_date": "2026-04-29",
+              "note": "費用区分: 食費 / 領収書: R-035 / 備考: 一人5000円相当",
+              "sort_order": 0
+            }
+          ]
+        },
+        {
+          "title": "買い物",
+          "start_time": "14:00",
+          "sort_order": 7,
+          "location": "ウミカジテラス",
+          "category": "shopping",
+          "expenses": []
+        },
+        {
+          "title": "ガソリン満タン返し",
+          "start_time": "15:20",
+          "sort_order": 8,
+          "location": "りゅうせき SSG",
+          "category": "transport",
+          "expenses": [
+            {
+              "amount": 5447,
+              "currency": "JPY",
+              "expense_date": "2026-04-29",
+              "note": "費用区分: 旅費 / 領収書: R-030 / 備考: レギュラー 182円/L、29.93L",
+              "sort_order": 0
+            }
+          ]
+        },
+        {
+          "title": "レンタカー返却",
+          "note": "レンタカー返却:16:00",
+          "start_time": "15:30",
+          "sort_order": 9,
+          "location": "Ks Rent A Car",
+          "category": "transport",
+          "expenses": []
+        },
+        {
+          "title": "空港入り",
+          "start_time": "15:45",
+          "sort_order": 10,
+          "location": "那覇国際空港",
+          "category": "transport",
+          "expenses": []
+        },
+        {
+          "title": "みなとさんへのおみやげ",
+          "start_time": "16:30",
+          "sort_order": 11,
+          "location": "那覇空港内 ファミマ",
+          "category": "shopping",
+          "expenses": [
+            {
+              "title": "おみやげ",
+              "amount": 782,
+              "currency": "JPY",
+              "paid_by_name": "知弘",
+              "expense_date": "2026-04-29",
+              "note": "費用区分: 個別:知弘 / 領収書: R-017 / 備考: 沖縄そば、さんぴん茶（飲んじゃった）",
+              "sort_order": 0
+            }
+          ]
+        },
+        {
+          "title": "ロイズ",
+          "start_time": "16:38",
+          "sort_order": 12,
+          "location": "那覇空港内",
+          "category": "shopping",
+          "expenses": []
+        },
+        {
+          "title": "ラングドシャ：会社のお土産",
+          "start_time": "16:45",
+          "sort_order": 13,
+          "location": "那覇空港内 売店",
+          "category": "shopping",
+          "expenses": [
+            {
+              "title": "ラングドシャ",
+              "amount": 2160,
+              "currency": "JPY",
+              "paid_by_name": "知弘",
+              "expense_date": "2026-04-29",
+              "note": "費用区分: 個別:知弘 / 領収書: R-029 / 備考: 会社のお土産",
+              "sort_order": 0
+            }
+          ]
+        },
+        {
+          "title": "夕食",
+          "start_time": "18:00",
+          "sort_order": 14,
+          "location": "Royal Host",
+          "category": "restaurant",
+          "expenses": [
+            {
+              "amount": 8052,
+              "currency": "JPY",
+              "expense_date": "2026-04-29",
+              "note": "費用区分: 食費 / 領収書: R-028 / 備考: じいじばあば席",
+              "sort_order": 0
+            },
+            {
+              "amount": 5115,
+              "currency": "JPY",
+              "expense_date": "2026-04-29",
+              "note": "費用区分: 食費 / 領収書: R-031 / 備考: ともひろ、るみ席",
+              "sort_order": 0
+            }
+          ]
+        },
+        {
+          "title": "チェックイン",
+          "start_time": "18:30",
+          "sort_order": 15,
+          "location": "那覇国際空港",
+          "category": "flight",
+          "expenses": []
+        },
+        {
+          "title": "那覇空港内 DFS・売店",
+          "start_time": "18:39",
+          "sort_order": 16,
+          "location": "那覇空港 DFS",
+          "category": "shopping",
+          "expenses": [
+            {
+              "title": "ホノルルクッキー",
+              "amount": 3900,
+              "currency": "JPY",
+              "paid_by_name": "知弘",
+              "expense_date": "2026-04-29",
+              "note": "費用区分: 個別:知弘 / 領収書: R-024",
+              "sort_order": 0
+            },
+            {
+              "title": "化粧品",
+              "amount": 31800,
+              "currency": "JPY",
+              "paid_by_name": "知弘",
+              "expense_date": "2026-04-29",
+              "note": "費用区分: 個別:知弘 / 領収書: R-022",
+              "sort_order": 0
+            },
+            {
+              "title": "COACH のバッグ",
+              "amount": 37500,
+              "currency": "JPY",
+              "paid_by_name": "知弘",
+              "expense_date": "2026-04-29",
+              "note": "費用区分: 個別:知弘 / 領収書: R-023",
+              "sort_order": 0
+            },
+            {
+              "title": "ジュース買い足し",
+              "amount": 445,
+              "currency": "JPY",
+              "paid_by_name": "知弘",
+              "expense_date": "2026-04-29",
+              "note": "費用区分: 個別:知弘 / 領収書: R-009",
+              "sort_order": 0
+            }
+          ]
+        },
+        {
+          "title": "NU046 OKA ⇒ NGO (22:05着)",
+          "start_time": "20:05",
+          "sort_order": 17,
+          "location": "中部国際空港",
+          "category": "flight",
+          "expenses": []
+        },
+        {
+          "title": "P1 G Parking",
+          "start_time": "22:30",
+          "sort_order": 18,
+          "location": "セントレア駐車場",
+          "category": "transport",
+          "expenses": []
+        },
+        {
+          "title": "高速道路 セントレア→東浦",
+          "start_time": "22:45",
+          "sort_order": 19,
+          "location": "セントレア→東浦",
+          "category": "transport",
+          "expenses": [
+            {
+              "amount": 630,
+              "currency": "JPY",
+              "expense_date": "2026-04-29",
+              "note": "費用区分: 旅費 / 領収書: なし / 備考: 知多半島道路 セントレア→東浦",
+              "sort_order": 0
+            }
+          ]
+        },
+        {
+          "title": "やっちゃんせっちゃんおろす",
+          "note": "有料道路:700円ぐらい？",
+          "start_time": "23:10",
+          "sort_order": 20,
+          "location": "シャトレー",
+          "category": "transport",
+          "expenses": []
+        },
+        {
+          "title": "帰宅",
+          "start_time": "23:30",
+          "sort_order": 21,
+          "location": "自宅",
+          "category": "transport",
+          "expenses": []
+        },
+        {
+          "title": "お土産 御菓子御殿",
+          "sort_order": 4,
+          "location": "御菓子御殿 恩納店",
+          "category": "shopping",
+          "expenses": [
+            {
+              "title": "お土産",
+              "amount": 6707,
+              "currency": "JPY",
+              "paid_by_name": "知弘",
+              "expense_date": "2026-04-29",
+              "note": "費用区分: 個別:知弘 / 領収書: R-032 / 備考: 安納芋の紅芋タルト",
+              "sort_order": 0
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "checklist_items": [
+    {
+      "title": "ETCカード",
+      "is_done": false,
+      "sort_order": 0
+    },
+    {
+      "title": "パスポート・身分証",
+      "is_done": false,
+      "sort_order": 0
+    },
+    {
+      "title": "レンタカー予約確認",
+      "is_done": true,
+      "sort_order": 0
+    },
+    {
+      "title": "駐車場予約確認（セントレア P1G）",
+      "is_done": true,
+      "sort_order": 0
+    }
+  ],
+  "notes": []
+}

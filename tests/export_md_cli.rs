@@ -118,3 +118,60 @@ fn cli_export_md_output_overwrites_existing_file() {
     assert!(content.contains("# First Trip"));
     assert!(!content.contains("old content"));
 }
+
+#[test]
+fn cli_export_md_includes_expenses_under_itinerary() {
+    let dir = temp_workdir();
+    assert!(run_cli(
+        &dir,
+        &[
+            "trip",
+            "add",
+            "Expense MD Trip",
+            "--start",
+            "2026-04-26",
+            "--end",
+            "2026-04-29",
+        ]
+    )
+    .status
+    .success());
+    assert!(run_cli(
+        &dir,
+        &[
+            "itinerary",
+            "add",
+            "1",
+            "--day",
+            "1",
+            "--time",
+            "09:00",
+            "Aquarium"
+        ]
+    )
+    .status
+    .success());
+    assert!(run_cli(
+        &dir,
+        &[
+            "expense",
+            "add",
+            "--itinerary",
+            "1",
+            "--amount",
+            "2500",
+            "--currency",
+            "JPY",
+            "--title",
+            "入館料",
+        ]
+    )
+    .status
+    .success());
+
+    let output = run_cli(&dir, &["trip", "export-md", "1"]);
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Expenses:"));
+    assert!(stdout.contains("- 入館料: 2,500 JPY"));
+}

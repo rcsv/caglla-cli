@@ -74,7 +74,7 @@ fn cli_expense_add_and_show() {
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("Expense を追加しました"));
-    assert!(stdout.contains("2200 JPY"));
+    assert!(stdout.contains("2,200 JPY"));
     assert!(stdout.contains("Tomo"));
     assert!(stdout.contains("2026-04-27"));
 

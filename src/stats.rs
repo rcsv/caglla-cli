@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use anyhow::Result;
 use rusqlite::Connection;
@@ -18,6 +18,8 @@ pub(crate) struct TripStats {
     pub stay_minutes: i64,
     pub travel_minutes: i64,
     pub total_minutes: i64,
+    pub expense_count: usize,
+    pub expense_totals: BTreeMap<String, i64>,
 }
 
 impl TripStats {
@@ -79,6 +81,13 @@ pub(crate) fn compute_trip_stats(conn: &Connection, trip_id: i64) -> Result<Trip
 
     let checklist_completed = checklist_items.iter().filter(|item| item.is_done).count();
 
+    let expenses = crate::expense::list_expenses_for_trip(conn, trip_id)?;
+    let expense_count = expenses.len();
+    let mut expense_totals: BTreeMap<String, i64> = BTreeMap::new();
+    for expense in &expenses {
+        *expense_totals.entry(expense.currency.clone()).or_insert(0) += expense.amount;
+    }
+
     Ok(TripStats {
         trip_name: trip.name,
         days,
@@ -89,6 +98,8 @@ pub(crate) fn compute_trip_stats(conn: &Connection, trip_id: i64) -> Result<Trip
         stay_minutes,
         travel_minutes,
         total_minutes: stay_minutes + travel_minutes,
+        expense_count,
+        expense_totals,
     })
 }
 
@@ -158,6 +169,18 @@ pub(crate) fn print_trip_stats(conn: &Connection, trip_id: i64) -> Result<()> {
         "Total Time:  {}",
         format_minutes_duration(stats.total_minutes())
     );
+    println!();
+    println!("Expenses: {}", stats.expense_count);
+    if stats.expense_count > 0 {
+        println!("Expense total:");
+        for (currency, total) in &stats.expense_totals {
+            println!(
+                "  {}: {}",
+                currency,
+                crate::expense::format_amount_value(*total, currency)
+            );
+        }
+    }
 
     Ok(())
 }
@@ -397,6 +420,76 @@ mod tests {
         assert_eq!(stats.total_minutes, 0);
         assert_eq!(stats.checklist_total, 0);
         assert!(stats.category_counts.is_empty());
+        assert_eq!(stats.expense_count, 0);
+        assert!(stats.expense_totals.is_empty());
+
+        print_trip_stats(&conn, trip_id).unwrap();
+    }
+
+    #[test]
+    fn test_stats_expense_count_and_totals() {
+        let conn = test_db();
+        let trip_id = add_test_trip(&conn, "Expense Stats Trip").unwrap();
+        let itinerary_id = crate::itinerary::add_itinerary_item(
+            &conn, trip_id, 1, "Lunch", None, None, None, None, None, None, None,
+        )
+        .unwrap();
+        crate::expense::add_expense(
+            &conn,
+            itinerary_id,
+            "1200",
+            "JPY",
+            Some("昼食"),
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        crate::expense::add_expense(&conn, itinerary_id, "300", "JPY", None, None, None, None)
+            .unwrap();
+
+        let stats = compute_trip_stats(&conn, trip_id).unwrap();
+        assert_eq!(stats.expense_count, 2);
+        assert_eq!(stats.expense_totals.get("JPY"), Some(&1500));
+    }
+
+    #[test]
+    fn test_stats_expense_multi_currency() {
+        let conn = test_db();
+        let trip_id = add_test_trip(&conn, "Multi Currency Trip").unwrap();
+        let itinerary_id = crate::itinerary::add_itinerary_item(
+            &conn, trip_id, 1, "Shopping", None, None, None, None, None, None, None,
+        )
+        .unwrap();
+        crate::expense::add_expense(
+            &conn,
+            itinerary_id,
+            "10000",
+            "JPY",
+            Some("お土産"),
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        crate::expense::add_expense(
+            &conn,
+            itinerary_id,
+            "12.50",
+            "USD",
+            Some("Coffee"),
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        crate::expense::add_expense(&conn, itinerary_id, "5.00", "USD", None, None, None, None)
+            .unwrap();
+
+        let stats = compute_trip_stats(&conn, trip_id).unwrap();
+        assert_eq!(stats.expense_count, 3);
+        assert_eq!(stats.expense_totals.get("JPY"), Some(&10000));
+        assert_eq!(stats.expense_totals.get("USD"), Some(&1750));
 
         print_trip_stats(&conn, trip_id).unwrap();
     }

@@ -1,7 +1,7 @@
 # Expense モデル（設計草案）
 
 Caglla CLI / 将来 Web 版に向けた **Expense（支出）** エンティティの仕様メモです。  
-**v1.5.0 時点: DB / CLI CRUD 実装済み。Export schema v3 は v1.6.x 以降。**
+**v1.5.0: DB / CLI CRUD 実装済み。v1.6.0: Export schema v3（nested export/import/validate）実装済み。**
 
 関連: [Day モデル](day-model.md) / [Note モデル](note-model.md) / [Export Schema](export-schema.md)
 
@@ -338,60 +338,64 @@ Trip / Day 直下への `add` は v1.x では **不可**。
 
 ---
 
-## 8. Export / Import への影響
+## 8. Export / Import（schema v3 — 実装済み）
 
-現行は [Export Schema v2](export-schema.md)（`notes[]` まで）。Expense は **schema v3** で追加する想定が安全。
+現行 export は [Export Schema v3](export-schema.md)（`days[].itineraries[].expenses[]`）。  
+top-level `expenses[]` 配列は **採用していません**。親子構造で Itinerary–Expense 関係を保持します。
 
-### schema v3 案（概要）
+### schema v3（実装）
 
 ```json
 {
   "schema_version": 3,
-  "generator": "caglla-cli",
-  "generator_version": "1.5.0",
-  "exported_at": "...",
   "trip": {},
-  "itinerary_items": [],
-  "checklist_items": [],
-  "notes": [],
-  "expenses": [
+  "days": [
     {
-      "itinerary_key": {
-        "day_number": 2,
-        "sort_order": 3,
-        "start_time": "09:00",
-        "title": "美ら海水族館"
-      },
-      "title": null,
-      "amount": 2200,
-      "currency": "JPY",
-      "paid_by_name": "太郎",
-      "expense_date": "2026-04-27",
-      "note": null,
-      "sort_order": 0
+      "day_number": 2,
+      "itineraries": [
+        {
+          "title": "美ら海水族館",
+          "sort_order": 0,
+          "start_time": "09:00",
+          "expenses": [
+            {
+              "title": null,
+              "amount": 2200,
+              "currency": "JPY",
+              "paid_by_name": "太郎",
+              "expense_date": "2026-04-27",
+              "note": null,
+              "sort_order": 0
+            }
+          ]
+        }
+      ]
     }
-  ]
+  ],
+  "checklist_items": [],
+  "notes": []
 }
 ```
 
 | 論点 | 方針 |
 |---|---|
-| v2 との互換 | v2 export（`expenses` なし）は import 継続。v3 import は `expenses` 省略時は空配列 |
-| 内部 ID | **`expenses.id` / `itinerary_id` は export しない**（Note と同様） |
-| Itinerary 参照 | **`itinerary_key`**（Note の Itinerary Note と **同一解決順**） |
-| import 順序 | Trip → Itinerary → Checklist → Note → **Expense**（Itinerary ID 解決後） |
-| `validate-export` | `expenses[]` 配列、`amount` / `currency` 必須、`itinerary_key` 解決可能性 |
-| `export-md` | v1.5.x 必須ではない。含める場合は Itinerary ブロック下に金額一覧 |
+| v2 との互換 | v2 export（Expense なし）は import 継続 |
+| 内部 ID | **`expenses.id` / `itinerary_id` は export しない** |
+| Itinerary 参照 | JSON 親子構造（`itinerary_key` は使わない） |
+| import 順序 | Trip → Itinerary → Checklist → Note → **Expense** |
+| `validate-export` | nested `expenses[]` の `currency` 必須・形式、`expense_date` 形式 |
+| `trip duplicate` | v3 export/import 経由で Expense も複製（v1.7.0+） |
+| `export-md` | Itinerary 下に簡素一覧（データ確認用、v1.7.0+） |
+| `trip stats` | 件数・通貨別合計（換算なし、v1.7.0+） |
 
-### リリース分割（確定）
+### リリース分割
 
 | フェーズ | 内容 |
 |---|---|
-| **v1.5.x** | `expenses` テーブル + CLI CRUD + cascade + テスト |
-| **v1.6.x 以降** | Export schema v3 + import + validate-export（**CRUD と分離**） |
-| 以降 | trip diff / export-md / stats 集計 |
-
-Note 実装と同様、**v1.5.x では Export / Import / validate-export を実装しない**。
+| **v1.5.0** | `expenses` テーブル + CLI CRUD + cascade + テスト |
+| **v1.6.0** | Export schema v3 + import + validate-export |
+| **v1.7.x** | duplicate / roundtrip 安定化、export-md / stats、canonical sample |
+| **v1.9.x 以降** | trip diff Expense、安定比較キー |
 
 ---
 

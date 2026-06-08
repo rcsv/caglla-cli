@@ -102,18 +102,51 @@ pub(crate) fn validate_expense_date_opt(value: &Option<String>) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn format_amount_display(amount: i64, currency: &str) -> String {
+fn format_integer_with_commas(value: i64) -> String {
+    let negative = value < 0;
+    let digits = value.abs().to_string();
+    let mut out = String::new();
+    for (i, ch) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i).is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(ch);
+    }
+    if negative {
+        format!("-{out}")
+    } else {
+        out
+    }
+}
+
+/// 金額の数値部分を表示用に整形する（通貨コードは含めない）
+pub(crate) fn format_amount_value(amount: i64, currency: &str) -> String {
     let decimals = currency_minor_unit_digits(currency);
     if decimals == 0 {
-        return format!("{amount} {currency}");
+        return format_integer_with_commas(amount);
     }
     let divisor = 10_i64.pow(decimals);
     let whole = amount / divisor;
     let frac = amount % divisor;
     format!(
-        "{whole}.{frac:0width$} {currency}",
+        "{}.{:0width$}",
+        format_integer_with_commas(whole),
+        frac,
         width = decimals as usize
     )
+}
+
+pub(crate) fn format_amount_display(amount: i64, currency: &str) -> String {
+    format!("{} {}", format_amount_value(amount, currency), currency)
+}
+
+/// Markdown export 用の Expense 1行
+pub(crate) fn format_expense_markdown_line(exp: &Expense) -> String {
+    let amount = format_amount_display(exp.amount, &exp.currency);
+    match exp.title.as_deref() {
+        Some(title) if !title.trim().is_empty() => format!("- {title}: {amount}"),
+        _ => format!("- {amount}"),
+    }
 }
 
 pub(crate) fn fmt_optional_text(value: &Option<String>) -> &str {

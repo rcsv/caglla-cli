@@ -1012,15 +1012,15 @@ pub(crate) fn run_trip_import(conn: &Connection, path: &str) -> Result<()> {
     Ok(())
 }
 
-/// 旅行を複製する（Trip / Itinerary / Checklist を新しい ID でコピー）
+/// 旅行を複製する（Trip / Itinerary / Checklist / Note / Expense を新しい ID でコピー）
 pub(crate) fn duplicate_trip(conn: &Connection, trip_id: i64, name: Option<&str>) -> Result<i64> {
     let source = get_trip(conn, trip_id)?;
-    let mut export = build_trip_export(conn, trip_id)?;
+    let mut export = build_trip_export_v3(conn, trip_id)?;
     export.trip.name = match name {
         Some(value) => value.to_string(),
         None => format!("{} (Copy)", source.name),
     };
-    import_trip_from_export(conn, &export)
+    import_trip_from_export_v3(conn, &export)
 }
 
 /// JSON ファイルから旅行をインポートする
@@ -2028,6 +2028,55 @@ mod tests {
             checklist_sem(before.checklist_items()),
             checklist_sem(duplicated.checklist_items())
         );
+    }
+
+    #[test]
+    fn test_duplicate_trip_copies_expenses() {
+        let conn = test_db();
+        let trip_id = add_trip(&conn, "Expense Trip", "2026-06-01", "2026-06-03").unwrap();
+        let itinerary_id = add_itinerary_item(
+            &conn,
+            trip_id,
+            1,
+            "Aquarium",
+            None,
+            Some("09:00"),
+            Some(0),
+            Some(120),
+            None,
+            Some("Motobu"),
+            None,
+        )
+        .unwrap();
+        crate::expense::add_expense(
+            &conn,
+            itinerary_id,
+            "2500",
+            "JPY",
+            Some("入館料"),
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        crate::expense::add_expense(
+            &conn,
+            itinerary_id,
+            "500",
+            "JPY",
+            Some("駐車場"),
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let before = build_trip_export_v3(&conn, trip_id).unwrap();
+        let new_id = duplicate_trip(&conn, trip_id, None).unwrap();
+        let duplicated = build_trip_export_v3(&conn, new_id).unwrap();
+
+        assert_eq!(duplicated.trip.name, "Expense Trip (Copy)");
+        assert_eq!(before.days, duplicated.days);
     }
 
     #[test]

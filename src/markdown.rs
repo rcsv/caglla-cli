@@ -1,7 +1,9 @@
+use std::collections::HashMap;
+
 use anyhow::{Context, Result};
 use rusqlite::{params, Connection};
 
-use crate::models::{ChecklistItem, ItineraryItem, Trip};
+use crate::models::{ChecklistItem, Expense, ItineraryItem, Trip};
 use crate::stats::{format_minutes_duration, TripStats};
 
 /// Markdown 出力用に日程一覧を取得する（day → sort_order → id 順）
@@ -39,7 +41,7 @@ pub(crate) fn format_trip_date_range(trip: &Trip) -> Option<String> {
 }
 
 /// 1件の日程を Markdown 形式に整形する
-pub(crate) fn format_itinerary_item_markdown(item: &ItineraryItem) -> String {
+pub(crate) fn format_itinerary_item_markdown(item: &ItineraryItem, expenses: &[Expense]) -> String {
     let mut lines = Vec::new();
     let heading = match &item.start_time {
         Some(time) => format!("### {time} {}", item.title),
@@ -67,6 +69,14 @@ pub(crate) fn format_itinerary_item_markdown(item: &ItineraryItem) -> String {
     if !detail_lines.is_empty() {
         lines.push(String::new());
         lines.extend(detail_lines);
+    }
+
+    if !expenses.is_empty() {
+        lines.push(String::new());
+        lines.push("Expenses:".to_string());
+        for expense in expenses {
+            lines.push(crate::expense::format_expense_markdown_line(expense));
+        }
     }
 
     lines.join("\n")
@@ -115,6 +125,7 @@ pub(crate) fn format_trip_markdown(
     items: &[ItineraryItem],
     checklist: &[ChecklistItem],
     stats: &TripStats,
+    expenses_by_itinerary: &HashMap<i64, Vec<Expense>>,
 ) -> String {
     let mut output = format!("# {}\n", trip.name);
     if let Some(dates) = format_trip_date_range(trip) {
@@ -138,7 +149,11 @@ pub(crate) fn format_trip_markdown(
         } else {
             output.push_str("\n\n");
         }
-        output.push_str(&format_itinerary_item_markdown(item));
+        let expenses = expenses_by_itinerary
+            .get(&item.id)
+            .map(|list| list.as_slice())
+            .unwrap_or(&[]);
+        output.push_str(&format_itinerary_item_markdown(item, expenses));
     }
 
     if let Some(checklist_md) = format_checklist_markdown(checklist) {
@@ -154,7 +169,20 @@ pub(crate) fn generate_trip_markdown(conn: &Connection, trip_id: i64) -> Result<
     let items = list_itinerary_items_for_markdown(conn, trip_id)?;
     let checklist = crate::checklist::list_checklist_items(conn, trip_id)?;
     let stats = crate::stats::compute_trip_stats(conn, trip_id)?;
-    Ok(format_trip_markdown(&trip, &items, &checklist, &stats))
+    let mut expenses_by_itinerary: HashMap<i64, Vec<Expense>> = HashMap::new();
+    for expense in crate::expense::list_expenses_for_trip(conn, trip_id)? {
+        expenses_by_itinerary
+            .entry(expense.itinerary_id)
+            .or_default()
+            .push(expense);
+    }
+    Ok(format_trip_markdown(
+        &trip,
+        &items,
+        &checklist,
+        &stats,
+        &expenses_by_itinerary,
+    ))
 }
 
 /// Markdown を標準出力に出力する
@@ -535,5 +563,78 @@ mod tests {
         let conn = test_db();
         let trip_id = add_test_trip(&conn, "標準出力テスト").unwrap();
         write_trip_markdown(&conn, trip_id, None).unwrap();
+    }
+
+    #[test]
+    fn test_export_md_includes_expenses() {
+        let conn = test_db();
+        let trip_id = add_test_trip(&conn, "Expense MD Trip").unwrap();
+        let itinerary_id = add_itinerary_item(
+            &conn,
+            trip_id,
+            1,
+            "Aquarium",
+            None,
+            Some("09:00"),
+            Some(0),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        crate::expense::add_expense(
+            &conn,
+            itinerary_id,
+            "2500",
+            "JPY",
+            Some("入館料"),
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        crate::expense::add_expense(
+            &conn,
+            itinerary_id,
+            "500",
+            "JPY",
+            Some("駐車場"),
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let md = generate_trip_markdown(&conn, trip_id).unwrap();
+        assert!(md.contains("Expenses:"));
+        assert!(md.contains("- 入館料: 2,500 JPY"));
+        assert!(md.contains("- 駐車場: 500 JPY"));
+        let expenses_pos = md.find("Expenses:").unwrap();
+        let aquarium_pos = md.find("### 09:00 Aquarium").unwrap();
+        assert!(aquarium_pos < expenses_pos);
+    }
+
+    #[test]
+    fn test_export_md_omits_expenses_when_none() {
+        let conn = test_db();
+        let trip_id = add_test_trip(&conn, "No Expense Trip").unwrap();
+        add_itinerary_item(
+            &conn,
+            trip_id,
+            1,
+            "Walk",
+            None,
+            None,
+            Some(0),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let md = generate_trip_markdown(&conn, trip_id).unwrap();
+        assert!(!md.contains("Expenses:"));
     }
 }

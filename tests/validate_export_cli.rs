@@ -250,3 +250,181 @@ fn cli_validate_export_missing_file_exits_with_error() {
     let output = run_cli(&dir, &["trip", "validate-export", "missing-export.json"]);
     assert!(!output.status.success());
 }
+
+fn write_v3_export(dir: &std::path::Path, filename: &str, days_json: &str) -> std::path::PathBuf {
+    let export_path = dir.join(filename);
+    let json = format!(
+        r#"{{
+  "schema_version": 3,
+  "trip": {{
+    "id": 1,
+    "name": "Expense Validate Trip",
+    "start_date": "2026-04-26",
+    "end_date": "2026-04-29",
+    "created_at": "2026-01-01 00:00:00",
+    "updated_at": "2026-01-01 00:00:00"
+  }},
+  "days": {days_json},
+  "checklist_items": [],
+  "notes": []
+}}"#
+    );
+    fs::write(&export_path, json).unwrap();
+    export_path
+}
+
+#[test]
+fn cli_validate_export_v3_expense_invalid_currency_fails() {
+    let dir = temp_workdir();
+    let export_path = write_v3_export(
+        &dir,
+        "invalid-currency.json",
+        r#"[
+    {
+      "day_number": 1,
+      "itineraries": [
+        {
+          "title": "Lunch",
+          "sort_order": 0,
+          "expenses": [
+            { "amount": 1000, "currency": "JP", "sort_order": 0 }
+          ]
+        }
+      ]
+    }
+  ]"#,
+    );
+
+    let output = run_cli(
+        &dir,
+        &["trip", "validate-export", export_path.to_str().unwrap()],
+    );
+    assert!(!output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("無効な export ファイル"));
+    assert!(stdout.contains("currency"));
+}
+
+#[test]
+fn cli_validate_export_v3_expense_empty_currency_fails() {
+    let dir = temp_workdir();
+    let export_path = write_v3_export(
+        &dir,
+        "empty-currency.json",
+        r#"[
+    {
+      "day_number": 1,
+      "itineraries": [
+        {
+          "title": "Lunch",
+          "sort_order": 0,
+          "expenses": [
+            { "amount": 1000, "currency": "", "sort_order": 0 }
+          ]
+        }
+      ]
+    }
+  ]"#,
+    );
+
+    let output = run_cli(
+        &dir,
+        &["trip", "validate-export", export_path.to_str().unwrap()],
+    );
+    assert!(!output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("currency"));
+    assert!(stdout.contains("必須"));
+}
+
+#[test]
+fn cli_validate_export_v3_expense_invalid_date_fails() {
+    let dir = temp_workdir();
+    let export_path = write_v3_export(
+        &dir,
+        "invalid-date.json",
+        r#"[
+    {
+      "day_number": 1,
+      "itineraries": [
+        {
+          "title": "Lunch",
+          "sort_order": 0,
+          "expenses": [
+            {
+              "amount": 1000,
+              "currency": "JPY",
+              "expense_date": "2026/04/26",
+              "sort_order": 0
+            }
+          ]
+        }
+      ]
+    }
+  ]"#,
+    );
+
+    let output = run_cli(
+        &dir,
+        &["trip", "validate-export", export_path.to_str().unwrap()],
+    );
+    assert!(!output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("expense_date"));
+}
+
+#[test]
+fn cli_validate_export_v3_expense_valid_nested_structure_succeeds() {
+    let dir = temp_workdir();
+    let export_path = write_v3_export(
+        &dir,
+        "valid-expenses.json",
+        r#"[
+    {
+      "day_number": 2,
+      "itineraries": [
+        {
+          "title": "Aquarium",
+          "sort_order": 0,
+          "start_time": "09:00",
+          "expenses": [
+            {
+              "title": "入館料",
+              "amount": 2500,
+              "currency": "JPY",
+              "sort_order": 0
+            },
+            {
+              "title": "駐車場",
+              "amount": 500,
+              "currency": "JPY",
+              "sort_order": 1
+            }
+          ]
+        }
+      ]
+    }
+  ]"#,
+    );
+
+    let output = run_cli(
+        &dir,
+        &[
+            "trip",
+            "validate-export",
+            export_path.to_str().unwrap(),
+            "--json",
+        ],
+    );
+    assert!(output.status.success());
+    let parsed: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(parsed["valid"], true);
+    assert_eq!(parsed["export_schema_version"], 3);
+    let expenses_check = parsed["checks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|check| check["id"] == "expenses")
+        .expect("expenses check");
+    assert_eq!(expenses_check["passed"], true);
+}
