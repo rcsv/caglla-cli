@@ -3,7 +3,7 @@
 Caglla CLI / 将来 Web 版に向けた **Expense（支出）** エンティティの仕様メモです。  
 **v1.5.0: DB / CLI CRUD 実装済み。v1.6.0: Export schema v3（nested export/import/validate）実装済み。**
 
-関連: [Day モデル](day-model.md) / [Note モデル](note-model.md) / [Export Schema](export-schema.md)
+関連: [Itinerary モデル](itinerary-model.md) / [Day モデル](day-model.md) / [Note モデル](note-model.md) / [Export Schema](export-schema.md)
 
 ---
 
@@ -44,7 +44,15 @@ Trip
 
 ## 2. Itinerary 配下とする理由
 
-Expense の親は **Itinerary のみ** とします（Trip 直下・Day 直下は v1.x では設けない）。
+Expense の親は **Itinerary のみ** とします。
+
+| 階層 | Expense の有無 |
+|---|---|
+| Trip 直下 | **なし**（v1.x） |
+| Day 直下 | **なし**（v1.x） |
+| Itinerary 配下 | **あり**（`expenses.itinerary_id` → `itinerary_items.id`） |
+
+Trip や Day に紐づく支出は、必ず **いずれかの Itinerary** にぶら下げます。Itinerary は「旅行中の行動を表す単位」であり、支出の文脈を保持するアンカーです（[Itinerary モデル](itinerary-model.md)）。
 
 ### 理由
 
@@ -341,7 +349,7 @@ Trip / Day 直下への `add` は v1.x では **不可**。
 ## 8. Export / Import（schema v3 — 実装済み）
 
 現行 export は [Export Schema v3](export-schema.md)（`days[].itineraries[].expenses[]`）。  
-top-level `expenses[]` 配列は **採用していません**。親子構造で Itinerary–Expense 関係を保持します。
+top-level `expenses[]` 配列は **採用していません**。親子構造で Itinerary–Expense 関係を保持します。Itinerary の意味論は [Itinerary モデル](itinerary-model.md)、JSON 構造・検証は [Export Schema](export-schema.md) を参照してください。
 
 ### schema v3（実装）
 

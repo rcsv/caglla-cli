@@ -3,7 +3,7 @@
 Caglla CLI / 将来 Web 版に向けた **Note** エンティティの仕様メモです。  
 v1.3.0 で **DB / CLI 基本 CRUD を実装済み**。Export schema v2 は未対応。
 
-関連: [Day モデル](day-model.md)
+関連: [Day モデル](day-model.md) / [Itinerary モデル](itinerary-model.md)
 
 ---
 

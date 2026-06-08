@@ -2,6 +2,17 @@
 
 Caglla CLI の trip export / import JSON 形式。
 
+**本ドキュメントの範囲:** JSON の **構造・バージョン・検証ルール** のみ。Itinerary / Expense / Note の **意味論・責務** は各モデル仕様を参照してください。
+
+| トピック | 参照 |
+|---|---|
+| Itinerary が何を表すか | [Itinerary モデル](itinerary-model.md) |
+| Expense の親子関係 | [Expense モデル](expense-model.md) |
+| Note の owner 解決 | [Note モデル](note-model.md) |
+| Day と `day_number` | [Day モデル](day-model.md) |
+
+---
+
 ## Schema versions
 
 | `schema_version` | 状態 | 説明 |
@@ -47,6 +58,8 @@ v3 では **top-level `itinerary_items` を使いません**。Itinerary は `da
 
 ### Day / Itinerary / Expense (v3)
 
+v3 の Itinerary オブジェクトは **行動のスナップショット** です。フィールドの意味（`title` 必須、`location` 任意、Itinerary 直付け費用なし等）は [Itinerary モデル](itinerary-model.md) を正とします。以下は **JSON 構造の例** です。
+
 ```json
 {
   "day_number": 2,
@@ -75,13 +88,14 @@ v3 では **top-level `itinerary_items` を使いません**。Itinerary は `da
 }
 ```
 
-| 論点 | 方針 |
+| 論点 | 方針（export 構造） |
 |---|---|
 | 内部 ID | **`trip.id` / `itinerary_id` / `expense_id` は export しない** |
-| Expense の親 | **Itinerary のみ**（top-level `expenses[]` は使わない） |
+| Expense の親 | **`days[].itineraries[].expenses[]` のみ**（top-level `expenses[]` は使わない）。Trip / Day 直下 Expense は存在しない — [Expense モデル](expense-model.md) |
 | import 順序 | Trip → Day（自動）→ Itinerary → Checklist → Note → **Expense** |
 | `amount` / `currency` | Expense で必須。`currency` は 3 文字英字（`validate_currency_code`） |
 | `expense_date` | 省略可（NULL）。指定時は `YYYY-MM-DD` |
+| Itinerary フィールド | `title`, `sort_order` 必須。`location` / `category` / `start_time` 等は任意 — 詳細は [Itinerary モデル](itinerary-model.md) |
 
 ## Top-level structure (v2)
 

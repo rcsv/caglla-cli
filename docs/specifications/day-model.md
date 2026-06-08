@@ -2,6 +2,8 @@
 
 Caglla CLI における Trip / Day / Itinerary の関係と、Day 自動生成のルールをまとめます。
 
+関連: [Itinerary モデル](itinerary-model.md) / [Expense モデル](expense-model.md)
+
 ## エンティティ関係
 
 ```text
@@ -13,8 +15,8 @@ Trip
 | エンティティ | 役割 |
 |---|---|
 | **Trip** | 旅行全体。`start_date` / `end_date` を必須で持つ |
-| **Day** | 旅行内の「何日目か」。`title` / `description` を将来の章立て・GUI 用に保持 |
-| **Itinerary** | 1 日の中の予定。DB 上は `day_id` で Day に紐づく。CLI / export では `day`（= day_number）を使用 |
+| **Day** | 旅行内の「何日目か」（日付コンテナ）。`title` / `description` を将来の章立て・GUI 用に保持 |
+| **Itinerary** | 1 日の中の **行動**（予定／実績）。DB 上は `day_id` で Day に紐づく。CLI / export では `day`（= day_number）を使用。詳細は [Itinerary モデル](itinerary-model.md) |
 
 ## Day に date カラムを持たせない理由
 

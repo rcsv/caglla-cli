@@ -1,7 +1,12 @@
 # 沖縄・瀬底 2026 canonical sample (v0)
 
-実旅行データ（`EstimateTrip_20260426.pdf`）由来の canonical sample です。  
-観光地デモではなく、高速道路・駐車場・空港内買い物・レンタカー・給油・買い出し・チェックイン/アウト・個人負担・領収書番号まで含む **実イベント台帳** を現行モデルで表現する検証用データです。
+実旅行データ（`EstimateTrip_20260426.pdf`）由来の canonical sample です。
+
+**このサンプルは観光地一覧ではありません。** 高速道路・駐車場・空港内買い物・レンタカー・給油・買い出し・チェックイン/アウト・個人負担・領収書番号まで含む **実旅行の行動台帳** を、現行 CLI モデルで表現する検証用データです。
+
+Itinerary は **not a venue** — 場所（POI）ではなく、旅行中に順序を持つ **行動** を表す最小単位です。計画時は予定、旅行後は実績として扱えます。出発・高速道路・給油・部屋食・レンタカー返却・帰宅なども Itinerary として登録します。理由は、**費用（Expense）・備考・チェックリスト・将来の Note / Photo** を、時系列上の行動に結びつけるためです。
+
+設計原則の詳細: [`docs/specifications/itinerary-model.md`](../../docs/specifications/itinerary-model.md)
 
 | 項目 | 値 |
 |---|---|
@@ -11,6 +16,24 @@
 | Expense | 49 件 |
 | 合計（JPY） | ¥561,780（PDF 会計合計と一致） |
 | Checklist | 4 件 |
+
+## なぜ観光地以外も Itinerary か
+
+PDF / Excel 台帳では、スケジュール行と会計行が混在します。CLI では次のように分けます。
+
+| 台帳上の性質 | CLI |
+|---|---|
+| いつ・何をするか（出発、高速道路、チェックイン、買い出し、給油、返却、帰宅…） | **Itinerary**（行動単位） |
+| 金額・領収書・個人負担 | **Expense**（対応 Itinerary 配下） |
+
+Itinerary 例（すべて `place_id` 不要、`location` は任意）:
+
+- `出発` / `高速道路 東浦→セントレア` / `P1 G Parking`
+- `チェックイン` / `NU045 NGO ⇒ OKA`
+- `夕食の買い出し` / `夕食 部屋`（location なし可）
+- `フェリー乗船` / `ガソリン満タン返し` / `レンタカー返却` / `帰宅`
+
+**1 行 = 1 Itinerary ではありません。** 同一の買い物・食事に複数レシートがある場合は、1 Itinerary に複数 Expense をぶら下げます（例: Day 4 `07:50 土産屋さん` → Expense 4 件）。
 
 ## 投入
 
@@ -36,9 +59,10 @@ cargo run -- trip import /tmp/okinawa-export.json
 
 ### Itinerary
 
-- PDF のスケジュール行を原則 Itinerary として登録
+- PDF の **スケジュール行** を原則 Itinerary として登録（観光地に限らない）
 - 時刻あり → `--time`、なし → `sort_order` のみ
-- 買い物の追加購入・レシート分割行などは **直前の Itinerary に Expense を追加**（例: 昼食追加、土産屋さんの複数レシート）
+- `--location` は任意（区間名・施設名・自宅など）
+- 買い物の追加購入・レシート分割行などは **同一 Itinerary に Expense を追加**（例: 昼食追加、土産屋さんの複数レシート）
 
 ### Expense
 
