@@ -4,6 +4,7 @@ mod day;
 mod db;
 mod diff;
 mod doctor;
+mod expense;
 mod itinerary;
 mod markdown;
 mod models;
@@ -63,6 +64,11 @@ enum Command {
     Note {
         #[command(subcommand)]
         action: NoteAction,
+    },
+    /// 支出 (Expense) の管理
+    Expense {
+        #[command(subcommand)]
+        action: ExpenseAction,
     },
 }
 
@@ -436,6 +442,82 @@ enum NoteAction {
     },
 }
 
+#[derive(Subcommand)]
+enum ExpenseAction {
+    /// Expense を追加
+    Add {
+        /// Itinerary ID（必須）
+        #[arg(long)]
+        itinerary: i64,
+        /// 金額（必須。JPY は整数、USD は小数可）
+        #[arg(long)]
+        amount: String,
+        /// 通貨コード（必須。例: JPY, USD）
+        #[arg(long)]
+        currency: String,
+        /// タイトル（任意）
+        #[arg(long)]
+        title: Option<String>,
+        /// メモ（任意）
+        #[arg(long)]
+        note: Option<String>,
+        /// 支払者名（任意）
+        #[arg(long)]
+        paid_by_name: Option<String>,
+        /// 支出日 YYYY-MM-DD（任意）
+        #[arg(long)]
+        expense_date: Option<String>,
+    },
+    /// Expense 一覧を表示
+    List {
+        /// Trip ID（Trip 配下を集約表示）
+        #[arg(long)]
+        trip: Option<i64>,
+        /// Itinerary ID
+        #[arg(long)]
+        itinerary: Option<i64>,
+        /// JSON 形式で出力する
+        #[arg(long)]
+        json: bool,
+    },
+    /// Expense 詳細を表示
+    Show {
+        /// Expense ID
+        id: i64,
+        /// JSON 形式で出力する
+        #[arg(long)]
+        json: bool,
+    },
+    /// Expense を更新
+    Update {
+        /// Expense ID
+        id: i64,
+        /// タイトル
+        #[arg(long)]
+        title: Option<String>,
+        /// 金額
+        #[arg(long)]
+        amount: Option<String>,
+        /// 通貨コード
+        #[arg(long)]
+        currency: Option<String>,
+        /// 支払者名
+        #[arg(long)]
+        paid_by_name: Option<String>,
+        /// 支出日 YYYY-MM-DD
+        #[arg(long)]
+        expense_date: Option<String>,
+        /// メモ
+        #[arg(long)]
+        note: Option<String>,
+    },
+    /// Expense を削除
+    Delete {
+        /// Expense ID
+        id: i64,
+    },
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
     let conn = crate::db::open_db()?;
@@ -679,6 +761,99 @@ fn main() -> Result<()> {
                 crate::note::delete_note(&conn, id)?;
                 println!("Note を削除しました (ID: {id})");
                 println!("  Title: {}", note.title.as_deref().unwrap_or("-"));
+            }
+        },
+        Command::Expense { action } => match action {
+            ExpenseAction::Add {
+                itinerary,
+                amount,
+                currency,
+                title,
+                note,
+                paid_by_name,
+                expense_date,
+            } => {
+                let id = crate::expense::add_expense(
+                    &conn,
+                    itinerary,
+                    &amount,
+                    &currency,
+                    title.as_deref(),
+                    note.as_deref(),
+                    paid_by_name.as_deref(),
+                    expense_date.as_deref(),
+                )?;
+                println!("Expense を追加しました (ID: {id})");
+                let expense = crate::expense::get_expense(&conn, id)?;
+                crate::expense::print_expense_detail(&expense);
+            }
+            ExpenseAction::List {
+                trip,
+                itinerary,
+                json,
+            } => {
+                let target = crate::expense::resolve_expense_list_target(trip, itinerary)?;
+                let expenses = match target {
+                    crate::expense::ExpenseListTarget::Trip(trip_id) => {
+                        crate::expense::list_expenses_for_trip(&conn, trip_id)?
+                    }
+                    crate::expense::ExpenseListTarget::Itinerary(itinerary_id) => {
+                        crate::expense::list_expenses_for_itinerary(&conn, itinerary_id)?
+                    }
+                };
+                if json {
+                    let (trip_id, itinerary_id) = match target {
+                        crate::expense::ExpenseListTarget::Trip(id) => (Some(id), None),
+                        crate::expense::ExpenseListTarget::Itinerary(id) => (None, Some(id)),
+                    };
+                    crate::trip::print_json(&crate::expense::ExpenseListJson {
+                        trip_id,
+                        itinerary_id,
+                        expenses,
+                    })?;
+                } else {
+                    crate::expense::print_expense_list(target, &expenses);
+                }
+            }
+            ExpenseAction::Show { id, json } => {
+                let expense = crate::expense::get_expense(&conn, id)?;
+                if json {
+                    crate::trip::print_json(&expense)?;
+                } else {
+                    crate::expense::print_expense_detail(&expense);
+                }
+            }
+            ExpenseAction::Update {
+                id,
+                title,
+                amount,
+                currency,
+                paid_by_name,
+                expense_date,
+                note,
+            } => {
+                crate::expense::update_expense(
+                    &conn,
+                    id,
+                    title.as_deref(),
+                    amount.as_deref(),
+                    currency.as_deref(),
+                    paid_by_name.as_deref(),
+                    expense_date.as_deref(),
+                    note.as_deref(),
+                )?;
+                println!("Expense を更新しました (ID: {id})");
+                let expense = crate::expense::get_expense(&conn, id)?;
+                crate::expense::print_expense_detail(&expense);
+            }
+            ExpenseAction::Delete { id } => {
+                let expense = crate::expense::get_expense(&conn, id)?;
+                crate::expense::delete_expense(&conn, id)?;
+                println!("Expense を削除しました (ID: {id})");
+                println!(
+                    "  Amount: {}",
+                    crate::expense::format_amount_display(expense.amount, &expense.currency)
+                );
             }
         },
         Command::Trip { action } => match action {

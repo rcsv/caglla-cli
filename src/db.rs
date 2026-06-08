@@ -124,6 +124,23 @@ pub(crate) fn init_db(conn: &Connection) -> Result<()> {
         [],
     )
     .context("notes テーブルの作成に失敗しました")?;
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS expenses (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            itinerary_id    INTEGER NOT NULL,
+            title           TEXT,
+            amount          INTEGER NOT NULL,
+            currency        TEXT NOT NULL,
+            paid_by_name    TEXT,
+            expense_date    TEXT,
+            note            TEXT,
+            sort_order      INTEGER NOT NULL DEFAULT 0,
+            created_at      TEXT NOT NULL,
+            updated_at      TEXT NOT NULL
+        )",
+        [],
+    )
+    .context("expenses テーブルの作成に失敗しました")?;
     migrate_itinerary_items(conn)?;
     migrate_days(conn)?;
     migrate_itinerary_day_id(conn)?;
@@ -158,6 +175,11 @@ pub(crate) fn migrate_indexes(conn: &Connection) -> Result<()> {
         conn,
         "idx_notes_owner",
         "CREATE INDEX IF NOT EXISTS idx_notes_owner ON notes(owner_type, owner_id)",
+    )?;
+    create_index_if_not_exists(
+        conn,
+        "idx_expenses_itinerary",
+        "CREATE INDEX IF NOT EXISTS idx_expenses_itinerary ON expenses(itinerary_id)",
     )?;
     Ok(())
 }
@@ -246,6 +268,8 @@ pub(crate) fn migrate_itinerary_items(conn: &Connection) -> Result<()> {
 pub(crate) fn reset_db(conn: &Connection) -> Result<()> {
     conn.execute("DELETE FROM notes", [])
         .context("notes の全削除に失敗しました")?;
+    conn.execute("DELETE FROM expenses", [])
+        .context("expenses の全削除に失敗しました")?;
     conn.execute("DELETE FROM checklist_items", [])
         .context("checklist_items の全削除に失敗しました")?;
     conn.execute("DELETE FROM itinerary_items", [])
@@ -255,7 +279,7 @@ pub(crate) fn reset_db(conn: &Connection) -> Result<()> {
     conn.execute("DELETE FROM trips", [])
         .context("trips の全削除に失敗しました")?;
     conn.execute(
-        "DELETE FROM sqlite_sequence WHERE name IN ('notes', 'checklist_items', 'itinerary_items', 'days', 'trips')",
+        "DELETE FROM sqlite_sequence WHERE name IN ('expenses', 'notes', 'checklist_items', 'itinerary_items', 'days', 'trips')",
         [],
     )
     .context("AUTOINCREMENT のリセットに失敗しました")?;
