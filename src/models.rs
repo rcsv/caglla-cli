@@ -71,7 +71,7 @@ pub struct Expense {
 }
 
 /// trips テーブルの1行分のデータ
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Trip {
     pub id: i64,
     pub name: String,
@@ -485,7 +485,7 @@ pub(crate) fn parse_itinerary_category(s: &str) -> Result<ItineraryCategory> {
 }
 
 /// itinerary_items テーブルの1行分のデータ
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ItineraryItem {
     pub id: i64,
     pub trip_id: i64,
@@ -504,7 +504,7 @@ pub struct ItineraryItem {
 }
 
 /// checklist_items テーブルの1行分のデータ
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ChecklistItem {
     pub id: i64,
     pub trip_id: i64,
@@ -516,7 +516,7 @@ pub struct ChecklistItem {
 }
 
 /// trip export 用 JSON の schema バージョン（現行 export）
-pub const TRIP_EXPORT_SCHEMA_VERSION: i32 = 2;
+pub const TRIP_EXPORT_SCHEMA_VERSION: i32 = 3;
 
 /// trip export schema v1（import 互換）
 pub const TRIP_EXPORT_SCHEMA_VERSION_V1: i32 = 1;
@@ -563,8 +563,84 @@ pub fn effective_export_schema_version(schema_version: Option<i32>) -> i32 {
 pub fn is_supported_export_schema_version(schema_version: Option<i32>) -> bool {
     matches!(
         effective_export_schema_version(schema_version),
-        TRIP_EXPORT_SCHEMA_VERSION_V1 | TRIP_EXPORT_SCHEMA_VERSION
+        TRIP_EXPORT_SCHEMA_VERSION_V1 | 2 | TRIP_EXPORT_SCHEMA_VERSION
     )
+}
+
+/// trip export schema v3 の Expense エントリ（DB id は含めない）
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExportExpenseV3 {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    pub amount: i64,
+    pub currency: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub paid_by_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expense_date: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+    pub sort_order: i64,
+}
+
+/// trip export schema v3 の Itinerary エントリ（DB id は含めない）
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExportItineraryV3 {
+    pub title: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub start_time: Option<String>,
+    pub sort_order: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub duration_minutes: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub travel_minutes: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub location: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub category: Option<ItineraryCategory>,
+    #[serde(default)]
+    pub expenses: Vec<ExportExpenseV3>,
+}
+
+/// trip export schema v3 の Day エントリ
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExportDayV3 {
+    pub day_number: i64,
+    #[serde(default)]
+    pub itineraries: Vec<ExportItineraryV3>,
+}
+
+/// trip export schema v3 の JSON 構造
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TripExportV3 {
+    #[serde(default)]
+    pub schema_version: Option<i32>,
+    #[serde(default)]
+    pub generator: Option<String>,
+    #[serde(default)]
+    pub generator_version: Option<String>,
+    #[serde(default)]
+    pub exported_at: Option<String>,
+    pub trip: Trip,
+    #[serde(default)]
+    pub days: Vec<ExportDayV3>,
+    /// v1/v2 互換のため、checklist/notes は top-level のまま維持する
+    #[serde(default)]
+    pub checklist_items: Option<Vec<ChecklistItem>>,
+    #[serde(default)]
+    pub notes: Option<Vec<ExportNote>>,
+}
+
+impl TripExportV3 {
+    pub fn checklist_items(&self) -> &[ChecklistItem] {
+        self.checklist_items.as_deref().unwrap_or(&[])
+    }
+
+    pub fn notes(&self) -> &[ExportNote] {
+        self.notes.as_deref().unwrap_or(&[])
+    }
 }
 
 /// trip export の generator 名
@@ -689,6 +765,7 @@ pub enum ExportValidationCheckId {
     ItineraryItems,
     ChecklistItems,
     Notes,
+    Expenses,
 }
 
 /// export 検証の1項目チェック結果

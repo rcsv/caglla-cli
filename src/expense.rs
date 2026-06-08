@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 
-use crate::models::Expense;
+use crate::models::{Expense, ExportExpenseV3};
 
 const EXPENSE_SELECT_SQL: &str = "
     SELECT id, itinerary_id, title, amount, currency, paid_by_name, expense_date, note,
@@ -95,6 +95,13 @@ fn validate_expense_date(value: &str) -> Result<()> {
     Ok(())
 }
 
+pub(crate) fn validate_expense_date_opt(value: &Option<String>) -> Result<()> {
+    if let Some(v) = value.as_deref() {
+        validate_expense_date(v)?;
+    }
+    Ok(())
+}
+
 pub(crate) fn format_amount_display(amount: i64, currency: &str) -> String {
     let decimals = currency_minor_unit_digits(currency);
     if decimals == 0 {
@@ -181,6 +188,39 @@ pub(crate) fn add_expense(
         ],
     )
     .context("Expense の追加に失敗しました")?;
+    Ok(conn.last_insert_rowid())
+}
+
+/// export schema v3 の Expense を import する（amount は最小通貨単位整数）
+pub(crate) fn import_expense_v3(
+    conn: &Connection,
+    itinerary_id: i64,
+    export: &ExportExpenseV3,
+) -> Result<i64> {
+    crate::itinerary::get_itinerary_item(conn, itinerary_id)?;
+    let currency = validate_currency_code(&export.currency)?;
+    validate_expense_date_opt(&export.expense_date)?;
+
+    let now = crate::db::now_string();
+    conn.execute(
+        "INSERT INTO expenses
+         (itinerary_id, title, amount, currency, paid_by_name, expense_date, note,
+          sort_order, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        params![
+            itinerary_id,
+            export.title,
+            export.amount,
+            currency,
+            export.paid_by_name,
+            export.expense_date,
+            export.note,
+            export.sort_order,
+            &now,
+            &now,
+        ],
+    )
+    .context("Expense の import に失敗しました")?;
     Ok(conn.last_insert_rowid())
 }
 

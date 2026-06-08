@@ -204,7 +204,7 @@ fn cli_export_import_reexport_roundtrip_with_notes() {
 
     let exported: serde_json::Value =
         serde_json::from_str(&fs::read_to_string(&export_path).unwrap()).unwrap();
-    assert_eq!(exported["schema_version"], 2);
+    assert_eq!(exported["schema_version"], 3);
     assert_eq!(exported["notes"].as_array().unwrap().len(), 3);
 
     assert!(run_cli(&dir, &["db", "reset"]).status.success());
