@@ -7,6 +7,7 @@ mod doctor;
 mod itinerary;
 mod markdown;
 mod models;
+mod note;
 mod stats;
 mod trip;
 
@@ -57,6 +58,11 @@ enum Command {
     Day {
         #[command(subcommand)]
         action: DayAction,
+    },
+    /// メモ (Note) の管理
+    Note {
+        #[command(subcommand)]
+        action: NoteAction,
     },
 }
 
@@ -369,6 +375,67 @@ enum DayAction {
     },
 }
 
+#[derive(Subcommand)]
+enum NoteAction {
+    /// Note を追加
+    Add {
+        /// Trip ID（Trip Note / Day Note）
+        #[arg(long)]
+        trip: Option<i64>,
+        /// 日目（Day Note のとき --trip とセット）
+        #[arg(long)]
+        day: Option<i64>,
+        /// Itinerary ID（Itinerary Note）
+        #[arg(long)]
+        itinerary: Option<i64>,
+        /// タイトル（任意）
+        #[arg(long)]
+        title: Option<String>,
+        /// 本文（必須）
+        #[arg(long)]
+        body: String,
+    },
+    /// owner 配下の Note 一覧を表示
+    List {
+        /// Trip ID
+        #[arg(long)]
+        trip: Option<i64>,
+        /// 日目
+        #[arg(long)]
+        day: Option<i64>,
+        /// Itinerary ID
+        #[arg(long)]
+        itinerary: Option<i64>,
+        /// JSON 形式で出力する
+        #[arg(long)]
+        json: bool,
+    },
+    /// Note 詳細を表示
+    Show {
+        /// Note ID
+        id: i64,
+        /// JSON 形式で出力する
+        #[arg(long)]
+        json: bool,
+    },
+    /// Note を更新
+    Update {
+        /// Note ID
+        id: i64,
+        /// 新しいタイトル
+        #[arg(long)]
+        title: Option<String>,
+        /// 新しい本文
+        #[arg(long)]
+        body: Option<String>,
+    },
+    /// Note を削除
+    Delete {
+        /// Note ID
+        id: i64,
+    },
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
     let conn = crate::db::open_db()?;
@@ -558,6 +625,60 @@ fn main() -> Result<()> {
                 let updated = crate::day::swap_day_itineraries(&conn, trip_id, day_a, day_b)?;
                 println!("Day {day_a} と Day {day_b} の日程を入れ替えました");
                 println!("  更新件数: {updated}");
+            }
+        },
+        Command::Note { action } => match action {
+            NoteAction::Add {
+                trip,
+                day,
+                itinerary,
+                title,
+                body,
+            } => {
+                let owner = crate::note::resolve_note_owner_for_add(&conn, trip, day, itinerary)?;
+                let id = crate::note::add_note(&conn, owner, title.as_deref(), &body)?;
+                println!("Note を追加しました (ID: {id})");
+                let note = crate::note::get_note(&conn, id)?;
+                crate::note::print_note_detail(&note);
+            }
+            NoteAction::List {
+                trip,
+                day,
+                itinerary,
+                json,
+            } => {
+                let owner = crate::note::resolve_note_owner_for_list(&conn, trip, day, itinerary)?;
+                let notes =
+                    crate::note::list_notes_for_owner(&conn, owner.owner_type(), owner.owner_id())?;
+                if json {
+                    crate::trip::print_json(&crate::note::NoteListJson {
+                        owner_type: owner.owner_type(),
+                        owner_id: owner.owner_id(),
+                        notes,
+                    })?;
+                } else {
+                    crate::note::print_note_list(owner.owner_type(), owner.owner_id(), &notes);
+                }
+            }
+            NoteAction::Show { id, json } => {
+                let note = crate::note::get_note(&conn, id)?;
+                if json {
+                    crate::trip::print_json(&note)?;
+                } else {
+                    crate::note::print_note_detail(&note);
+                }
+            }
+            NoteAction::Update { id, title, body } => {
+                crate::note::update_note(&conn, id, title.as_deref(), body.as_deref())?;
+                println!("Note を更新しました (ID: {id})");
+                let note = crate::note::get_note(&conn, id)?;
+                crate::note::print_note_detail(&note);
+            }
+            NoteAction::Delete { id } => {
+                let note = crate::note::get_note(&conn, id)?;
+                crate::note::delete_note(&conn, id)?;
+                println!("Note を削除しました (ID: {id})");
+                println!("  Title: {}", note.title.as_deref().unwrap_or("-"));
             }
         },
         Command::Trip { action } => match action {

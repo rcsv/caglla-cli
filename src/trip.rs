@@ -602,6 +602,8 @@ pub(crate) fn load_trip_export_from_file(path: &str) -> Result<TripExport> {
 pub(crate) fn delete_trip(conn: &Connection, id: i64) -> Result<()> {
     // 存在確認（見つからなければエラー）
     get_trip(conn, id)?;
+    // 案A: 親削除前に Note を削除（days / itinerary_items が残っている間に subquery 可能）
+    crate::note::delete_notes_for_trip(conn, id)?;
     conn.execute("DELETE FROM trips WHERE id = ?1", params![id])
         .context("旅行の削除に失敗しました")?;
     Ok(())

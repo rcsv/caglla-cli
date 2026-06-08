@@ -13,6 +13,47 @@ pub struct Day {
     pub updated_at: String,
 }
 
+/// notes テーブルの owner 種別
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum NoteOwnerType {
+    Trip,
+    Day,
+    Itinerary,
+}
+
+impl NoteOwnerType {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Trip => "trip",
+            Self::Day => "day",
+            Self::Itinerary => "itinerary",
+        }
+    }
+}
+
+pub(crate) fn parse_note_owner_type(value: &str) -> Result<NoteOwnerType> {
+    match value {
+        "trip" => Ok(NoteOwnerType::Trip),
+        "day" => Ok(NoteOwnerType::Day),
+        "itinerary" => Ok(NoteOwnerType::Itinerary),
+        _ => anyhow::bail!("invalid owner_type: {value}"),
+    }
+}
+
+/// notes テーブルの1行分のデータ
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Note {
+    pub id: i64,
+    pub owner_type: NoteOwnerType,
+    pub owner_id: i64,
+    pub title: Option<String>,
+    pub body: String,
+    pub sort_order: i64,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
 /// trips テーブルの1行分のデータ
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Trip {
