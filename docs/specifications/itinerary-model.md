@@ -1,0 +1,380 @@
+# Itinerary モデル
+
+Caglla CLI における **Itinerary（予定）** の責務とフィールド定義です。  
+v1.8.0 で **CLI 側のモデルを正として明文化** します。実装は v1.0.x〜v1.7.0 で既に本仕様に沿って動作しています。
+
+関連: [Day モデル](day-model.md) / [Expense モデル](expense-model.md) / [Note モデル](note-model.md) / [Export Schema](export-schema.md)
+
+検証データ: [沖縄・瀬底 canonical sample](../../samples/okinawa_sesoko_2026/README.md)
+
+---
+
+## 1. 設計原則
+
+### Itinerary is an event, not a venue
+
+**Itinerary は場所ではなく、旅行中に発生する出来事である。**
+
+- ユーザーが記録したいのは「どこか」だけでなく、「いつ・何をしたか」という **時系列上のイベント**
+- 観光地・レストラン・ホテルなどの POI は、出来事の **説明や文脈** になりうるが、Itinerary の本質ではない
+- `title`（何をしたか）と親 Day（いつ）があれば Itinerary として成立する
+
+### Venue / Place is optional metadata
+
+**場所情報は Itinerary の任意属性である。**
+
+- `location` は自由文字列（住所・施設名・区間名など）で、**任意**
+- Google Place / POI ID などの外部参照は **現行 CLI にはない**（将来、任意の補助メタデータとして追加可能）
+- 場所が特定できない・特定する必要がない出来事（「出発」「部屋で夕食」「帰宅」など）も Itinerary として登録する
+
+### 費用は Itinerary 配下の Expense
+
+Itinerary 自身は金額を持たない。支出は **Expense エンティティ** として Itinerary の子にぶら下げる（[Expense モデル](expense-model.md) 参照）。
+
+---
+
+## 2. エンティティ関係
+
+```text
+Trip
+ └─ Day (day_number, title, description)
+      └─ Itinerary (itinerary_items)
+           ├─ Expense
+           ├─ Note（エンティティ）
+           └─ itinerary_items.note（短いメモ列）
+```
+
+| エンティティ | 役割 |
+|---|---|
+| **Trip** | 旅行全体 |
+| **Day** | 旅行内の「何日目か」。カレンダー日付は Trip から導出 |
+| **Itinerary** | Day 内の **出来事**。順序・時刻・備考・分類を持つ |
+| **Expense** | Itinerary に紐づく支出（複数可） |
+
+Itinerary の正規の親は DB 上 `day_id`（`days.id`）。CLI / export では `day`（= `day_number`）を使用する（[Day モデル](day-model.md) 参照）。
+
+---
+
+## 3. Itinerary として成立するもの
+
+### 必須
+
+| 条件 | 説明 |
+|---|---|
+| 親 Day | `--day N`（Trip 内の N 日目）。内部で `day_id` に解決 |
+| `title` | 出来事の要約（例: `出発`、`高速道路 東浦→セントレア`、`部屋で夕食`） |
+
+### 任意
+
+`start_time`, `sort_order`, `note`, `location`, `category`, `duration_minutes`, `travel_minutes` および配下の Expense / Note。
+
+**場所（`location`）・POI・金額は必須ではない。**
+
+### 沖縄・瀬底 canonical sample における代表例
+
+実旅行台帳（`EstimateTrip_20260426.pdf`）を CLI モデルで表現した [canonical sample](../../samples/okinawa_sesoko_2026/) では、次のような項目が Itinerary として登録されています。いずれも **POI ではない場合がある** が、旅行の順序を持った出来事であり、費用・備考・チェックリスト・将来の Note / Photo を結びつける単位として価値があります。
+
+| 出来事 | canonical sample での例 | 場所の扱い | category（補助） |
+|---|---|---|---|
+| 出発 | Day 1 `06:00` 出発、せっちゃんやっちゃんピックアップ | `location`: 粟根家 | `transport` |
+| 高速道路 | `高速道路 東浦→セントレア` | 区間名を `location` に | `transport` |
+| 駐車場 | `P1 G Parking` | 施設名 | `transport` |
+| 空港チェックイン | `チェックイン`（出発・帰路とも） | 空港名 | `flight` |
+| フライト | `NU045 NGO ⇒ OKA` | 空港 | `flight` |
+| レンタカー受取 | `Toyota Alphard 又は同等車種` | レンタカー会社 | `transport` |
+| 買い出し | `夕食の買い出し` | スーパー名 | `shopping` |
+| 部屋で夕食 | `夕食 部屋` | **location なし可** | `restaurant` |
+| ホテルチェックイン | `チェックイン`（ヒルトン瀬底） | ホテル名 | `hotel` |
+| ホテルチェックアウト | `出発`（チェックアウトリミット記載を `note` に） | ホテル名 | `hotel` |
+| フェリー乗船 | `フェリー乗船` | ターミナル名 | `transport` |
+| 給油 | `ガソリン満タン返し` | スタンド名 | `transport` |
+| レンタカー返却 | `レンタカー返却` | 返却場所 | `transport` |
+| 帰宅 | Day 4 `23:30` `帰宅` | `location`: 自宅 | `transport` |
+
+これらは **「場所を先に決めてから予定を作る」** のではなく、**「旅行中に起きたことを時系列で記録する」** という入力順序で自然に登録できます。
+
+---
+
+## 4. PDF / Excel 行と Itinerary の対応
+
+旅行会計の PDF や Excel 台帳では、**1 行が必ず 1 Itinerary ではありません。**
+
+### 原則
+
+| 台帳の性質 | CLI での置き方 |
+|---|---|
+| スケジュール行（いつ・何をしたか） | **Itinerary** |
+| 金額行（レシート・領収書・個人負担） | **Expense**（対応する Itinerary 配下） |
+| 金額なしの備考行 | Itinerary `note`、Expense `note`、または省略 |
+
+canonical sample の seed 化ルール（[README](../../samples/okinawa_sesoko_2026/README.md)）:
+
+- PDF の **スケジュール行** を原則 Itinerary として登録
+- **金額がある行** は対応 Itinerary 配下に Expense として登録
+- 買い物の追加購入・レシート分割行などは **同一 Itinerary に Expense を追加**
+
+### 例: 1 Itinerary に複数 Expense（土産屋さん）
+
+同一時刻・同一行動に対して複数レシートや複数費用がある場合、**1 Itinerary に複数 Expense** をぶら下げます。
+
+```text
+Itinerary (Day 4, 07:50):
+  土産屋さん
+
+Expenses:
+  - 土産屋さん（個別：節子）  R-005  ¥3,700
+  - 土産屋さん（個別：知弘）  R-021  ¥8,380
+  - SAGAWA BOX（個別：知弘）  R-001  ¥3,200
+  - 宅配便（個別：知弘）      R-001  ¥286
+```
+
+昼食で追加注文があった場合も同様です（`朝食 スタンダードコーヒー` に本体 Expense + `ジュース買い足し` Expense）。
+
+### 意図的に Itinerary にしないもの
+
+canonical sample では次を省略しています（Itinerary / Expense どちらにもしない、または note のみ）:
+
+- 金額なし行（例: ロイズ R-033）
+- 概算のみの備考（例: 有料道路「700円ぐらい？」— Itinerary `note` に記載、Expense なし）
+
+---
+
+## 5. コアフィールド
+
+### `ItineraryItem`（`src/models.rs`）
+
+| フィールド | 必須 | 説明 |
+|---|---|---|
+| `id` | ✓（DB） | 内部 ID |
+| `trip_id` | ✓ | 所属 Trip |
+| `day` | ✓ | `day_number`（表示・CLI 用） |
+| `title` | ✓ | 出来事の要約 |
+| `note` | — | 短い補足（1 フィールド） |
+| `start_time` | — | 開始時刻 `HH:MM` |
+| `sort_order` | ✓ | 同一 Day 内の並び（default `0`） |
+| `duration_minutes` | — | 滞在・実施の目安時間（分） |
+| `travel_minutes` | — | 次の予定までの移動時間の目安（分） |
+| `location` | — | 場所の自由記述 |
+| `category` | — | 補助分類（後述） |
+| `created_at` / `updated_at` | ✓ | タイムスタンプ |
+
+DB 上は `day_id`（`days.id` への FK）を正規の親参照として保持する。`day` 列は export / 互換用に `day_number` を同期保持する。
+
+### CLI 作成の最小例
+
+```bash
+# 場所・時刻なしでも作成可能
+caglla itinerary add 1 --day 1 "部屋で夕食"
+
+# 時刻・場所・順序は任意で付与
+caglla itinerary add 1 --day 1 --time 06:00 --order 1 --location "粟根家" \
+  "出発、せっちゃんやっちゃんピックアップ"
+```
+
+---
+
+## 6. 場所（`location`）
+
+`location` は **任意の文字列** です。
+
+- 施設名（`ヒルトン瀬底`）、住所（`自宅`）、区間（`東浦→セントレア`）など、ユーザーの入力意図をそのまま保持する
+- POI データベースや地図サービスへの参照は **必須ではない**
+- 将来、外部 Place ID を任意メタデータとして追加しても、Itinerary の成立条件には含めない
+
+移動区間（高速道路）や自宅など、固定 POI に紐づけにくい出来事こそ、`location` を補助的に使う典型例です。
+
+---
+
+## 7. 時刻と並び順
+
+### `start_time`
+
+- 形式: `HH:MM`（任意）
+- ある場合は一覧表示・Markdown 出力で時刻として表示される
+- **なくても Itinerary は成立する**（canonical sample でも時刻なしの行がある）
+
+### `sort_order`
+
+- 同一 Day 内での明示的な順序
+- `--order`（CLI）で指定。未指定時は `0`
+- 時刻がない Itinerary は `sort_order` で順序を決める
+
+### 一覧のソート順（現行実装）
+
+`src/itinerary.rs` の既定順:
+
+```text
+day_number 昇順
+→ start_time ありを先（NULL は後）
+→ start_time 昇順
+→ sort_order 昇順
+→ id 昇順
+```
+
+時刻ありの予定を時系列で見せつつ、時刻なしの予定は `sort_order` で整列します。同時刻の複数 Itinerary は `sort_order` → `id` でタイブレークします。
+
+### `duration_minutes` / `travel_minutes`
+
+- **任意** の目安値
+- 移動そのものを別 Itinerary（例: `高速道路 東浦→セントレア`）として表現する運用と併用可能
+- `travel_minutes` は「次の予定までの移動」のメモとして使えるが、canonical sample では主に **移動 Itinerary 行** で表現している
+
+---
+
+## 8. 費用（Expense との関係）
+
+Itinerary は **金額フィールドを持たない**。支出はすべて Expense として Itinerary 配下に登録する。
+
+```bash
+caglla expense add --itinerary 39 --amount 3700 --currency JPY \
+  --title "土産屋さん" --paid-by-name "節子" \
+  --note "費用区分: 個別：節子 / 領収書: R-005"
+```
+
+| 観点 | 方針 |
+|---|---|
+| 親子関係 | Expense の親は **Itinerary のみ**（Trip / Day 直下は v1.x では設けない） |
+| 複数件 | 1 Itinerary に **複数 Expense 可** |
+| 集計 | `trip stats` で Trip 単位の Expense 件数・通貨別合計を表示 |
+| Export | schema v3 で `days[].itineraries[].expenses[]` にネスト |
+
+Itinerary に紐づけにくい支出は、ユーザーが明示的に作った Itinerary（例: 「その他経費」）に載せる運用を許容する。**ダミー Itinerary の自動作成は行わない**。
+
+---
+
+## 9. 説明とメモ（`note` / Note）
+
+| 手段 | 用途 |
+|---|---|
+| `itinerary_items.note` | 予定 1 件への **短い補足**（チェックアウトリミット、連絡先、ETC 要否など） |
+| **Note エンティティ** | **長文・複数件** の自由記述（`owner_type = itinerary`） |
+
+詳細は [Note モデル](note-model.md)。v1.8.0 時点では両者を **併存** させる。canonical sample では備考の多くを Itinerary `note` / Expense `note` に集約し、Note エンティティの大量投入は省略している。
+
+---
+
+## 10. カテゴリ（`category`）
+
+`category` は Itinerary を **表示・集計・チェックリスト生成** するための **補助分類** です。Itinerary の成立条件ではない。
+
+### 定義済み値（8 種）
+
+| 値 | 表示名 | 用途の例 |
+|---|---|---|
+| `flight` | フライト | 空港チェックイン、搭乗 |
+| `hotel` | ホテル | チェックイン、アウト |
+| `restaurant` | 食事 | レストラン、部屋食 |
+| `activity` | アクティビティ | 観光・体験 |
+| `transport` | 移動 | 出発、高速道路、駐車場、フェリー、給油、帰宅 |
+| `shopping` | 買い物 | 買い出し、土産 |
+| `beach` | ビーチ | ビーチ訪問 |
+| `museum` | 博物館・展示 | 博物館・水族館など |
+
+```bash
+caglla itinerary update 2 --category transport
+```
+
+### チェックリストとの関係
+
+`ItineraryCategory` にはカテゴリごとの **標準チェックリスト候補** が定義されている（`src/models.rs` の `CategoryDefinition`）。`ChecklistRule` により、Trip 内のカテゴリ組み合わせに応じたチェックリスト追加も行える。
+
+カテゴリは **あとから付与・変更可能**。作成時に未指定でもよい。
+
+---
+
+## 11. CLI コマンド（現行）
+
+| コマンド | 説明 |
+|---|---|
+| `itinerary add <trip_id> --day N <title>` | 作成（`--time`, `--order`, `--location`, `--note` 任意） |
+| `itinerary list <trip_id>` | 一覧 |
+| `itinerary show <id>` | 詳細 |
+| `itinerary update <id>` | 更新（`--category`, `--time`, `--order` 等） |
+| `itinerary delete <id>` | 削除 |
+
+Day 操作は [Day モデル](day-model.md) の `day list` / `day show` / `day swap` を参照。
+
+---
+
+## 12. DB スキーマ（抜粋）
+
+```sql
+CREATE TABLE itinerary_items (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    trip_id          INTEGER NOT NULL,
+    day_id           INTEGER REFERENCES days(id),
+    day              INTEGER NOT NULL,
+    title            TEXT NOT NULL,
+    note             TEXT,
+    start_time       TEXT,
+    sort_order       INTEGER NOT NULL DEFAULT 0,
+    duration_minutes INTEGER,
+    travel_minutes   INTEGER,
+    location         TEXT,
+    category         TEXT,
+    created_at       TEXT NOT NULL,
+    updated_at       TEXT NOT NULL,
+    FOREIGN KEY(trip_id) REFERENCES trips(id) ON DELETE CASCADE
+);
+```
+
+`place_id` 列は **存在しない**（意図的）。
+
+---
+
+## 13. Export / Import（schema v3）
+
+現行 export は `schema_version: 3`。Itinerary は `days[].itineraries[]` にネストする。
+
+```json
+{
+  "day_number": 4,
+  "itineraries": [
+    {
+      "title": "土産屋さん",
+      "start_time": "07:50",
+      "sort_order": 2,
+      "category": "shopping",
+      "expenses": [
+        {
+          "title": "土産屋さん",
+          "amount": 3700,
+          "currency": "JPY",
+          "paid_by_name": "節子",
+          "note": "費用区分: 個別：節子 / 領収書: R-005",
+          "sort_order": 0
+        }
+      ]
+    }
+  ]
+}
+```
+
+| 論点 | 方針 |
+|---|---|
+| 内部 ID | export しない |
+| `place_id` | フィールドなし（場所は `location` のみ） |
+| Expense | Itinerary 配下のみ |
+
+詳細は [Export Schema](export-schema.md)。
+
+---
+
+## 14. 実装参照
+
+| 用途 | パス |
+|---|---|
+| 型定義 | `src/models.rs`（`ItineraryItem`, `ItineraryCategory`, `ExportItineraryV3`） |
+| CRUD | `src/itinerary.rs` |
+| Export / Import | `src/trip.rs` |
+| Markdown 出力 | `src/markdown.rs` |
+| canonical sample | `samples/okinawa_sesoko_2026/` |
+| golden テスト | `tests/okinawa_sesoko_seed_cli.rs` |
+
+---
+
+## Appendix: 他系統の設計について
+
+Caglla.Travel Web 版には、Google Places を起点とした別系統の Itinerary 設計（作成時に `place_id` を必須とするスキーマなど）が存在します。
+
+**v1.8.0 では CLI モデルを正とし、Web との互換・統合・マイグレーションは本仕様のスコープ外** です。将来の連携を検討する場合も、まず本ドキュメントの「出来事としての Itinerary」を基準にします。
