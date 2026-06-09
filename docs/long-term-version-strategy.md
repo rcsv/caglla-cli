@@ -1,0 +1,272 @@
+# Caglla.Travel 長期バージョン戦略
+
+Caglla.Travel（CLI / 将来 Web）の **メジャーバージョンごとの到達イメージ** を整理したロードマップメモです。
+
+**本書の位置付け:**
+
+- 今後の設計議論・優先順位判断の **参考資料**
+- **実装指示ではない** — スケジュール・スコープの確約でもない
+- リポジトリの **パッチリリース**（v1.14.0、v1.16.0 等の documentation-only release）とは **別軸** の「製品メジャー版」想定
+
+関連: [Travel Ledger Responsibilities](specifications/travel-ledger-responsibilities.md) / [Summary Implementation Plan](specifications/summary-implementation-plan.md) / [Reservation Implementation Plan](specifications/reservation-implementation-plan.md) / [data-model.md](data-model.md)
+
+---
+
+## 基本方針
+
+メジャーバージョンは **技術的な区切り** ではなく、
+
+```text
+ユーザーが何をできるようになるか
+```
+
+で区切る。
+
+---
+
+## v1 — Planning Foundation
+
+**現在の到達点（および v1 系で完結させたい基盤）。**
+
+### 目的
+
+```text
+旅行計画を立てられる
+旅行実績を記録できる
+```
+
+### 主な要素
+
+```text
+Trip
+Day
+Itinerary
+Checklist
+Expense
+Note
+Remark
+Summary        ← 設計済み、実装は進行中 / 未着手
+Reservation    ← 設計済み、実装は未着手
+```
+
+Reservation と Summary は **設計フェーズ（Responsibility → Entity Design → Implementation Plan）まで整理済み**。v1 系の残りは **実装で旅行計画ツールとしての基盤を完成させる** フェーズ。
+
+### v1 系に持ち込まない想定（現時点）
+
+```text
+Photo
+Attachment
+Participant
+```
+
+まず **Summary** と **Reservation** を完成させ、旅行計画を **完結して表現できる状態** を優先する。
+
+---
+
+## v2 — Participant Foundation
+
+### テーマ
+
+```text
+誰と旅行するか
+```
+
+### 追加予定
+
+```text
+Participant
+```
+
+### スコープ
+
+この段階では **精算機能は持ち込まない**。
+
+例:
+
+```text
+父 / 母 / 妻 / 長男 / 次男
+```
+
+参加者情報を Trip に紐付けられることが目的。
+
+---
+
+## v3 — Shared Expense
+
+### テーマ
+
+```text
+誰が払ったか
+誰の費用か
+```
+
+### 追加予定
+
+```text
+Paid By
+Beneficiary
+Settlement
+```
+
+ここで初めて **Expense が Participant と結び付く**。家族旅行・グループ旅行の精算が可能になる。
+
+---
+
+## v4 — Reservation
+
+### テーマ
+
+```text
+予約情報の正式管理
+```
+
+### 追加予定
+
+```text
+Reservation Entity
+Reservation Export
+Reservation Display
+```
+
+**設計フェーズは v1 系ドキュメントで進行済み**（[reservation-model.md](specifications/reservation-model.md) 系列）。製品メジャー v4 では、旅行計画の **中核情報として Reservation を正式実装** する到達点を想定。
+
+> **注:** v1 系パッチで Summary 実装が先に入る可能性はある。本ロードマップの **番号** と **CLI パッチバージョン** は一致しない場合がある。
+
+---
+
+## v5 — Travel Book
+
+### テーマ
+
+```text
+旅のしおり
+```
+
+### 追加予定
+
+```text
+Rich Markdown Export
+PDF Export
+Reservation Integration
+Summary Integration
+```
+
+旅行 **前** の共有資料を生成できる状態を目指す。
+
+---
+
+## v6 — Travel Journal
+
+### テーマ
+
+```text
+旅行記録
+```
+
+### 追加予定
+
+```text
+Photo
+Attachment
+```
+
+旅行 **後** の記録保存・振り返りを強化する。
+
+---
+
+## v7 — Identity
+
+### テーマ
+
+```text
+利用者
+```
+
+### 追加予定
+
+```text
+User
+Authentication
+```
+
+**クラウド同期はまだ行わない**。まず「利用者」という概念を導入する。
+
+---
+
+## v8 — Cloud
+
+### テーマ
+
+```text
+共有と同期
+```
+
+### 追加予定
+
+```text
+Cloud Sync
+Backup
+Sharing
+```
+
+複数端末での利用・共有を実現する。
+
+---
+
+## v9 — Platform
+
+### テーマ
+
+```text
+Caglla Engine
+```
+
+### 追加予定
+
+```text
+Desktop Application
+Mobile Application
+Backend Library
+Public API
+```
+
+CLI を中心とした **旅行プラットフォーム** へ発展させる。
+
+---
+
+## 一覧（早見表）
+
+| メジャー | テーマ | ユーザーができること（イメージ） |
+|---|---|---|
+| **v1** | Planning Foundation | 計画・実績の記録、しおりの土台 |
+| **v2** | Participant Foundation | 同行者を Trip に登録 |
+| **v3** | Shared Expense | 誰が払い・誰の費用かを整理・精算 |
+| **v4** | Reservation | 予約情報の正式管理 |
+| **v5** | Travel Book | 共有用しおり（MD/PDF） |
+| **v6** | Travel Journal | 写真・添付付き旅行記 |
+| **v7** | Identity | 利用者・アカウント |
+| **v8** | Cloud | 同期・バックアップ・共有 |
+| **v9** | Platform | デスクトップ / モバイル / API |
+
+---
+
+## v1 系ドキュメント系列（参考）
+
+Summary / Reservation はいずれも **3 段階** で設計を整理している。
+
+```text
+Responsibilities Review  →  Entity Design  →  Implementation Plan
+```
+
+| 概念 | 責務整理 | Entity Design | Implementation Plan |
+|---|---|---|---|
+| **Summary** | v1.14.0 | v1.15.0（同梱） | v1.16.0 |
+| **Reservation** | v1.11.0 | v1.12.0 | v1.13.0 |
+
+実装着手順序は本ロードマップの **v1 優先（Summary → Reservation）** と整合させる。
+
+---
+
+## 改訂
+
+本メモはプロダクト判断に応じて更新する。実装・リリースの正は各 [releases/](releases/) ノートおよび [specifications/](specifications/) を参照する。

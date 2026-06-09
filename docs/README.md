@@ -13,6 +13,12 @@ Caglla CLI のドキュメント索引です。GitHub トップの [README.md](.
 | [markdown-export.md](markdown-export.md) | `trip export-md` による旅行しおり出力 |
 | [development.md](development.md) | `make check`・CI・プロジェクト構成・サンプル |
 
+## Planning
+
+| ドキュメント | 内容 |
+|---|---|
+| [long-term-version-strategy.md](long-term-version-strategy.md) | Caglla.Travel メジャーバージョン戦略（v1 Planning Foundation 〜 v9 Platform）— 設計判断用参考 |
+
 ## Specifications
 
 内部モデル・設計仕様は [specifications/](specifications/) にあります。
