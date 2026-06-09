@@ -1,0 +1,6 @@
+# TruffleHog OSS — minimal config for CI secret scanning.
+# See .github/workflows/secret-scan.yml
+
+logLevel: info
+runOnce: true
+logJson: false
