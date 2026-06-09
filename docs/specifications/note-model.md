@@ -3,7 +3,7 @@
 Caglla CLI / 将来 Web 版に向けた **Note エンティティ**（Long-form Note）の仕様メモです。  
 v1.3.0 で **DB / CLI 基本 CRUD を実装済み**。Export schema v2 は未対応。
 
-**責務の全体像**（Summary / Remark / Note / Reservation の使い分け）は [Travel Ledger Responsibilities](travel-ledger-responsibilities.md) を正とします。**Reservation** の詳細は [Reservation モデル](reservation-model.md) を参照。本書は **Long-form Note entity** に焦点を当てます。
+**責務の全体像**（Summary / Remark / Note / Reservation の使い分け）は [Travel Ledger Responsibilities](travel-ledger-responsibilities.md) を正とします。**Summary** の詳細は [Summary Responsibilities Review](summary-responsibilities-review.md)。**Reservation** の詳細は [Reservation モデル](reservation-model.md) を参照。本書は **Long-form Note entity** に焦点を当てます。
 
 関連: [Day モデル](day-model.md) / [Itinerary モデル](itinerary-model.md) / [Travel Ledger Responsibilities](travel-ledger-responsibilities.md)
 

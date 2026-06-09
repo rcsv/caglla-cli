@@ -10,6 +10,7 @@ Caglla CLI の trip export / import JSON 形式。
 | Expense の親子関係 | [Expense モデル](expense-model.md) |
 | Note の owner 解決 | [Note モデル](note-model.md) |
 | Reservation（将来） | [Reservation Implementation Plan](reservation-implementation-plan.md) §7 |
+| Summary（将来） | [Summary Responsibilities Review](summary-responsibilities-review.md) §9 |
 | Day と `day_number` | [Day モデル](day-model.md) |
 | 並び順（`sort_order` / `start_time`） | [Ordering モデル](ordering-model.md) |
 
