@@ -480,7 +480,7 @@ fn count_notes(conn: &Connection) -> Result<i64> {
 fn find_day_by_id(conn: &Connection, day_id: i64) -> Result<crate::models::Day> {
     crate::db::map_query_row(
         conn.query_row(
-            "SELECT id, trip_id, day_number, title, description, created_at, updated_at
+            "SELECT id, trip_id, day_number, title, summary, created_at, updated_at
              FROM days WHERE id = ?1",
             params![day_id],
             crate::day::row_to_day,
@@ -556,7 +556,7 @@ mod tests {
     #[test]
     fn test_add_trip_day_and_itinerary_notes() {
         let conn = test_db();
-        let trip_id = add_trip(&conn, "Note Trip", "2026-04-26", "2026-04-29").unwrap();
+        let trip_id = add_trip(&conn, "Note Trip", "2026-04-26", "2026-04-29", None).unwrap();
         let itinerary_id = add_itinerary_item(
             &conn, trip_id, 2, "Museum", None, None, None, None, None, None, None,
         )
@@ -597,7 +597,7 @@ mod tests {
     fn test_add_note_rejects_invalid_owner() {
         let conn = test_db();
         assert!(add_note(&conn, ResolvedNoteOwner::Trip(999), None, "body",).is_err());
-        let trip_id = add_trip(&conn, "Trip", "2026-04-26", "2026-04-29").unwrap();
+        let trip_id = add_trip(&conn, "Trip", "2026-04-26", "2026-04-29", None).unwrap();
         assert!(add_note(&conn, ResolvedNoteOwner::Day(999), None, "body",).is_err());
         assert!(add_note(&conn, ResolvedNoteOwner::Itinerary(999), None, "body",).is_err());
         let day = crate::day::find_day_by_trip_and_day_number(&conn, trip_id, 1).unwrap();
@@ -612,7 +612,7 @@ mod tests {
     #[test]
     fn test_get_update_delete_note() {
         let conn = test_db();
-        let trip_id = add_trip(&conn, "Trip", "2026-04-26", "2026-04-29").unwrap();
+        let trip_id = add_trip(&conn, "Trip", "2026-04-26", "2026-04-29", None).unwrap();
         let id = add_note(
             &conn,
             ResolvedNoteOwner::Trip(trip_id),
@@ -637,7 +637,7 @@ mod tests {
     #[test]
     fn test_delete_notes_for_trip_cascade() {
         let conn = test_db();
-        let trip_id = add_trip(&conn, "Trip", "2026-04-26", "2026-04-29").unwrap();
+        let trip_id = add_trip(&conn, "Trip", "2026-04-26", "2026-04-29", None).unwrap();
         let itinerary_id = add_itinerary_item(
             &conn, trip_id, 2, "Plan", None, None, None, None, None, None, None,
         )
@@ -661,7 +661,7 @@ mod tests {
     #[test]
     fn test_delete_notes_for_day_on_trip_shrink() {
         let conn = test_db();
-        let trip_id = add_trip(&conn, "Trip", "2026-04-26", "2026-04-29").unwrap();
+        let trip_id = add_trip(&conn, "Trip", "2026-04-26", "2026-04-29", None).unwrap();
         let day = crate::day::find_day_by_trip_and_day_number(&conn, trip_id, 4).unwrap();
         add_note(&conn, ResolvedNoteOwner::Day(day.id), None, "day4").unwrap();
         delete_notes_for_day(&conn, day.id).unwrap();
@@ -671,7 +671,7 @@ mod tests {
     #[test]
     fn test_delete_notes_for_itinerary() {
         let conn = test_db();
-        let trip_id = add_trip(&conn, "Trip", "2026-04-26", "2026-04-29").unwrap();
+        let trip_id = add_trip(&conn, "Trip", "2026-04-26", "2026-04-29", None).unwrap();
         let itinerary_id = add_itinerary_item(
             &conn, trip_id, 1, "Plan", None, None, None, None, None, None, None,
         )
@@ -690,7 +690,7 @@ mod tests {
     #[test]
     fn test_trip_delete_removes_all_owner_notes() {
         let conn = test_db();
-        let trip_id = add_trip(&conn, "Trip", "2026-04-26", "2026-04-29").unwrap();
+        let trip_id = add_trip(&conn, "Trip", "2026-04-26", "2026-04-29", None).unwrap();
         let itinerary_id = add_itinerary_item(
             &conn, trip_id, 2, "Plan", None, None, None, None, None, None, None,
         )
@@ -714,13 +714,13 @@ mod tests {
     #[test]
     fn test_trip_update_shrink_deletes_only_removed_day_notes() {
         let conn = test_db();
-        let trip_id = add_trip(&conn, "Trip", "2026-04-26", "2026-04-29").unwrap();
+        let trip_id = add_trip(&conn, "Trip", "2026-04-26", "2026-04-29", None).unwrap();
         let day1 = crate::day::find_day_by_trip_and_day_number(&conn, trip_id, 1).unwrap();
         let day4 = crate::day::find_day_by_trip_and_day_number(&conn, trip_id, 4).unwrap();
         add_note(&conn, ResolvedNoteOwner::Day(day1.id), None, "keep").unwrap();
         add_note(&conn, ResolvedNoteOwner::Day(day4.id), None, "remove").unwrap();
 
-        update_trip(&conn, trip_id, None, None, Some("2026-04-28")).unwrap();
+        update_trip(&conn, trip_id, None, None, Some("2026-04-28"), None, false).unwrap();
 
         assert_eq!(count_notes(&conn).unwrap(), 1);
         let remaining = list_notes_for_owner(&conn, NoteOwnerType::Day, day1.id).unwrap();
@@ -730,7 +730,7 @@ mod tests {
     #[test]
     fn test_trip_update_shrink_rejects_day_with_itinerary_before_deleting_notes() {
         let conn = test_db();
-        let trip_id = add_trip(&conn, "Trip", "2026-04-26", "2026-04-29").unwrap();
+        let trip_id = add_trip(&conn, "Trip", "2026-04-26", "2026-04-29", None).unwrap();
         let itinerary_id = add_itinerary_item(
             &conn,
             trip_id,
@@ -755,14 +755,14 @@ mod tests {
         )
         .unwrap();
 
-        assert!(update_trip(&conn, trip_id, None, None, Some("2026-04-28")).is_err());
+        assert!(update_trip(&conn, trip_id, None, None, Some("2026-04-28"), None, false).is_err());
         assert_eq!(count_notes(&conn).unwrap(), 2);
     }
 
     #[test]
     fn test_update_trip_shrink_rolls_back_when_middle_day_blocks_deletion() {
         let conn = test_db();
-        let trip_id = add_trip(&conn, "Trip", "2026-04-26", "2026-04-29").unwrap();
+        let trip_id = add_trip(&conn, "Trip", "2026-04-26", "2026-04-29", None).unwrap();
         let day4 = crate::day::find_day_by_trip_and_day_number(&conn, trip_id, 4).unwrap();
         add_note(&conn, ResolvedNoteOwner::Day(day4.id), None, "day4 note").unwrap();
         add_itinerary_item(
@@ -781,7 +781,7 @@ mod tests {
         .unwrap();
         let trip_before = crate::trip::get_trip(&conn, trip_id).unwrap();
 
-        assert!(update_trip(&conn, trip_id, None, None, Some("2026-04-27")).is_err());
+        assert!(update_trip(&conn, trip_id, None, None, Some("2026-04-27"), None, false).is_err());
 
         let trip_after = crate::trip::get_trip(&conn, trip_id).unwrap();
         assert_eq!(trip_before.end_date, trip_after.end_date);
@@ -797,7 +797,7 @@ mod tests {
     #[test]
     fn test_itinerary_delete_leaves_trip_and_day_notes() {
         let conn = test_db();
-        let trip_id = add_trip(&conn, "Trip", "2026-04-26", "2026-04-29").unwrap();
+        let trip_id = add_trip(&conn, "Trip", "2026-04-26", "2026-04-29", None).unwrap();
         let day = crate::day::find_day_by_trip_and_day_number(&conn, trip_id, 1).unwrap();
         let keep_id = add_itinerary_item(
             &conn, trip_id, 1, "Keep", None, None, None, None, None, None, None,
@@ -853,7 +853,7 @@ mod tests {
     #[test]
     fn test_itinerary_delete_removes_only_target_itinerary_notes() {
         let conn = test_db();
-        let trip_id = add_trip(&conn, "Trip", "2026-04-26", "2026-04-29").unwrap();
+        let trip_id = add_trip(&conn, "Trip", "2026-04-26", "2026-04-29", None).unwrap();
         let itinerary_id = add_itinerary_item(
             &conn, trip_id, 1, "Plan", None, None, None, None, None, None, None,
         )
@@ -874,7 +874,7 @@ mod tests {
     #[test]
     fn test_day_swap_leaves_day_notes_on_days_id_and_itinerary_notes_on_itinerary_id() {
         let conn = test_db();
-        let trip_id = add_trip(&conn, "Trip", "2026-04-26", "2026-04-29").unwrap();
+        let trip_id = add_trip(&conn, "Trip", "2026-04-26", "2026-04-29", None).unwrap();
         let day2 = crate::day::find_day_by_trip_and_day_number(&conn, trip_id, 2).unwrap();
         let day3 = crate::day::find_day_by_trip_and_day_number(&conn, trip_id, 3).unwrap();
         add_note(&conn, ResolvedNoteOwner::Day(day2.id), None, "day2 note").unwrap();

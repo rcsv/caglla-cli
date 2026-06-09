@@ -43,6 +43,7 @@ struct ItineraryFieldChange {
 /// trip diff の結果
 pub(crate) struct TripDiff {
     trip_changes: Vec<(String, String, String)>,
+    day_summary_changes: Vec<(i64, String, String)>,
     itinerary_added: Vec<ItineraryItem>,
     itinerary_removed: Vec<ItineraryItem>,
     itinerary_modified: Vec<ItineraryFieldChange>,
@@ -222,6 +223,39 @@ pub(crate) fn compute_trip_diff(old: &TripExport, new: &TripExport) -> TripDiff 
             fmt_diff_option_str(&new.trip.end_date),
         ));
     }
+    if old.trip.summary != new.trip.summary {
+        trip_changes.push((
+            "summary".to_string(),
+            fmt_diff_option_str(&old.trip.summary),
+            fmt_diff_option_str(&new.trip.summary),
+        ));
+    }
+
+    let mut day_summary_changes = Vec::new();
+    let old_days: HashMap<i64, Option<String>> = old
+        .day_summaries
+        .iter()
+        .map(|d| (d.day_number, d.summary.clone()))
+        .collect();
+    let new_days: HashMap<i64, Option<String>> = new
+        .day_summaries
+        .iter()
+        .map(|d| (d.day_number, d.summary.clone()))
+        .collect();
+    let mut day_numbers: Vec<i64> = old_days.keys().chain(new_days.keys()).copied().collect();
+    day_numbers.sort_unstable();
+    day_numbers.dedup();
+    for day_number in day_numbers {
+        let old_summary = old_days.get(&day_number).cloned().unwrap_or(None);
+        let new_summary = new_days.get(&day_number).cloned().unwrap_or(None);
+        if old_summary != new_summary {
+            day_summary_changes.push((
+                day_number,
+                fmt_diff_option_str(&old_summary),
+                fmt_diff_option_str(&new_summary),
+            ));
+        }
+    }
 
     let old_map: HashMap<ItineraryKey, &ItineraryItem> = old
         .itinerary_items
@@ -338,6 +372,7 @@ pub(crate) fn compute_trip_diff(old: &TripExport, new: &TripExport) -> TripDiff 
 
     TripDiff {
         trip_changes,
+        day_summary_changes,
         itinerary_added,
         itinerary_removed,
         itinerary_modified,
@@ -356,6 +391,16 @@ pub(crate) fn print_trip_diff(diff: &TripDiff) {
         for (field, old_value, new_value) in &diff.trip_changes {
             println!("- {field}: {old_value}");
             println!("+ {field}: {new_value}");
+        }
+    }
+
+    println!();
+    println!("Day summary:");
+    if diff.day_summary_changes.is_empty() {
+        println!("  （変更なし）");
+    } else {
+        for (day_number, old_value, new_value) in &diff.day_summary_changes {
+            println!("~ Day {day_number} summary: {old_value} -> {new_value}");
         }
     }
 
@@ -440,6 +485,7 @@ mod tests {
             name: name.to_string(),
             start_date: None,
             end_date: None,
+            summary: None,
             created_at: "2026-01-01 00:00:00".to_string(),
             updated_at: "2026-01-01 00:00:00".to_string(),
         }
@@ -474,6 +520,7 @@ mod tests {
             itinerary_items: vec![],
             checklist_items: None,
             notes: None,
+            day_summaries: vec![],
         };
         let new = TripExport {
             schema_version: None,
@@ -484,6 +531,7 @@ mod tests {
             itinerary_items: vec![make_test_item(1, "首里城", Some("09:00"))],
             checklist_items: None,
             notes: None,
+            day_summaries: vec![],
         };
 
         let diff = compute_trip_diff(&old, &new);
@@ -515,6 +563,7 @@ mod tests {
             itinerary_items: vec![old_item],
             checklist_items: None,
             notes: None,
+            day_summaries: vec![],
         };
         let new = TripExport {
             schema_version: None,
@@ -525,6 +574,7 @@ mod tests {
             itinerary_items: vec![new_item],
             checklist_items: None,
             notes: None,
+            day_summaries: vec![],
         };
 
         let diff = compute_trip_diff(&old, &new);
@@ -562,6 +612,7 @@ mod tests {
             itinerary_items: vec![make_test_item(1, "万座毛", Some("10:00"))],
             checklist_items: None,
             notes: None,
+            day_summaries: vec![],
         };
         let new = TripExport {
             schema_version: None,
@@ -572,6 +623,7 @@ mod tests {
             itinerary_items: vec![],
             checklist_items: None,
             notes: None,
+            day_summaries: vec![],
         };
 
         let diff = compute_trip_diff(&old, &new);
@@ -591,6 +643,7 @@ mod tests {
             itinerary_items: vec![],
             checklist_items: None,
             notes: None,
+            day_summaries: vec![],
         };
         let new = TripExport {
             schema_version: None,
@@ -601,6 +654,7 @@ mod tests {
             itinerary_items: vec![],
             checklist_items: None,
             notes: None,
+            day_summaries: vec![],
         };
 
         let diff = compute_trip_diff(&old, &new);
@@ -608,6 +662,23 @@ mod tests {
         assert_eq!(diff.trip_changes[0].0, "name");
         assert_eq!(diff.trip_changes[0].1, "沖縄旅行");
         assert_eq!(diff.trip_changes[0].2, "沖縄・瀬底旅行");
+    }
+
+    #[test]
+    fn test_diff_trip_summary_change() {
+        let mut old_trip = make_test_trip("Trip");
+        old_trip.summary = Some("old overview".to_string());
+        let mut new_trip = make_test_trip("Trip");
+        new_trip.summary = Some("new overview".to_string());
+
+        let old = make_base_export(old_trip);
+        let new = make_base_export(new_trip);
+
+        let diff = compute_trip_diff(&old, &new);
+        assert_eq!(diff.trip_changes.len(), 1);
+        assert_eq!(diff.trip_changes[0].0, "summary");
+        assert_eq!(diff.trip_changes[0].1, "old overview");
+        assert_eq!(diff.trip_changes[0].2, "new overview");
     }
 
     fn make_base_export(trip: Trip) -> TripExport {
@@ -620,6 +691,7 @@ mod tests {
             itinerary_items: vec![],
             checklist_items: None,
             notes: None,
+            day_summaries: vec![],
         }
     }
 

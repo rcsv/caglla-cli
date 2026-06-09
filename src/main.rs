@@ -10,6 +10,7 @@ mod markdown;
 mod models;
 mod note;
 mod stats;
+mod summary;
 mod trip;
 
 use anyhow::Result;
@@ -90,6 +91,9 @@ enum TripAction {
         /// 終了日 (YYYY-MM-DD)
         #[arg(long, required = true)]
         end: String,
+        /// 旅行の概要（任意）
+        #[arg(long)]
+        summary: Option<String>,
     },
     /// 旅行一覧を表示
     List {
@@ -118,6 +122,12 @@ enum TripAction {
         /// 新しい終了日 (YYYY-MM-DD)
         #[arg(long)]
         end: Option<String>,
+        /// 旅行の概要
+        #[arg(long)]
+        summary: Option<String>,
+        /// 旅行の概要をクリアする
+        #[arg(long)]
+        clear_summary: bool,
     },
     /// 旅行を削除
     Delete {
@@ -369,6 +379,19 @@ enum DayAction {
         /// JSON 形式で出力する
         #[arg(long)]
         json: bool,
+    },
+    /// Day の概要を更新
+    Update {
+        /// 旅行 ID
+        trip_id: i64,
+        /// 何日目か
+        day_number: i64,
+        /// その日の概要
+        #[arg(long)]
+        summary: Option<String>,
+        /// 概要をクリアする
+        #[arg(long)]
+        clear_summary: bool,
     },
     /// 2 つの Day 配下の Itinerary を入れ替える
     Swap {
@@ -699,6 +722,20 @@ fn main() -> Result<()> {
             } => {
                 crate::day::run_day_show(&conn, trip_id, day_number, json)?;
             }
+            DayAction::Update {
+                trip_id,
+                day_number,
+                summary,
+                clear_summary,
+            } => {
+                crate::day::run_day_update(
+                    &conn,
+                    trip_id,
+                    day_number,
+                    summary.as_deref(),
+                    clear_summary,
+                )?;
+            }
             DayAction::Swap {
                 trip_id,
                 day_a,
@@ -857,12 +894,20 @@ fn main() -> Result<()> {
             }
         },
         Command::Trip { action } => match action {
-            TripAction::Add { name, start, end } => {
-                let id = crate::trip::add_trip(&conn, &name, &start, &end)?;
+            TripAction::Add {
+                name,
+                start,
+                end,
+                summary,
+            } => {
+                let id = crate::trip::add_trip(&conn, &name, &start, &end, summary.as_deref())?;
                 println!("旅行を追加しました (ID: {id})");
                 println!("  名前   : {name}");
                 println!("  開始日 : {start}");
                 println!("  終了日 : {end}");
+                if let Some(text) = summary {
+                    println!("  概要   : {text}");
+                }
             }
             TripAction::List { json } => {
                 let trips = crate::trip::list_trips(&conn)?;
@@ -885,6 +930,8 @@ fn main() -> Result<()> {
                 name,
                 start,
                 end,
+                summary,
+                clear_summary,
             } => {
                 crate::trip::update_trip(
                     &conn,
@@ -892,6 +939,8 @@ fn main() -> Result<()> {
                     name.as_deref(),
                     start.as_deref(),
                     end.as_deref(),
+                    summary.as_deref(),
+                    clear_summary,
                 )?;
                 println!("旅行を更新しました (ID: {id})");
                 let trip = crate::trip::get_trip(&conn, id)?;

@@ -330,7 +330,7 @@ fn cli_export_import_reexport_roundtrip_with_expenses() {
         serde_json::from_str(&fs::read_to_string(&export_path).unwrap()).unwrap();
     assert_eq!(exported["schema_version"], 3);
     assert_eq!(
-        exported["days"][0]["itineraries"][0]["expenses"]
+        exported["days"][1]["itineraries"][0]["expenses"]
             .as_array()
             .unwrap()
             .len(),

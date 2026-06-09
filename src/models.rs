@@ -8,7 +8,7 @@ pub struct Day {
     pub trip_id: i64,
     pub day_number: i64,
     pub title: String,
-    pub description: Option<String>,
+    pub summary: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -77,6 +77,8 @@ pub struct Trip {
     pub name: String,
     pub start_date: Option<String>,
     pub end_date: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -608,8 +610,18 @@ pub struct ExportItineraryV3 {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ExportDayV3 {
     pub day_number: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
     #[serde(default)]
     pub itineraries: Vec<ExportItineraryV3>,
+}
+
+/// trip diff 用の Day summary スナップショット
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExportDaySummary {
+    pub day_number: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
 }
 
 /// trip export schema v3 の JSON 構造
@@ -668,6 +680,9 @@ pub struct TripExport {
     /// schema v2+: Note 一覧。v1 import では省略可。
     #[serde(default)]
     pub notes: Option<Vec<ExportNote>>,
+    /// schema v3+: Day summary（diff 用。v1/v2 export では省略可）
+    #[serde(default)]
+    pub day_summaries: Vec<ExportDaySummary>,
 }
 
 impl TripExport {

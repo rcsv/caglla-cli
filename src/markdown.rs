@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use anyhow::{Context, Result};
 use rusqlite::Connection;
 
-use crate::models::{ChecklistItem, Expense, ItineraryItem, Trip};
+use crate::models::{ChecklistItem, Day, Expense, ItineraryItem, Trip};
 use crate::stats::{format_minutes_duration, TripStats};
 
 /// Markdown 出力用に日程一覧を取得する（`list_itinerary_items` と同一順序）
@@ -106,12 +106,23 @@ fn append_overview_section(output: &mut String, stats: &TripStats) {
 /// 旅行と日程一覧から Markdown 文字列を組み立てる
 pub(crate) fn format_trip_markdown(
     trip: &Trip,
+    days: &[Day],
     items: &[ItineraryItem],
     checklist: &[ChecklistItem],
     stats: &TripStats,
     expenses_by_itinerary: &HashMap<i64, Vec<Expense>>,
 ) -> String {
+    let day_summaries: HashMap<i64, Option<String>> = days
+        .iter()
+        .map(|d| (d.day_number, d.summary.clone()))
+        .collect();
+
     let mut output = format!("# {}\n", trip.name);
+    if let Some(summary) = &trip.summary {
+        output.push('\n');
+        output.push_str(summary);
+        output.push('\n');
+    }
     if let Some(dates) = format_trip_date_range(trip) {
         output.push('\n');
         output.push_str(&dates);
@@ -129,6 +140,10 @@ pub(crate) fn format_trip_markdown(
                 output.push('\n');
             }
             output.push_str(&format!("## Day {}\n\n", item.day));
+            if let Some(day_summary) = day_summaries.get(&item.day).and_then(|s| s.as_ref()) {
+                output.push_str(day_summary);
+                output.push_str("\n\n");
+            }
             current_day = Some(item.day);
         } else {
             output.push_str("\n\n");
@@ -150,6 +165,7 @@ pub(crate) fn format_trip_markdown(
 /// 旅行しおりを Markdown 文字列として組み立てる
 pub(crate) fn generate_trip_markdown(conn: &Connection, trip_id: i64) -> Result<String> {
     let trip = crate::trip::get_trip(conn, trip_id)?;
+    let days = crate::day::list_days(conn, trip_id)?;
     let items = list_itinerary_items_for_markdown(conn, trip_id)?;
     let checklist = crate::checklist::list_checklist_items(conn, trip_id)?;
     let stats = crate::stats::compute_trip_stats(conn, trip_id)?;
@@ -162,6 +178,7 @@ pub(crate) fn generate_trip_markdown(conn: &Connection, trip_id: i64) -> Result<
     }
     Ok(format_trip_markdown(
         &trip,
+        &days,
         &items,
         &checklist,
         &stats,
@@ -420,7 +437,7 @@ mod tests {
     #[test]
     fn test_export_md_with_itinerary() {
         let conn = test_db();
-        let trip_id = add_trip(&conn, "沖縄旅行", "2026-04-26", "2026-04-29").unwrap();
+        let trip_id = add_trip(&conn, "沖縄旅行", "2026-04-26", "2026-04-29", None).unwrap();
         add_itinerary_item(
             &conn,
             trip_id,
@@ -450,7 +467,7 @@ mod tests {
     #[test]
     fn test_export_md_includes_overview() {
         let conn = test_db();
-        let trip_id = add_trip(&conn, "沖縄旅行", "2026-04-26", "2026-04-29").unwrap();
+        let trip_id = add_trip(&conn, "沖縄旅行", "2026-04-26", "2026-04-29", None).unwrap();
         add_itinerary_item(
             &conn,
             trip_id,

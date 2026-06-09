@@ -379,7 +379,7 @@ mod tests {
     #[test]
     fn test_doctor_detects_high_travel_time() {
         let conn = test_db();
-        let trip_id = add_trip(&conn, "移動多め旅行", "2026-01-01", "2026-01-04").unwrap();
+        let trip_id = add_trip(&conn, "移動多め旅行", "2026-01-01", "2026-01-04", None).unwrap();
         add_itinerary_item(
             &conn,
             trip_id,

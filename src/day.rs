@@ -39,7 +39,7 @@ fn ensure_days_range(conn: &Connection, trip_id: i64, from: i64, to: i64) -> Res
     let now = now_string();
     for day_number in from..=to {
         conn.execute(
-            "INSERT OR IGNORE INTO days (trip_id, day_number, title, description, created_at, updated_at)
+            "INSERT OR IGNORE INTO days (trip_id, day_number, title, summary, created_at, updated_at)
              VALUES (?1, ?2, '', NULL, ?3, ?3)",
             params![trip_id, day_number, &now],
         )
@@ -67,12 +67,12 @@ pub(crate) fn sync_days_to_trip_duration(
             }
             if !day.title.is_empty()
                 || day
-                    .description
+                    .summary
                     .as_ref()
-                    .is_some_and(|description| !description.is_empty())
+                    .is_some_and(|summary| !summary.is_empty())
             {
                 anyhow::bail!(
-                    "Day {day_number} にタイトルまたは説明があるため、旅行期間を短縮できません"
+                    "Day {day_number} にタイトルまたは概要があるため、旅行期間を短縮できません"
                 );
             }
             // Day 削除前に Day Note のみ削除（Itinerary がある Day は上で reject 済み）
@@ -100,7 +100,7 @@ pub(crate) fn find_day_by_trip_and_day_number(
 ) -> Result<Day> {
     crate::db::map_query_row(
         conn.query_row(
-            "SELECT id, trip_id, day_number, title, description, created_at, updated_at
+            "SELECT id, trip_id, day_number, title, summary, created_at, updated_at
              FROM days WHERE trip_id = ?1 AND day_number = ?2",
             params![trip_id, day_number],
             row_to_day,
@@ -135,7 +135,7 @@ struct DayListEntryJson {
     date: String,
     title: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    description: Option<String>,
+    summary: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -152,6 +152,8 @@ struct DayShowJson {
     day_number: i64,
     date: String,
     day_id: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    summary: Option<String>,
     itineraries: Vec<ItineraryItem>,
 }
 
@@ -168,7 +170,7 @@ pub(crate) fn run_day_list(conn: &Connection, trip_id: i64, json: bool) -> Resul
                     day_number: day.day_number,
                     date: day_date_for_trip(&trip, day.day_number)?,
                     title: day.title.clone(),
-                    description: day.description.clone(),
+                    summary: day.summary.clone(),
                 })
             })
             .collect::<Result<Vec<_>>>()?;
@@ -201,11 +203,67 @@ pub(crate) fn run_day_show(
             day_number,
             date,
             day_id: day.id,
+            summary: day.summary.clone(),
             itineraries: items,
         })?;
     } else {
-        print_day_show(&trip, day_number, &date, &items);
+        print_day_show(&trip, &day, day_number, &date, &items);
     }
+    Ok(())
+}
+
+/// Day の summary を DB に設定する（import 用）
+pub(crate) fn set_day_summary(
+    conn: &Connection,
+    trip_id: i64,
+    day_number: i64,
+    summary: Option<String>,
+) -> Result<()> {
+    let day = find_day_by_trip_and_day_number(conn, trip_id, day_number)?;
+    let now = now_string();
+    conn.execute(
+        "UPDATE days SET summary = ?1, updated_at = ?2 WHERE id = ?3",
+        params![summary, &now, day.id],
+    )
+    .context("Day summary の設定に失敗しました")?;
+    Ok(())
+}
+
+/// Day の summary を更新する
+pub(crate) fn update_day_summary(
+    conn: &Connection,
+    trip_id: i64,
+    day_number: i64,
+    summary: Option<&str>,
+    clear_summary: bool,
+) -> Result<()> {
+    if !clear_summary && summary.is_none() {
+        anyhow::bail!("更新する項目を指定してください (--summary または --clear-summary)");
+    }
+    let _trip = crate::trip::get_trip(conn, trip_id)?;
+    let new_summary = if clear_summary {
+        None
+    } else {
+        crate::summary::normalize_day_summary(summary)?
+    };
+    set_day_summary(conn, trip_id, day_number, new_summary)
+}
+
+/// Day 更新 CLI
+pub(crate) fn run_day_update(
+    conn: &Connection,
+    trip_id: i64,
+    day_number: i64,
+    summary: Option<&str>,
+    clear_summary: bool,
+) -> Result<()> {
+    update_day_summary(conn, trip_id, day_number, summary, clear_summary)?;
+    let trip = crate::trip::get_trip(conn, trip_id)?;
+    let day = find_day_by_trip_and_day_number(conn, trip_id, day_number)?;
+    let date = day_date_for_trip(&trip, day_number)?;
+    let items = crate::itinerary::list_itinerary_items_for_day(conn, trip_id, day_number)?;
+    println!("Day {day_number} を更新しました");
+    print_day_show(&trip, &day, day_number, &date, &items);
     Ok(())
 }
 
@@ -265,14 +323,22 @@ fn print_day_list(trip: &Trip, days: &[Day]) -> Result<()> {
     Ok(())
 }
 
-fn print_day_show(trip: &Trip, day_number: i64, date: &str, items: &[ItineraryItem]) {
+fn print_day_show(trip: &Trip, day: &Day, day_number: i64, date: &str, items: &[ItineraryItem]) {
     println!("Trip: {}", trip.name);
     println!();
     println!("Day {day_number}");
     println!("Date: {date}");
+    if let Some(summary) = &day.summary {
+        println!();
+        println!("概要:");
+        for line in summary.lines() {
+            println!("  {line}");
+        }
+    }
     println!();
     println!("Itineraries:");
     if items.is_empty() {
+        println!("  （なし）");
         return;
     }
     for item in items {
@@ -287,7 +353,7 @@ fn print_day_show(trip: &Trip, day_number: i64, date: &str, items: &[ItineraryIt
 pub(crate) fn list_days(conn: &Connection, trip_id: i64) -> Result<Vec<Day>> {
     let mut stmt = conn
         .prepare(
-            "SELECT id, trip_id, day_number, title, description, created_at, updated_at
+            "SELECT id, trip_id, day_number, title, summary, created_at, updated_at
              FROM days WHERE trip_id = ?1 ORDER BY day_number",
         )
         .context("Day 一覧取得の準備に失敗しました")?;
@@ -319,7 +385,7 @@ pub(crate) fn row_to_day(row: &rusqlite::Row) -> rusqlite::Result<Day> {
         trip_id: row.get(1)?,
         day_number: row.get(2)?,
         title: row.get(3)?,
-        description: row.get(4)?,
+        summary: row.get(4)?,
         created_at: row.get(5)?,
         updated_at: row.get(6)?,
     })
@@ -396,7 +462,7 @@ mod tests {
     #[test]
     fn test_create_days_for_trip() {
         let conn = test_db();
-        let trip_id = add_trip(&conn, "Day Trip", "2026-12-01", "2026-12-03").unwrap();
+        let trip_id = add_trip(&conn, "Day Trip", "2026-12-01", "2026-12-03", None).unwrap();
         let days = list_days(&conn, trip_id).unwrap();
         assert_eq!(days.len(), 3);
         assert_eq!(days[0].day_number, 1);
@@ -407,7 +473,7 @@ mod tests {
     #[test]
     fn test_sync_days_extends_on_end_date_change() {
         let conn = test_db();
-        let trip_id = add_trip(&conn, "Extend Trip", "2026-12-01", "2026-12-02").unwrap();
+        let trip_id = add_trip(&conn, "Extend Trip", "2026-12-01", "2026-12-02", None).unwrap();
         sync_days_to_trip_duration(&conn, trip_id, 4).unwrap();
         assert_eq!(list_days(&conn, trip_id).unwrap().len(), 4);
     }
@@ -415,7 +481,7 @@ mod tests {
     #[test]
     fn test_sync_days_deletes_empty_extra_days() {
         let conn = test_db();
-        let trip_id = add_trip(&conn, "Shrink Trip", "2026-12-01", "2026-12-04").unwrap();
+        let trip_id = add_trip(&conn, "Shrink Trip", "2026-12-01", "2026-12-04", None).unwrap();
         sync_days_to_trip_duration(&conn, trip_id, 2).unwrap();
         assert_eq!(list_days(&conn, trip_id).unwrap().len(), 2);
     }
@@ -423,7 +489,7 @@ mod tests {
     #[test]
     fn test_sync_days_rejects_shrink_when_itinerary_exists() {
         let conn = test_db();
-        let trip_id = add_trip(&conn, "Busy Trip", "2026-12-01", "2026-12-03").unwrap();
+        let trip_id = add_trip(&conn, "Busy Trip", "2026-12-01", "2026-12-03", None).unwrap();
         add_itinerary_item(
             &conn, trip_id, 3, "Activity", None, None, None, None, None, None, None,
         )
@@ -434,7 +500,7 @@ mod tests {
     #[test]
     fn test_day_date_for_trip() {
         let conn = test_db();
-        let trip_id = add_trip(&conn, "Okinawa", "2026-04-26", "2026-04-29").unwrap();
+        let trip_id = add_trip(&conn, "Okinawa", "2026-04-26", "2026-04-29", None).unwrap();
         let trip = crate::trip::get_trip(&conn, trip_id).unwrap();
         assert_eq!(day_date_for_trip(&trip, 1).unwrap(), "2026-04-26");
         assert_eq!(day_date_for_trip(&trip, 4).unwrap(), "2026-04-29");
@@ -443,7 +509,14 @@ mod tests {
     #[test]
     fn test_day_list_includes_derived_dates() {
         let conn = test_db();
-        let trip_id = add_trip(&conn, "Okinawa Family Trip", "2026-04-26", "2026-04-29").unwrap();
+        let trip_id = add_trip(
+            &conn,
+            "Okinawa Family Trip",
+            "2026-04-26",
+            "2026-04-29",
+            None,
+        )
+        .unwrap();
         let trip = crate::trip::get_trip(&conn, trip_id).unwrap();
         let days = list_days(&conn, trip_id).unwrap();
         assert_eq!(days.len(), 4);
@@ -454,7 +527,7 @@ mod tests {
     #[test]
     fn test_run_day_show_empty_day() {
         let conn = test_db();
-        let trip_id = add_trip(&conn, "Empty Day Trip", "2026-04-26", "2026-04-29").unwrap();
+        let trip_id = add_trip(&conn, "Empty Day Trip", "2026-04-26", "2026-04-29", None).unwrap();
         let items = crate::itinerary::list_itinerary_items_for_day(&conn, trip_id, 2).unwrap();
         assert!(items.is_empty());
     }
@@ -462,14 +535,14 @@ mod tests {
     #[test]
     fn test_run_day_show_rejects_invalid_day_number() {
         let conn = test_db();
-        let trip_id = add_trip(&conn, "Range Trip", "2026-04-26", "2026-04-29").unwrap();
+        let trip_id = add_trip(&conn, "Range Trip", "2026-04-26", "2026-04-29", None).unwrap();
         assert!(run_day_show(&conn, trip_id, 99, false).is_err());
     }
 
     #[test]
     fn test_swap_day_itineraries_exchanges_day2_and_day3() {
         let conn = test_db();
-        let trip_id = add_trip(&conn, "Swap Trip", "2026-04-26", "2026-04-29").unwrap();
+        let trip_id = add_trip(&conn, "Swap Trip", "2026-04-26", "2026-04-29", None).unwrap();
         add_itinerary_item(
             &conn,
             trip_id,
@@ -528,7 +601,7 @@ mod tests {
     #[test]
     fn test_swap_preserves_total_itinerary_count() {
         let conn = test_db();
-        let trip_id = add_trip(&conn, "Count Trip", "2026-04-26", "2026-04-29").unwrap();
+        let trip_id = add_trip(&conn, "Count Trip", "2026-04-26", "2026-04-29", None).unwrap();
         add_itinerary_item(
             &conn, trip_id, 2, "A", None, None, None, None, None, None, None,
         )
@@ -552,7 +625,7 @@ mod tests {
     #[test]
     fn test_swap_rejects_same_day() {
         let conn = test_db();
-        let trip_id = add_trip(&conn, "Same Day Trip", "2026-04-26", "2026-04-29").unwrap();
+        let trip_id = add_trip(&conn, "Same Day Trip", "2026-04-26", "2026-04-29", None).unwrap();
         add_itinerary_item(
             &conn, trip_id, 2, "Plan", None, None, None, None, None, None, None,
         )
@@ -568,7 +641,8 @@ mod tests {
     #[test]
     fn test_swap_leaves_data_unchanged_on_invalid_day() {
         let conn = test_db();
-        let trip_id = add_trip(&conn, "Invalid Day Trip", "2026-04-26", "2026-04-29").unwrap();
+        let trip_id =
+            add_trip(&conn, "Invalid Day Trip", "2026-04-26", "2026-04-29", None).unwrap();
         add_itinerary_item(
             &conn, trip_id, 2, "Plan", None, None, None, None, None, None, None,
         )
@@ -583,7 +657,7 @@ mod tests {
     #[test]
     fn test_swap_transaction_rollback_on_failed_commit() {
         let conn = test_db();
-        let trip_id = add_trip(&conn, "Rollback Trip", "2026-04-26", "2026-04-29").unwrap();
+        let trip_id = add_trip(&conn, "Rollback Trip", "2026-04-26", "2026-04-29", None).unwrap();
         add_itinerary_item(
             &conn, trip_id, 2, "A", None, None, None, None, None, None, None,
         )
@@ -616,7 +690,7 @@ mod tests {
     #[test]
     fn test_day_list_json_payload() {
         let conn = test_db();
-        let trip_id = add_trip(&conn, "JSON Trip", "2026-04-26", "2026-04-28").unwrap();
+        let trip_id = add_trip(&conn, "JSON Trip", "2026-04-26", "2026-04-28", None).unwrap();
         let trip = crate::trip::get_trip(&conn, trip_id).unwrap();
         let days = list_days(&conn, trip_id).unwrap();
         let entries = days
@@ -627,7 +701,7 @@ mod tests {
                     day_number: day.day_number,
                     date: day_date_for_trip(&trip, day.day_number)?,
                     title: day.title.clone(),
-                    description: day.description.clone(),
+                    summary: day.summary.clone(),
                 })
             })
             .collect::<Result<Vec<_>>>()
@@ -647,7 +721,7 @@ mod tests {
     #[test]
     fn test_day_show_json_payload() {
         let conn = test_db();
-        let trip_id = add_trip(&conn, "JSON Show Trip", "2026-04-26", "2026-04-28").unwrap();
+        let trip_id = add_trip(&conn, "JSON Show Trip", "2026-04-26", "2026-04-28", None).unwrap();
         add_itinerary_item(
             &conn,
             trip_id,
@@ -672,6 +746,7 @@ mod tests {
             day_number: 2,
             date,
             day_id: day.id,
+            summary: day.summary.clone(),
             itineraries: items,
         })
         .unwrap();

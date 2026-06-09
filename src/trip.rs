@@ -11,13 +11,20 @@ use crate::models::{
 };
 
 /// 新しい旅行を追加する
-pub(crate) fn add_trip(conn: &Connection, name: &str, start: &str, end: &str) -> Result<i64> {
+pub(crate) fn add_trip(
+    conn: &Connection,
+    name: &str,
+    start: &str,
+    end: &str,
+    summary: Option<&str>,
+) -> Result<i64> {
     let day_count = crate::day::validate_trip_date_range(start, end)?;
+    let summary = crate::summary::normalize_trip_summary(summary)?;
     let now = now_string();
     conn.execute(
-        "INSERT INTO trips (name, start_date, end_date, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5)",
-        params![name, start, end, &now, &now],
+        "INSERT INTO trips (name, start_date, end_date, summary, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        params![name, start, end, summary, &now, &now],
     )
     .context("旅行の追加に失敗しました")?;
     let trip_id = conn.last_insert_rowid();
@@ -27,14 +34,14 @@ pub(crate) fn add_trip(conn: &Connection, name: &str, start: &str, end: &str) ->
 
 #[cfg(test)]
 pub(crate) fn add_test_trip(conn: &Connection, name: &str) -> Result<i64> {
-    add_trip(conn, name, "2026-01-01", "2026-01-03")
+    add_trip(conn, name, "2026-01-01", "2026-01-03", None)
 }
 
 /// すべての旅行を取得する
 pub(crate) fn list_trips(conn: &Connection) -> Result<Vec<Trip>> {
     let mut stmt = conn
         .prepare(
-            "SELECT id, name, start_date, end_date, created_at, updated_at
+            "SELECT id, name, start_date, end_date, summary, created_at, updated_at
              FROM trips
              ORDER BY id",
         )
@@ -53,7 +60,7 @@ pub(crate) fn list_trips(conn: &Connection) -> Result<Vec<Trip>> {
 pub(crate) fn get_trip(conn: &Connection, id: i64) -> Result<Trip> {
     crate::db::map_query_row(
         conn.query_row(
-            "SELECT id, name, start_date, end_date, created_at, updated_at
+            "SELECT id, name, start_date, end_date, summary, created_at, updated_at
          FROM trips
          WHERE id = ?1",
             params![id],
@@ -70,12 +77,15 @@ pub(crate) fn update_trip(
     name: Option<&str>,
     start: Option<&str>,
     end: Option<&str>,
+    summary: Option<&str>,
+    clear_summary: bool,
 ) -> Result<()> {
-    if name.is_none() && start.is_none() && end.is_none() {
-        anyhow::bail!("更新する項目を1つ以上指定してください (--name, --start, --end)");
+    if name.is_none() && start.is_none() && end.is_none() && summary.is_none() && !clear_summary {
+        anyhow::bail!(
+            "更新する項目を1つ以上指定してください (--name, --start, --end, --summary, --clear-summary)"
+        );
     }
 
-    // 既存データを読み込み、指定された項目だけ上書きする
     let mut trip = get_trip(conn, id)?;
     if let Some(n) = name {
         trip.name = n.to_string();
@@ -87,6 +97,11 @@ pub(crate) fn update_trip(
     if let Some(e) = end {
         crate::day::parse_trip_date(e)?;
         trip.end_date = Some(e.to_string());
+    }
+    if clear_summary {
+        trip.summary = None;
+    } else if let Some(s) = summary {
+        trip.summary = crate::summary::normalize_trip_summary(Some(s))?;
     }
 
     let start_date = trip
@@ -103,9 +118,16 @@ pub(crate) fn update_trip(
     crate::db::with_transaction(conn, "trip update", |tx| {
         tx.execute(
             "UPDATE trips
-             SET name = ?1, start_date = ?2, end_date = ?3, updated_at = ?4
-             WHERE id = ?5",
-            params![trip.name, trip.start_date, trip.end_date, &now, id],
+             SET name = ?1, start_date = ?2, end_date = ?3, summary = ?4, updated_at = ?5
+             WHERE id = ?6",
+            params![
+                trip.name,
+                trip.start_date,
+                trip.end_date,
+                trip.summary,
+                &now,
+                id
+            ],
         )
         .context("旅行の更新に失敗しました")?;
         crate::day::sync_days_to_trip_duration(tx, id, day_count)?;
@@ -120,6 +142,14 @@ pub(crate) fn build_trip_export(conn: &Connection, trip_id: i64) -> Result<TripE
     let itinerary_items = crate::itinerary::list_itinerary_items(conn, trip_id)?;
     let checklist_items = crate::checklist::list_checklist_items(conn, trip_id)?;
     let notes = crate::note::build_export_notes(conn, trip_id)?;
+    let day_summaries = crate::day::list_days(conn, trip_id)?
+        .into_iter()
+        .filter(|day| day.summary.is_some())
+        .map(|day| crate::models::ExportDaySummary {
+            day_number: day.day_number,
+            summary: day.summary.clone(),
+        })
+        .collect();
     Ok(TripExport {
         schema_version: None,
         generator: None,
@@ -129,6 +159,7 @@ pub(crate) fn build_trip_export(conn: &Connection, trip_id: i64) -> Result<TripE
         itinerary_items,
         checklist_items: Some(checklist_items),
         notes: Some(notes),
+        day_summaries,
     })
 }
 
@@ -137,8 +168,18 @@ pub(crate) fn build_trip_export_v3(conn: &Connection, trip_id: i64) -> Result<Tr
     let base = build_trip_export(conn, trip_id)?;
 
     // Itinerary を day_number でグルーピングし、各 Itinerary に expenses を付与する
-    let mut day_map: std::collections::BTreeMap<i64, Vec<ExportItineraryV3>> =
+    let mut day_map: std::collections::BTreeMap<i64, ExportDayV3> =
         std::collections::BTreeMap::new();
+    for day in crate::day::list_days(conn, trip_id)? {
+        day_map.insert(
+            day.day_number,
+            ExportDayV3 {
+                day_number: day.day_number,
+                summary: day.summary.clone(),
+                itineraries: Vec::new(),
+            },
+        );
+    }
     for item in &base.itinerary_items {
         let expenses = crate::expense::list_expenses_for_itinerary(conn, item.id)?
             .into_iter()
@@ -155,7 +196,12 @@ pub(crate) fn build_trip_export_v3(conn: &Connection, trip_id: i64) -> Result<Tr
 
         day_map
             .entry(item.day)
-            .or_default()
+            .or_insert_with(|| ExportDayV3 {
+                day_number: item.day,
+                summary: None,
+                itineraries: Vec::new(),
+            })
+            .itineraries
             .push(ExportItineraryV3 {
                 title: item.title.clone(),
                 note: item.note.clone(),
@@ -170,10 +216,11 @@ pub(crate) fn build_trip_export_v3(conn: &Connection, trip_id: i64) -> Result<Tr
     }
 
     let mut days = Vec::new();
-    for (day_number, itineraries) in day_map {
+    for (day_number, day) in day_map {
         days.push(ExportDayV3 {
             day_number,
-            itineraries,
+            summary: day.summary,
+            itineraries: day.itineraries,
         });
     }
 
@@ -281,8 +328,18 @@ fn validate_trip_export_v3(export: &TripExportV3) -> Result<()> {
         .ok_or_else(|| anyhow::anyhow!("trip.end_date は必須です"))?;
     let day_count = crate::day::validate_trip_date_range(start, end)?;
 
+    crate::summary::normalize_summary_for_import(
+        export.trip.summary.as_deref(),
+        crate::summary::TRIP_SUMMARY_MAX_LEN,
+    )?;
+
     // days/itineraries
     for (d_index, day) in export.days.iter().enumerate() {
+        crate::summary::normalize_summary_for_import(
+            day.summary.as_deref(),
+            crate::summary::DAY_SUMMARY_MAX_LEN,
+        )
+        .with_context(|| format!("days[{d_index}].summary is invalid"))?;
         if day.day_number < 1 || day.day_number > day_count {
             anyhow::bail!(
                 "days[{d_index}].day_number ({}) は旅行期間 (1..={day_count}) の範囲外です",
@@ -340,6 +397,16 @@ fn validate_trip_export_v3(export: &TripExportV3) -> Result<()> {
         })
         .collect();
 
+    let day_summaries = export
+        .days
+        .iter()
+        .filter(|day| day.summary.is_some())
+        .map(|day| crate::models::ExportDaySummary {
+            day_number: day.day_number,
+            summary: day.summary.clone(),
+        })
+        .collect();
+
     let v2_like = TripExport {
         schema_version: export.schema_version,
         generator: export.generator.clone(),
@@ -349,6 +416,7 @@ fn validate_trip_export_v3(export: &TripExportV3) -> Result<()> {
         itinerary_items,
         checklist_items: export.checklist_items.clone(),
         notes: export.notes.clone(),
+        day_summaries,
     };
     if let Some(error) = crate::note::collect_export_note_validation_errors(&v2_like)
         .into_iter()
@@ -752,7 +820,14 @@ pub(crate) fn import_trip_from_export(conn: &Connection, export: &TripExport) ->
         &export.trip.name,
         export.trip.start_date.as_deref().expect("validated above"),
         export.trip.end_date.as_deref().expect("validated above"),
+        export.trip.summary.as_deref(),
     )?;
+
+    for day_summary in &export.day_summaries {
+        if let Some(text) = crate::summary::normalize_day_summary(day_summary.summary.as_deref())? {
+            crate::day::set_day_summary(conn, new_trip_id, day_summary.day_number, Some(text))?;
+        }
+    }
 
     let checklist_items: Vec<_> = export.checklist_items().to_vec();
 
@@ -801,7 +876,14 @@ pub(crate) fn import_trip_from_export_v3(conn: &Connection, export: &TripExportV
         &export.trip.name,
         export.trip.start_date.as_deref().expect("validated above"),
         export.trip.end_date.as_deref().expect("validated above"),
+        export.trip.summary.as_deref(),
     )?;
+
+    for day in &export.days {
+        if let Some(text) = crate::summary::normalize_day_summary(day.summary.as_deref())? {
+            crate::day::set_day_summary(conn, new_trip_id, day.day_number, Some(text))?;
+        }
+    }
 
     // Itinerary → Expense の順で復元する（id は新規採番）
     for day in &export.days {
@@ -1057,6 +1139,15 @@ pub(crate) fn load_trip_export_from_file(path: &str) -> Result<TripExport> {
                     })
             })
             .collect::<Vec<_>>();
+        let day_summaries = export
+            .days
+            .iter()
+            .filter(|day| day.summary.is_some())
+            .map(|day| crate::models::ExportDaySummary {
+                day_number: day.day_number,
+                summary: day.summary.clone(),
+            })
+            .collect::<Vec<_>>();
         Ok(TripExport {
             schema_version: export.schema_version,
             generator: export.generator,
@@ -1066,6 +1157,7 @@ pub(crate) fn load_trip_export_from_file(path: &str) -> Result<TripExport> {
             itinerary_items,
             checklist_items: export.checklist_items,
             notes: export.notes,
+            day_summaries,
         })
     } else {
         serde_json::from_str(&json).context("JSON の形式が不正です")
@@ -1091,8 +1183,9 @@ pub(crate) fn row_to_trip(row: &rusqlite::Row) -> rusqlite::Result<Trip> {
         name: row.get(1)?,
         start_date: row.get(2)?,
         end_date: row.get(3)?,
-        created_at: row.get(4)?,
-        updated_at: row.get(5)?,
+        summary: row.get(4)?,
+        created_at: row.get(5)?,
+        updated_at: row.get(6)?,
     })
 }
 /// 日付を表示用に整形する（未設定なら "-"）
@@ -1138,6 +1231,12 @@ pub(crate) fn print_trip_detail(trip: &Trip) {
     println!("名前      : {}", trip.name);
     println!("開始日    : {}", fmt_date(&trip.start_date));
     println!("終了日    : {}", fmt_date(&trip.end_date));
+    if let Some(summary) = &trip.summary {
+        println!("概要      :");
+        for line in summary.lines() {
+            println!("            {line}");
+        }
+    }
     println!("作成日時  : {}", trip.created_at);
     println!("更新日時  : {}", trip.updated_at);
 }
@@ -1156,7 +1255,7 @@ mod tests {
     #[test]
     fn test_add_trip() {
         let conn = test_db();
-        let id = add_trip(&conn, "沖縄旅行", "2025-06-01", "2025-06-05").unwrap();
+        let id = add_trip(&conn, "沖縄旅行", "2025-06-01", "2025-06-05", None).unwrap();
 
         assert_eq!(id, 1);
         let trip = get_trip(&conn, id).unwrap();
@@ -1168,7 +1267,7 @@ mod tests {
     #[test]
     fn test_add_trip_creates_days() {
         let conn = test_db();
-        let trip_id = add_trip(&conn, "Day Trip", "2026-12-01", "2026-12-03").unwrap();
+        let trip_id = add_trip(&conn, "Day Trip", "2026-12-01", "2026-12-03", None).unwrap();
         let days = crate::day::list_days(&conn, trip_id).unwrap();
         assert_eq!(days.len(), 3);
         assert_eq!(days[0].day_number, 1);
@@ -1178,15 +1277,15 @@ mod tests {
     #[test]
     fn test_add_trip_rejects_invalid_date_range() {
         let conn = test_db();
-        assert!(add_trip(&conn, "Bad Trip", "2026-12-04", "2026-12-01").is_err());
+        assert!(add_trip(&conn, "Bad Trip", "2026-12-04", "2026-12-01", None).is_err());
     }
 
     #[test]
     fn test_update_trip_syncs_days_on_end_extension() {
         let conn = test_db();
-        let id = add_trip(&conn, "Extend Trip", "2026-12-01", "2026-12-02").unwrap();
+        let id = add_trip(&conn, "Extend Trip", "2026-12-01", "2026-12-02", None).unwrap();
         assert_eq!(crate::day::list_days(&conn, id).unwrap().len(), 2);
-        update_trip(&conn, id, None, None, Some("2026-12-04")).unwrap();
+        update_trip(&conn, id, None, None, Some("2026-12-04"), None, false).unwrap();
         assert_eq!(crate::day::list_days(&conn, id).unwrap().len(), 4);
     }
 
@@ -1204,7 +1303,7 @@ mod tests {
     #[test]
     fn test_export_import_roundtrip() {
         let conn = test_db();
-        let trip_id = add_trip(&conn, "沖縄旅行", "2026-04-26", "2026-04-29").unwrap();
+        let trip_id = add_trip(&conn, "沖縄旅行", "2026-04-26", "2026-04-29", None).unwrap();
         add_itinerary_item(
             &conn,
             trip_id,
@@ -1265,7 +1364,7 @@ mod tests {
     #[test]
     fn test_get_trip() {
         let conn = test_db();
-        let id = add_trip(&conn, "北海道旅行", "2025-08-01", "2025-08-10").unwrap();
+        let id = add_trip(&conn, "北海道旅行", "2025-08-01", "2025-08-10", None).unwrap();
 
         let trip = get_trip(&conn, id).unwrap();
         assert_eq!(trip.id, id);
@@ -1353,8 +1452,8 @@ mod tests {
     #[test]
     fn test_list_trips() {
         let conn = test_db();
-        add_trip(&conn, "沖縄旅行", "2025-06-01", "2025-06-05").unwrap();
-        add_trip(&conn, "京都旅行", "2025-07-01", "2025-07-03").unwrap();
+        add_trip(&conn, "沖縄旅行", "2025-06-01", "2025-06-05", None).unwrap();
+        add_trip(&conn, "京都旅行", "2025-07-01", "2025-07-03", None).unwrap();
 
         let trips = list_trips(&conn).unwrap();
         assert_eq!(trips.len(), 2);
@@ -1365,7 +1464,7 @@ mod tests {
     #[test]
     fn test_trip_export_contains_trip_and_items() {
         let conn = test_db();
-        let trip_id = add_trip(&conn, "沖縄旅行", "2026-04-26", "2026-04-29").unwrap();
+        let trip_id = add_trip(&conn, "沖縄旅行", "2026-04-26", "2026-04-29", None).unwrap();
         add_itinerary_item(
             &conn,
             trip_id,
@@ -1591,7 +1690,7 @@ mod tests {
     #[test]
     fn test_print_json_trip_list() {
         let conn = test_db();
-        add_trip(&conn, "沖縄旅行", "2025-06-01", "2025-06-05").unwrap();
+        add_trip(&conn, "沖縄旅行", "2025-06-01", "2025-06-05", None).unwrap();
         add_test_trip(&conn, "京都旅行").unwrap();
 
         let trips = list_trips(&conn).unwrap();
@@ -1607,7 +1706,7 @@ mod tests {
     #[test]
     fn test_print_json_trip_show() {
         let conn = test_db();
-        let id = add_trip(&conn, "北海道旅行", "2025-08-01", "2025-08-10").unwrap();
+        let id = add_trip(&conn, "北海道旅行", "2025-08-01", "2025-08-10", None).unwrap();
 
         let trip = get_trip(&conn, id).unwrap();
         let json = serde_json::to_string_pretty(&trip).unwrap();
@@ -1630,6 +1729,8 @@ mod tests {
             Some("沖縄・瀬底旅行"),
             Some("2025-06-01"),
             Some("2025-06-07"),
+            None,
+            false,
         )
         .unwrap();
 
@@ -1725,7 +1826,14 @@ mod tests {
         use crate::note::{add_note, ResolvedNoteOwner};
 
         let conn = test_db();
-        let trip_id = add_trip(&conn, "Note Roundtrip Trip", "2026-06-01", "2026-06-03").unwrap();
+        let trip_id = add_trip(
+            &conn,
+            "Note Roundtrip Trip",
+            "2026-06-01",
+            "2026-06-03",
+            None,
+        )
+        .unwrap();
         let itinerary_id = add_itinerary_item(
             &conn,
             trip_id,
@@ -1853,6 +1961,7 @@ mod tests {
             "Import Export Verify Trip",
             "2026-06-01",
             "2026-06-03",
+            None,
         )
         .unwrap();
         add_itinerary_item(
@@ -2124,7 +2233,7 @@ mod tests {
     #[test]
     fn test_duplicate_trip_copies_trip_itinerary_and_checklist() {
         let conn = test_db();
-        let trip_id = add_trip(&conn, "Okinawa Trip", "2026-06-01", "2026-06-03").unwrap();
+        let trip_id = add_trip(&conn, "Okinawa Trip", "2026-06-01", "2026-06-03", None).unwrap();
         add_itinerary_item(
             &conn,
             trip_id,
@@ -2164,7 +2273,7 @@ mod tests {
     #[test]
     fn test_duplicate_trip_copies_expenses() {
         let conn = test_db();
-        let trip_id = add_trip(&conn, "Expense Trip", "2026-06-01", "2026-06-03").unwrap();
+        let trip_id = add_trip(&conn, "Expense Trip", "2026-06-01", "2026-06-03", None).unwrap();
         let itinerary_id = add_itinerary_item(
             &conn,
             trip_id,
@@ -2234,7 +2343,7 @@ mod tests {
     #[test]
     fn test_export_import_reexport_structural_roundtrip_with_checklist() {
         let conn = test_db();
-        let trip_id = add_trip(&conn, "Roundtrip Trip", "2026-07-01", "2026-07-05").unwrap();
+        let trip_id = add_trip(&conn, "Roundtrip Trip", "2026-07-01", "2026-07-05", None).unwrap();
         add_itinerary_item(
             &conn,
             trip_id,

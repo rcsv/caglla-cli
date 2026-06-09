@@ -54,6 +54,7 @@ pub(crate) fn init_db(conn: &Connection) -> Result<()> {
             name        TEXT NOT NULL,
             start_date  TEXT,
             end_date    TEXT,
+            summary     TEXT,
             created_at  TEXT NOT NULL,
             updated_at  TEXT NOT NULL
         )",
@@ -100,7 +101,7 @@ pub(crate) fn init_db(conn: &Connection) -> Result<()> {
             trip_id     INTEGER NOT NULL,
             day_number  INTEGER NOT NULL,
             title       TEXT NOT NULL DEFAULT '',
-            description TEXT,
+            summary     TEXT,
             created_at  TEXT NOT NULL,
             updated_at  TEXT NOT NULL,
             FOREIGN KEY(trip_id) REFERENCES trips(id) ON DELETE CASCADE,
@@ -144,6 +145,7 @@ pub(crate) fn init_db(conn: &Connection) -> Result<()> {
     migrate_itinerary_items(conn)?;
     migrate_days(conn)?;
     migrate_itinerary_day_id(conn)?;
+    migrate_summaries(conn)?;
     migrate_indexes(conn)?;
     Ok(())
 }
@@ -211,6 +213,31 @@ fn add_column_if_not_exists(
 /// 既存 DB 向け: Trip ごとに Day 行を backfill する
 pub(crate) fn migrate_days(conn: &Connection) -> Result<()> {
     crate::day::migrate_days(conn)
+}
+
+fn column_exists(conn: &Connection, table: &str, column: &str) -> Result<bool> {
+    let mut stmt = conn
+        .prepare(&format!("PRAGMA table_info({table})"))
+        .with_context(|| format!("{table} テーブル情報の取得に失敗しました"))?;
+    let mut names = stmt
+        .query_map([], |row| row.get::<_, String>(1))
+        .with_context(|| format!("{table} テーブル情報の読み込みに失敗しました"))?;
+    Ok(names.any(|name| name.map(|n| n == column).unwrap_or(false)))
+}
+
+/// trips.summary 追加、days.description → summary リネーム（既存 DB 向け）
+pub(crate) fn migrate_summaries(conn: &Connection) -> Result<()> {
+    add_column_if_not_exists(conn, "trips", "summary", "TEXT")?;
+
+    let has_summary = column_exists(conn, "days", "summary")?;
+    let has_description = column_exists(conn, "days", "description")?;
+    if !has_summary && has_description {
+        conn.execute("ALTER TABLE days RENAME COLUMN description TO summary", [])
+            .context("days.description → summary のリネームに失敗しました")?;
+    } else if !has_summary {
+        add_column_if_not_exists(conn, "days", "summary", "TEXT")?;
+    }
+    Ok(())
 }
 
 /// 既存 DB 向け: itinerary_items.day_id を backfill する
