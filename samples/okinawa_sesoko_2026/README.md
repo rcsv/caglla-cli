@@ -6,7 +6,7 @@
 
 Itinerary は **not a venue** — 場所（POI）ではなく、旅行中に順序を持つ **行動** を表す最小単位です。計画時は予定、旅行後は実績として扱えます。出発・高速道路・給油・部屋食・レンタカー返却・帰宅なども Itinerary として登録します。理由は、**費用（Expense）・備考・チェックリスト・将来の Note / Photo** を、時系列上の行動に結びつけるためです。
 
-設計原則の詳細: [`docs/specifications/itinerary-model.md`](../../docs/specifications/itinerary-model.md) / [`ordering-model.md`](../../docs/specifications/ordering-model.md)
+設計原則の詳細: [`docs/specifications/itinerary-model.md`](../../docs/specifications/itinerary-model.md) / [`ordering-model.md`](../../docs/specifications/ordering-model.md) / [`travel-ledger-responsibilities.md`](../../docs/specifications/travel-ledger-responsibilities.md)
 
 | 項目 | 値 |
 |---|---|
@@ -74,8 +74,11 @@ cargo run -- trip import /tmp/okinawa-export.json
 ### 意図的に省略したもの
 
 - 金額なし行（ロイズ R-033、有料道路「700円ぐらい？」など）
-- Note エンティティの大量投入（備考は Itinerary / Expense `note` に集約）
+- Note エンティティの大量投入（備考は Itinerary **Remark**（`note`）/ Expense `note` に集約）
+- Trip / Day **Summary**、**Reservation** entity（旅行前しおり向け — 仕様は [`travel-ledger-responsibilities.md`](../../docs/specifications/travel-ledger-responsibilities.md)）
 - Participant / Settlement / Expense category
+
+canonical sample は主に **旅行後の台帳・清算・export 検証** 向けです。旅行前の計画共有（概要・主な行先・予約一覧）は同仕様の Future スコープとして整理しています。
 
 ## ファイル
 

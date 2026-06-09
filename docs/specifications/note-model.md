@@ -1,9 +1,11 @@
 # Note モデル（設計草案）
 
-Caglla CLI / 将来 Web 版に向けた **Note** エンティティの仕様メモです。  
+Caglla CLI / 将来 Web 版に向けた **Note エンティティ**（Long-form Note）の仕様メモです。  
 v1.3.0 で **DB / CLI 基本 CRUD を実装済み**。Export schema v2 は未対応。
 
-関連: [Day モデル](day-model.md) / [Itinerary モデル](itinerary-model.md)
+**責務の全体像**（Summary / Remark / Note / Reservation の使い分け）は [Travel Ledger Responsibilities](travel-ledger-responsibilities.md) を正とします。本書は **Long-form Note entity** に焦点を当てます。
+
+関連: [Day モデル](day-model.md) / [Itinerary モデル](itinerary-model.md) / [Travel Ledger Responsibilities](travel-ledger-responsibilities.md)
 
 ---
 
@@ -21,16 +23,17 @@ Note は、旅行計画・実行・振り返りにおける **自由記述の記
 
 ### 既存 `itinerary_items.note` との関係
 
-現行 DB には Itinerary 行に **短いメモ列** `itinerary_items.note`（TEXT, 任意）が既にあります。
+現行 DB には Itinerary 行に **短い備考列** `itinerary_items.note`（TEXT, 任意）が既にあります。ユーザー向けラベルは **備考（Remark）** とし、Long-form Note とは別責務です（[travel-ledger-responsibilities.md §3](travel-ledger-responsibilities.md#3-itinerary-remarkitinerary_itemsnote)）。
 
-| 項目 | `itinerary_items.note` | Note モデル（本仕様） |
+| 項目 | `itinerary_items.note`（Remark） | Note モデル（Long-form） |
 |---|---|---|
 | 粒度 | 予定 1 件に 1 フィールド | 予定 1 件に **複数** Note 可 |
+| 用途 | 旅程表の短い補足 | 検討・記録・振り返りなど長文 |
 | 構造 | 単一文字列 | `title` + `body` |
 | 対象 | Itinerary のみ | Trip / Day / Itinerary |
-| Export | schema v1 の itinerary フィールド | schema v2 の `notes[]`（予定） |
+| Export | schema v3 の itinerary `note` | schema v2+ の `notes[]` |
 
-**方針:** v1.3.0 では両者を **併存** させる。`itinerary_items.note` の削除・統合は将来検討。CLI ドキュメントで役割差を明示する。
+**方針:** v1.x では両者を **併存** させる。`itinerary_items.note` の削除・統合は将来検討。Summary（Trip/Day 概要）は別フィールドとして将来追加する。
 
 ### 将来エンティティとの関係
 
