@@ -1,5 +1,10 @@
 /target
+
+# Local Caglla database (not encrypted; may contain private travel data)
 caglla.db
+caglla.db-*
+*.sqlite
+*.sqlite3
 
 # ルート直下の試験用 JSON（trip export などの一時ファイル）
 # 先頭 / でサブディレクトリは対象外。一般的な設定ファイルは除外する。

@@ -97,6 +97,10 @@ cargo run -- itinerary timeline 1
 
 GitHub Release 用ノートは [docs/releases/](docs/releases/) にあります。最新: [v1.16.0](docs/releases/v1.16.0-notes.md)
 
+## Security
+
+- [Security Policy](SECURITY.md)
+
 ## License
 
 MIT — see [Cargo.toml](Cargo.toml)
