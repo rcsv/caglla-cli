@@ -142,6 +142,23 @@ pub(crate) fn init_db(conn: &Connection) -> Result<()> {
         [],
     )
     .context("expenses テーブルの作成に失敗しました")?;
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS reservations (
+            id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+            itinerary_id        INTEGER NOT NULL,
+            reservation_type    TEXT NOT NULL,
+            provider_name       TEXT NOT NULL,
+            confirmation_code   TEXT,
+            reservation_site_url TEXT,
+            remark              TEXT,
+            start_at            TEXT,
+            end_at              TEXT,
+            created_at          TEXT NOT NULL,
+            updated_at          TEXT NOT NULL
+        )",
+        [],
+    )
+    .context("reservations テーブルの作成に失敗しました")?;
     migrate_itinerary_items(conn)?;
     migrate_days(conn)?;
     migrate_itinerary_day_id(conn)?;
@@ -182,6 +199,11 @@ pub(crate) fn migrate_indexes(conn: &Connection) -> Result<()> {
         conn,
         "idx_expenses_itinerary",
         "CREATE INDEX IF NOT EXISTS idx_expenses_itinerary ON expenses(itinerary_id)",
+    )?;
+    create_index_if_not_exists(
+        conn,
+        "idx_reservations_itinerary",
+        "CREATE INDEX IF NOT EXISTS idx_reservations_itinerary ON reservations(itinerary_id)",
     )?;
     Ok(())
 }
@@ -295,6 +317,8 @@ pub(crate) fn migrate_itinerary_items(conn: &Connection) -> Result<()> {
 pub(crate) fn reset_db(conn: &Connection) -> Result<()> {
     conn.execute("DELETE FROM notes", [])
         .context("notes の全削除に失敗しました")?;
+    conn.execute("DELETE FROM reservations", [])
+        .context("reservations の全削除に失敗しました")?;
     conn.execute("DELETE FROM expenses", [])
         .context("expenses の全削除に失敗しました")?;
     conn.execute("DELETE FROM checklist_items", [])
@@ -306,7 +330,7 @@ pub(crate) fn reset_db(conn: &Connection) -> Result<()> {
     conn.execute("DELETE FROM trips", [])
         .context("trips の全削除に失敗しました")?;
     conn.execute(
-        "DELETE FROM sqlite_sequence WHERE name IN ('expenses', 'notes', 'checklist_items', 'itinerary_items', 'days', 'trips')",
+        "DELETE FROM sqlite_sequence WHERE name IN ('reservations', 'expenses', 'notes', 'checklist_items', 'itinerary_items', 'days', 'trips')",
         [],
     )
     .context("AUTOINCREMENT のリセットに失敗しました")?;
@@ -354,6 +378,22 @@ mod tests {
             .query_row(
                 "SELECT COUNT(*) FROM sqlite_master
                  WHERE type = 'table' AND name = 'itinerary_items'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn test_init_db_creates_reservations_table() {
+        let conn = Connection::open(":memory:").unwrap();
+        init_db(&conn).unwrap();
+
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master
+                 WHERE type = 'table' AND name = 'reservations'",
                 [],
                 |row| row.get(0),
             )

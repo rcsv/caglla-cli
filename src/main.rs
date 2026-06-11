@@ -9,6 +9,7 @@ mod itinerary;
 mod markdown;
 mod models;
 mod note;
+mod reservation;
 mod stats;
 mod summary;
 mod trip;
@@ -70,6 +71,11 @@ enum Command {
     Expense {
         #[command(subcommand)]
         action: ExpenseAction,
+    },
+    /// 予約 (Reservation) の管理
+    Reservation {
+        #[command(subcommand)]
+        action: ReservationAction,
     },
 }
 
@@ -466,6 +472,103 @@ enum NoteAction {
 }
 
 #[derive(Subcommand)]
+enum ReservationAction {
+    /// Reservation を追加
+    Add {
+        /// Itinerary ID（必須）
+        #[arg(long)]
+        itinerary: i64,
+        /// 予約種別（hotel, flight, rental_car, …）
+        #[arg(long)]
+        reservation_type: String,
+        /// 事業者名（必須）
+        #[arg(long)]
+        provider: String,
+        /// 予約番号・確認コード
+        #[arg(long)]
+        confirmation: Option<String>,
+        /// 予約確認ページ URL
+        #[arg(long)]
+        site_url: Option<String>,
+        /// 短文補足
+        #[arg(long)]
+        remark: Option<String>,
+        /// 利用開始（ISO 8601 または日時文字列）
+        #[arg(long)]
+        start_at: Option<String>,
+        /// 利用終了
+        #[arg(long)]
+        end_at: Option<String>,
+    },
+    /// Reservation 一覧を表示
+    List {
+        /// Trip ID（Trip 配下を集約表示）
+        #[arg(long)]
+        trip: Option<i64>,
+        /// Itinerary ID
+        #[arg(long)]
+        itinerary: Option<i64>,
+        /// JSON 形式で出力する
+        #[arg(long)]
+        json: bool,
+    },
+    /// Reservation 詳細を表示
+    Show {
+        /// Reservation ID
+        id: i64,
+        /// JSON 形式で出力する
+        #[arg(long)]
+        json: bool,
+    },
+    /// Reservation を更新
+    Update {
+        /// Reservation ID
+        id: i64,
+        /// 予約種別
+        #[arg(long)]
+        reservation_type: Option<String>,
+        /// 事業者名
+        #[arg(long)]
+        provider: Option<String>,
+        /// 予約番号・確認コード（空文字でクリア）
+        #[arg(long)]
+        confirmation: Option<String>,
+        /// 予約確認ページ URL（空文字でクリア）
+        #[arg(long)]
+        site_url: Option<String>,
+        /// 短文補足（空文字でクリア）
+        #[arg(long)]
+        remark: Option<String>,
+        /// 利用開始（空文字でクリア）
+        #[arg(long)]
+        start_at: Option<String>,
+        /// 利用終了（空文字でクリア）
+        #[arg(long)]
+        end_at: Option<String>,
+        /// confirmation をクリアする
+        #[arg(long)]
+        clear_confirmation: bool,
+        /// site_url をクリアする
+        #[arg(long)]
+        clear_site_url: bool,
+        /// remark をクリアする
+        #[arg(long)]
+        clear_remark: bool,
+        /// start_at をクリアする
+        #[arg(long)]
+        clear_start_at: bool,
+        /// end_at をクリアする
+        #[arg(long)]
+        clear_end_at: bool,
+    },
+    /// Reservation を削除
+    Delete {
+        /// Reservation ID
+        id: i64,
+    },
+}
+
+#[derive(Subcommand)]
 enum ExpenseAction {
     /// Expense を追加
     Add {
@@ -612,6 +715,26 @@ fn main() -> Result<()> {
                     crate::trip::print_json(&item)?;
                 } else {
                     crate::itinerary::print_itinerary_detail(&item);
+                    let reservations =
+                        crate::reservation::list_reservations_for_itinerary(&conn, id)?;
+                    if !reservations.is_empty() {
+                        println!();
+                        println!("Reservations ({}):", reservations.len());
+                        for res in &reservations {
+                            println!(
+                                "  [{}] {}  {}  {}",
+                                res.id,
+                                res.reservation_type,
+                                res.provider_name,
+                                crate::reservation::fmt_optional_text(&res.confirmation_code)
+                            );
+                            let period =
+                                crate::reservation::format_period(&res.start_at, &res.end_at);
+                            if period != "-" {
+                                println!("      {period}");
+                            }
+                        }
+                    }
                 }
             }
             ItineraryAction::Update {
@@ -891,6 +1014,147 @@ fn main() -> Result<()> {
                     "  Amount: {}",
                     crate::expense::format_amount_display(expense.amount, &expense.currency)
                 );
+            }
+        },
+        Command::Reservation { action } => match action {
+            ReservationAction::Add {
+                itinerary,
+                reservation_type,
+                provider,
+                confirmation,
+                site_url,
+                remark,
+                start_at,
+                end_at,
+            } => {
+                let id = crate::reservation::add_reservation(
+                    &conn,
+                    itinerary,
+                    &reservation_type,
+                    &provider,
+                    confirmation.as_deref(),
+                    site_url.as_deref(),
+                    remark.as_deref(),
+                    start_at.as_deref(),
+                    end_at.as_deref(),
+                )?;
+                println!("Reservation を追加しました (ID: {id})");
+                let reservation = crate::reservation::get_reservation(&conn, id)?;
+                crate::reservation::print_reservation_detail(&conn, &reservation);
+            }
+            ReservationAction::List {
+                trip,
+                itinerary,
+                json,
+            } => {
+                let target = crate::reservation::resolve_reservation_list_target(trip, itinerary)?;
+                match target {
+                    crate::reservation::ReservationListTarget::Trip(trip_id) => {
+                        let context_rows =
+                            crate::reservation::list_reservations_for_trip(&conn, trip_id)?;
+                        let reservations = context_rows
+                            .iter()
+                            .map(|row| row.reservation.clone())
+                            .collect::<Vec<_>>();
+                        if json {
+                            crate::trip::print_json(&crate::reservation::ReservationListJson {
+                                trip_id: Some(trip_id),
+                                itinerary_id: None,
+                                reservations,
+                            })?;
+                        } else {
+                            crate::reservation::print_reservation_list(
+                                target,
+                                &reservations,
+                                Some(&context_rows),
+                            );
+                        }
+                    }
+                    crate::reservation::ReservationListTarget::Itinerary(itinerary_id) => {
+                        let reservations = crate::reservation::list_reservations_for_itinerary(
+                            &conn,
+                            itinerary_id,
+                        )?;
+                        if json {
+                            crate::trip::print_json(&crate::reservation::ReservationListJson {
+                                trip_id: None,
+                                itinerary_id: Some(itinerary_id),
+                                reservations: reservations.clone(),
+                            })?;
+                        } else {
+                            crate::reservation::print_reservation_list(target, &reservations, None);
+                        }
+                    }
+                }
+            }
+            ReservationAction::Show { id, json } => {
+                let reservation = crate::reservation::get_reservation(&conn, id)?;
+                if json {
+                    crate::trip::print_json(&reservation)?;
+                } else {
+                    crate::reservation::print_reservation_detail(&conn, &reservation);
+                }
+            }
+            ReservationAction::Update {
+                id,
+                reservation_type,
+                provider,
+                confirmation,
+                site_url,
+                remark,
+                start_at,
+                end_at,
+                clear_confirmation,
+                clear_site_url,
+                clear_remark,
+                clear_start_at,
+                clear_end_at,
+            } => {
+                let confirmation_update = if clear_confirmation {
+                    Some(None)
+                } else {
+                    confirmation.as_ref().map(|value| Some(value.as_str()))
+                };
+                let site_url_update = if clear_site_url {
+                    Some(None)
+                } else {
+                    site_url.as_ref().map(|value| Some(value.as_str()))
+                };
+                let remark_update = if clear_remark {
+                    Some(None)
+                } else {
+                    remark.as_ref().map(|value| Some(value.as_str()))
+                };
+                let start_at_update = if clear_start_at {
+                    Some(None)
+                } else {
+                    start_at.as_ref().map(|value| Some(value.as_str()))
+                };
+                let end_at_update = if clear_end_at {
+                    Some(None)
+                } else {
+                    end_at.as_ref().map(|value| Some(value.as_str()))
+                };
+                crate::reservation::update_reservation(
+                    &conn,
+                    id,
+                    reservation_type.as_deref(),
+                    provider.as_deref(),
+                    confirmation_update,
+                    site_url_update,
+                    remark_update,
+                    start_at_update,
+                    end_at_update,
+                )?;
+                println!("Reservation を更新しました (ID: {id})");
+                let reservation = crate::reservation::get_reservation(&conn, id)?;
+                crate::reservation::print_reservation_detail(&conn, &reservation);
+            }
+            ReservationAction::Delete { id } => {
+                let reservation = crate::reservation::get_reservation(&conn, id)?;
+                crate::reservation::delete_reservation(&conn, id)?;
+                println!("Reservation を削除しました (ID: {id})");
+                println!("  Provider: {}", reservation.provider_name);
             }
         },
         Command::Trip { action } => match action {

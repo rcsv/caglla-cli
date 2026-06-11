@@ -62,7 +62,7 @@ cargo run -- itinerary timeline 1
 | Trip | `trip add`, `trip list`, `trip show`, `trip update`, `trip delete`, `trip duplicate`, `trip stats` |
 | Day | `day list`, `day show`, `day update`, `day swap` |
 | Itinerary | `itinerary add`, `itinerary list`, `itinerary show`, `itinerary update`, `itinerary delete`, `itinerary timeline` |
-| Note / Expense | `note add/list/...`, `expense add/list/...` |
+| Note / Expense / Reservation | `note add/list/...`, `expense add/list/...`, `reservation add/list/...` |
 | Checklist | `checklist add/list/check/...`, `trip checklist-generate` |
 | Export | `trip export`, `trip import`, `trip validate-export`, `trip diff`, `trip export-md` |
 | Diagnostics | `trip doctor`, `trip advisor` |
@@ -96,7 +96,7 @@ cargo run -- itinerary timeline 1
 
 ## Releases
 
-GitHub Release 用ノートは [docs/releases/](docs/releases/) にあります。最新: [v1.17.0](docs/releases/v1.17.0-notes.md)
+GitHub Release 用ノートは [docs/releases/](docs/releases/) にあります。最新: [v1.18.0](docs/releases/v1.18.0-notes.md)
 
 ## Security
 

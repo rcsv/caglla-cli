@@ -5,9 +5,10 @@ use rusqlite::{params, Connection};
 use crate::db::now_string;
 use crate::models::{
     effective_export_schema_version, is_supported_export_schema_version, ExportDayV3,
-    ExportExpenseV3, ExportItineraryV3, ExportValidationCheck, ExportValidationCheckId,
-    ExportValidationReport, Trip, TripExport, TripExportMetadata, TripExportV3, TripImportSummary,
-    TRIP_EXPORT_GENERATOR, TRIP_EXPORT_SCHEMA_VERSION, TRIP_EXPORT_SCHEMA_VERSION_V1,
+    ExportExpenseV3, ExportItineraryV3, ExportReservation, ExportReservationV3,
+    ExportValidationCheck, ExportValidationCheckId, ExportValidationReport, ItineraryNoteKey, Trip,
+    TripExport, TripExportMetadata, TripExportV3, TripImportSummary, TRIP_EXPORT_GENERATOR,
+    TRIP_EXPORT_SCHEMA_VERSION, TRIP_EXPORT_SCHEMA_VERSION_V1,
 };
 
 /// 新しい旅行を追加する
@@ -150,6 +151,29 @@ pub(crate) fn build_trip_export(conn: &Connection, trip_id: i64) -> Result<TripE
             summary: day.summary.clone(),
         })
         .collect();
+    let mut reservations = Vec::new();
+    for item in &itinerary_items {
+        let itinerary_key = ItineraryNoteKey {
+            day_number: item.day,
+            sort_order: item.sort_order,
+            start_time: item.start_time.clone(),
+            title: item.title.clone(),
+        };
+        for reservation in crate::reservation::list_reservations_for_itinerary(conn, item.id)? {
+            reservations.push(ExportReservation {
+                itinerary_key: itinerary_key.clone(),
+                reservation: ExportReservationV3 {
+                    reservation_type: reservation.reservation_type,
+                    provider_name: reservation.provider_name,
+                    confirmation_code: reservation.confirmation_code,
+                    reservation_site_url: reservation.reservation_site_url,
+                    remark: reservation.remark,
+                    start_at: reservation.start_at,
+                    end_at: reservation.end_at,
+                },
+            });
+        }
+    }
     Ok(TripExport {
         schema_version: None,
         generator: None,
@@ -160,6 +184,7 @@ pub(crate) fn build_trip_export(conn: &Connection, trip_id: i64) -> Result<TripE
         checklist_items: Some(checklist_items),
         notes: Some(notes),
         day_summaries,
+        reservations,
     })
 }
 
@@ -193,6 +218,18 @@ pub(crate) fn build_trip_export_v3(conn: &Connection, trip_id: i64) -> Result<Tr
                 sort_order: e.sort_order,
             })
             .collect::<Vec<_>>();
+        let reservations = crate::reservation::list_reservations_for_itinerary(conn, item.id)?
+            .into_iter()
+            .map(|r| ExportReservationV3 {
+                reservation_type: r.reservation_type,
+                provider_name: r.provider_name,
+                confirmation_code: r.confirmation_code,
+                reservation_site_url: r.reservation_site_url,
+                remark: r.remark,
+                start_at: r.start_at,
+                end_at: r.end_at,
+            })
+            .collect::<Vec<_>>();
 
         day_map
             .entry(item.day)
@@ -212,6 +249,7 @@ pub(crate) fn build_trip_export_v3(conn: &Connection, trip_id: i64) -> Result<Tr
                 location: item.location.clone(),
                 category: item.category,
                 expenses,
+                reservations,
             });
     }
 
@@ -362,6 +400,13 @@ fn validate_trip_export_v3(export: &TripExportV3) -> Result<()> {
                 let _ = crate::expense::validate_currency_code(&exp.currency)?;
                 crate::expense::validate_expense_date_opt(&exp.expense_date)?;
             }
+            for (r_index, res) in it.reservations.iter().enumerate() {
+                crate::reservation::validate_export_reservation_v3(res).with_context(|| {
+                    format!(
+                        "days[{d_index}].itineraries[{i_index}].reservations[{r_index}] is invalid"
+                    )
+                })?;
+            }
         }
     }
 
@@ -417,6 +462,7 @@ fn validate_trip_export_v3(export: &TripExportV3) -> Result<()> {
         checklist_items: export.checklist_items.clone(),
         notes: export.notes.clone(),
         day_summaries,
+        reservations: flatten_reservations_from_v3(export),
     };
     if let Some(error) = crate::note::collect_export_note_validation_errors(&v2_like)
         .into_iter()
@@ -517,6 +563,11 @@ pub(crate) fn analyze_trip_export_json(file: &str, json: &str) -> ExportValidati
                 push_check(&mut report.checks, ExportValidationCheckId::Expenses, true);
                 push_check(
                     &mut report.checks,
+                    ExportValidationCheckId::Reservations,
+                    true,
+                );
+                push_check(
+                    &mut report.checks,
                     ExportValidationCheckId::ChecklistItems,
                     root.get("checklist_items").is_some(),
                 );
@@ -573,6 +624,11 @@ pub(crate) fn analyze_trip_export_json(file: &str, json: &str) -> ExportValidati
             root.get("notes").map(|v| v.is_array()).unwrap_or(true),
         );
         push_check(&mut report.checks, ExportValidationCheckId::Expenses, true);
+        push_check(
+            &mut report.checks,
+            ExportValidationCheckId::Reservations,
+            true,
+        );
 
         // validate
         if let Err(error) = validate_trip_export_v3(&export) {
@@ -605,6 +661,11 @@ pub(crate) fn analyze_trip_export_json(file: &str, json: &str) -> ExportValidati
             push_check(
                 &mut report.checks,
                 ExportValidationCheckId::Expenses,
+                root.get("days").is_none(),
+            );
+            push_check(
+                &mut report.checks,
+                ExportValidationCheckId::Reservations,
                 root.get("days").is_none(),
             );
             report
@@ -685,8 +746,13 @@ pub(crate) fn analyze_trip_export_json(file: &str, json: &str) -> ExportValidati
         report.errors.push(error);
     }
 
-    // v1/v2 は Expense 非対象（v3 で追加）
+    // v1/v2 は Expense / Reservation 非対象（v3 で追加）
     push_check(&mut report.checks, ExportValidationCheckId::Expenses, false);
+    push_check(
+        &mut report.checks,
+        ExportValidationCheckId::Reservations,
+        false,
+    );
     report.valid = report.errors.is_empty();
     report
 }
@@ -698,7 +764,7 @@ pub(crate) fn analyze_trip_export(path: &str) -> Result<ExportValidationReport> 
     Ok(analyze_trip_export_json(path, &json))
 }
 
-const EXPORT_VALIDATION_CHECK_ORDER: [ExportValidationCheckId; 7] = [
+const EXPORT_VALIDATION_CHECK_ORDER: [ExportValidationCheckId; 8] = [
     ExportValidationCheckId::JsonFormat,
     ExportValidationCheckId::SchemaVersion,
     ExportValidationCheckId::Trip,
@@ -706,6 +772,7 @@ const EXPORT_VALIDATION_CHECK_ORDER: [ExportValidationCheckId; 7] = [
     ExportValidationCheckId::ChecklistItems,
     ExportValidationCheckId::Notes,
     ExportValidationCheckId::Expenses,
+    ExportValidationCheckId::Reservations,
 ];
 
 fn export_validation_check_label(id: ExportValidationCheckId) -> &'static str {
@@ -717,7 +784,37 @@ fn export_validation_check_label(id: ExportValidationCheckId) -> &'static str {
         ExportValidationCheckId::ChecklistItems => "checklist_items",
         ExportValidationCheckId::Notes => "notes",
         ExportValidationCheckId::Expenses => "expenses",
+        ExportValidationCheckId::Reservations => "reservations",
     }
+}
+
+pub(crate) fn flatten_reservations_from_v3(export: &TripExportV3) -> Vec<ExportReservation> {
+    export
+        .days
+        .iter()
+        .flat_map(|day| {
+            day.itineraries.iter().map(|it| {
+                (
+                    ItineraryNoteKey {
+                        day_number: day.day_number,
+                        sort_order: it.sort_order,
+                        start_time: it.start_time.clone(),
+                        title: it.title.clone(),
+                    },
+                    &it.reservations,
+                )
+            })
+        })
+        .flat_map(|(itinerary_key, reservations)| {
+            reservations
+                .iter()
+                .cloned()
+                .map(move |reservation| ExportReservation {
+                    itinerary_key: itinerary_key.clone(),
+                    reservation,
+                })
+        })
+        .collect()
 }
 
 fn export_validation_error_line(error: &str) -> String {
@@ -903,6 +1000,9 @@ pub(crate) fn import_trip_from_export_v3(conn: &Connection, export: &TripExportV
             )?;
             for exp in &it.expenses {
                 crate::expense::import_expense_v3(conn, itinerary_id, exp)?;
+            }
+            for res in &it.reservations {
+                crate::reservation::import_reservation_v3(conn, itinerary_id, res)?;
             }
         }
     }
@@ -1148,6 +1248,7 @@ pub(crate) fn load_trip_export_from_file(path: &str) -> Result<TripExport> {
                 summary: day.summary.clone(),
             })
             .collect::<Vec<_>>();
+        let reservations = flatten_reservations_from_v3(&export);
         Ok(TripExport {
             schema_version: export.schema_version,
             generator: export.generator,
@@ -1158,6 +1259,7 @@ pub(crate) fn load_trip_export_from_file(path: &str) -> Result<TripExport> {
             checklist_items: export.checklist_items,
             notes: export.notes,
             day_summaries,
+            reservations,
         })
     } else {
         serde_json::from_str(&json).context("JSON の形式が不正です")
@@ -1169,6 +1271,7 @@ pub(crate) fn delete_trip(conn: &Connection, id: i64) -> Result<()> {
     get_trip(conn, id)?;
     crate::db::with_transaction(conn, "trip delete", |tx| {
         crate::note::delete_notes_for_trip(tx, id)?;
+        crate::reservation::delete_reservations_for_trip(tx, id)?;
         crate::expense::delete_expenses_for_trip(tx, id)?;
         tx.execute("DELETE FROM trips WHERE id = ?1", params![id])
             .context("旅行の削除に失敗しました")?;

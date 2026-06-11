@@ -54,6 +54,27 @@ pub struct Note {
     pub updated_at: String,
 }
 
+/// reservations テーブルの1行分のデータ
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Reservation {
+    pub id: i64,
+    pub itinerary_id: i64,
+    pub reservation_type: String,
+    pub provider_name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub confirmation_code: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reservation_site_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub remark: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub start_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub end_at: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
 /// expenses テーブルの1行分のデータ
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Expense {
@@ -569,6 +590,31 @@ pub fn is_supported_export_schema_version(schema_version: Option<i32>) -> bool {
     )
 }
 
+/// trip export schema v3 の Reservation エントリ（DB id は含めない）
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExportReservationV3 {
+    pub reservation_type: String,
+    pub provider_name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub confirmation_code: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reservation_site_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub remark: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub start_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub end_at: Option<String>,
+}
+
+/// trip diff 用の Reservation（Itinerary コンテキスト付き）
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExportReservation {
+    pub itinerary_key: ItineraryNoteKey,
+    #[serde(flatten)]
+    pub reservation: ExportReservationV3,
+}
+
 /// trip export schema v3 の Expense エントリ（DB id は含めない）
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ExportExpenseV3 {
@@ -604,6 +650,8 @@ pub struct ExportItineraryV3 {
     pub category: Option<ItineraryCategory>,
     #[serde(default)]
     pub expenses: Vec<ExportExpenseV3>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub reservations: Vec<ExportReservationV3>,
 }
 
 /// trip export schema v3 の Day エントリ
@@ -683,6 +731,9 @@ pub struct TripExport {
     /// schema v3+: Day summary（diff 用。v1/v2 export では省略可）
     #[serde(default)]
     pub day_summaries: Vec<ExportDaySummary>,
+    /// schema v3+: Reservation 一覧（diff 用。v1/v2/v3 旧 export では省略可）
+    #[serde(default)]
+    pub reservations: Vec<ExportReservation>,
 }
 
 impl TripExport {
@@ -781,6 +832,7 @@ pub enum ExportValidationCheckId {
     ChecklistItems,
     Notes,
     Expenses,
+    Reservations,
 }
 
 /// export 検証の1項目チェック結果

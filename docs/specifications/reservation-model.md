@@ -2,7 +2,7 @@
 
 Caglla.Travel CLI / 将来 Web 版に向けた **Reservation** エンティティの仕様メモです。
 
-**v1.11.0 時点: 仕様整理のみ。** DB migration、CLI、export schema の変更は行いません。
+**v1.11.0:** 仕様整理。**v1.18.0:** Itinerary 配下の Reservation entity を実装済み。
 
 関連: [Travel Ledger Responsibilities](travel-ledger-responsibilities.md) / [Itinerary モデル](itinerary-model.md) / [Expense モデル](expense-model.md) / [Note モデル](note-model.md) / [Export Schema](export-schema.md) / [Reservation Entity Design](reservation-entity-design.md) / [Reservation Implementation Plan](reservation-implementation-plan.md)
 
@@ -23,7 +23,7 @@ required to execute a travel activity.
 旅行行動を実行するために必要な予約・確認情報
 ```
 
-Reservation は **Itinerary 配下** に属する、**構造化された予約・確保情報** です。
+Reservation は **Itinerary 配下** に属する、**構造化された予約・確保情報** です。Trip 直下の独立台帳ではなく、**Itinerary を実行するために必要な予約・契約情報** として保存します。
 
 ### What it is not
 
@@ -320,7 +320,7 @@ Sample 更新
 
 | 概念 | パス / 状態 |
 |---|---|
-| Reservation | **未実装** — 本仕様のみ |
+| Reservation | `src/reservation.rs` — v1.18.0 実装 |
 | Remark | `itinerary_items.note` — `src/itinerary.rs` |
 | Expense | `src/expense.rs` |
 | Note entity | `src/note.rs` |

@@ -45,8 +45,8 @@ Checklist
 Expense
 Note
 Remark
-Summary        ← 設計済み、実装は進行中 / 未着手
-Reservation    ← 設計済み、実装は未着手
+Summary        ← v1.17.0 実装済み
+Reservation    ← v1.18.0 実装済み
 ```
 
 Reservation と Summary は **設計フェーズ（Responsibility → Entity Design → Implementation Plan）まで整理済み**。v1 系の残りは **実装で旅行計画ツールとしての基盤を完成させる** フェーズ。
@@ -266,6 +266,8 @@ Responsibilities Review  →  Entity Design  →  Implementation Plan
 実装着手順序は本ロードマップの **v1 優先（Summary → Reservation）** と整合させる。
 
 **Summary 実装:** v1.17.0 で Trip / Day Summary を実装済み（[v1.17.0-notes.md](releases/v1.17.0-notes.md)）。
+
+**Reservation 実装:** v1.18.0 で Itinerary 配下 Reservation を実装済み（[v1.18.0-notes.md](releases/v1.18.0-notes.md)）。保存は Itinerary 配下、Trip 一覧は表示・集約ビュー。
 
 ---
 

@@ -4,6 +4,7 @@ use anyhow::{Context, Result};
 use rusqlite::Connection;
 
 use crate::models::{ChecklistItem, Day, Expense, ItineraryItem, Trip};
+use crate::reservation::ReservationWithContext;
 use crate::stats::{format_minutes_duration, TripStats};
 
 /// Markdown 出力用に日程一覧を取得する（`list_itinerary_items` と同一順序）
@@ -80,6 +81,54 @@ pub(crate) fn format_checklist_markdown(items: &[ChecklistItem]) -> Option<Strin
     Some(format!("\n\n{}\n", lines.join("\n")))
 }
 
+/// Trip 全体の Reservation セクションを Markdown 形式に整形する（0 件なら None）
+pub(crate) fn format_reservations_markdown(
+    reservations: &[ReservationWithContext],
+) -> Option<String> {
+    if reservations.is_empty() {
+        return None;
+    }
+
+    let mut lines = vec!["## Reservations".to_string(), String::new()];
+    let mut current_type: Option<String> = None;
+    for row in reservations {
+        let res = &row.reservation;
+        if current_type.as_deref() != Some(res.reservation_type.as_str()) {
+            if current_type.is_some() {
+                lines.push(String::new());
+            }
+            lines.push(format!(
+                "### {}",
+                crate::reservation::format_reservation_type_display(&res.reservation_type)
+            ));
+            lines.push(String::new());
+            current_type = Some(res.reservation_type.clone());
+        }
+
+        lines.push(format!(
+            "**Day {} / {}** — {}",
+            row.day_number, row.itinerary_title, res.provider_name
+        ));
+        lines.push(format!("Provider: {}", res.provider_name));
+        if let Some(code) = &res.confirmation_code {
+            lines.push(format!("Confirmation: {code}"));
+        }
+        if let Some(url) = &res.reservation_site_url {
+            lines.push(format!("URL: {url}"));
+        }
+        if let Some(remark) = &res.remark {
+            lines.push(format!("Remark: {remark}"));
+        }
+        let period = crate::reservation::format_period(&res.start_at, &res.end_at);
+        if period != "-" {
+            lines.push(format!("Period: {period}"));
+        }
+        lines.push(String::new());
+    }
+
+    Some(format!("\n\n{}\n", lines.join("\n").trim_end()))
+}
+
 /// Overview セクション（旅行統計サマリー）を Markdown に追記する
 fn append_overview_section(output: &mut String, stats: &TripStats) {
     output.push_str("\n## Overview\n\n");
@@ -111,6 +160,7 @@ pub(crate) fn format_trip_markdown(
     checklist: &[ChecklistItem],
     stats: &TripStats,
     expenses_by_itinerary: &HashMap<i64, Vec<Expense>>,
+    reservations: &[ReservationWithContext],
 ) -> String {
     let day_summaries: HashMap<i64, Option<String>> = days
         .iter()
@@ -130,6 +180,10 @@ pub(crate) fn format_trip_markdown(
     }
 
     append_overview_section(&mut output, stats);
+
+    if let Some(reservations_md) = format_reservations_markdown(reservations) {
+        output.push_str(&reservations_md);
+    }
 
     let mut current_day: Option<i64> = None;
     for item in items {
@@ -176,6 +230,7 @@ pub(crate) fn generate_trip_markdown(conn: &Connection, trip_id: i64) -> Result<
             .or_default()
             .push(expense);
     }
+    let reservations = crate::reservation::list_reservations_for_trip(conn, trip_id)?;
     Ok(format_trip_markdown(
         &trip,
         &days,
@@ -183,6 +238,7 @@ pub(crate) fn generate_trip_markdown(conn: &Connection, trip_id: i64) -> Result<
         &checklist,
         &stats,
         &expenses_by_itinerary,
+        &reservations,
     ))
 }
 
@@ -564,6 +620,57 @@ mod tests {
         let conn = test_db();
         let trip_id = add_test_trip(&conn, "標準出力テスト").unwrap();
         write_trip_markdown(&conn, trip_id, None).unwrap();
+    }
+
+    #[test]
+    fn test_export_md_includes_reservations() {
+        let conn = test_db();
+        let trip_id = add_test_trip(&conn, "Reservation MD Trip").unwrap();
+        let itinerary_id = add_itinerary_item(
+            &conn,
+            trip_id,
+            1,
+            "Check-in",
+            None,
+            Some("16:40"),
+            Some(0),
+            None,
+            None,
+            Some("Hilton Sesoko"),
+            None,
+        )
+        .unwrap();
+        crate::reservation::add_reservation(
+            &conn,
+            itinerary_id,
+            "hotel",
+            "Hilton Sesoko Resort",
+            Some("ABC123"),
+            None,
+            Some("Twin room"),
+            Some("2026-04-26T16:40"),
+            Some("2026-04-29T10:00"),
+        )
+        .unwrap();
+
+        let md = generate_trip_markdown(&conn, trip_id).unwrap();
+        assert!(md.contains("## Reservations"));
+        assert!(md.contains("### Hotel"));
+        assert!(md.contains("Day 1 / Check-in"));
+        assert!(md.contains("Confirmation: ABC123"));
+        assert!(md.contains("Period: 2026-04-26T16:40 — 2026-04-29T10:00"));
+
+        let reservations_pos = md.find("## Reservations").unwrap();
+        let day1_pos = md.find("## Day 1").unwrap();
+        assert!(reservations_pos < day1_pos);
+    }
+
+    #[test]
+    fn test_export_md_omits_reservations_when_none() {
+        let conn = test_db();
+        let trip_id = add_test_trip(&conn, "No Reservation Trip").unwrap();
+        let md = generate_trip_markdown(&conn, trip_id).unwrap();
+        assert!(!md.contains("## Reservations"));
     }
 
     #[test]

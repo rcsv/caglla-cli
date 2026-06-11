@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 
-use crate::models::{ExportNote, ItineraryCategory, ItineraryItem, TripExport};
+use crate::models::{ExportNote, ExportReservation, ItineraryCategory, ItineraryItem, TripExport};
 
 /// export Note の比較キー
 #[derive(Clone, Eq, PartialEq, Hash, PartialOrd, Ord)]
@@ -40,6 +40,26 @@ struct ItineraryFieldChange {
     new_value: String,
 }
 
+/// Reservation の比較キー（Itinerary コンテキスト + 予約識別）
+#[derive(Clone, Eq, PartialEq, Hash, PartialOrd, Ord)]
+struct ReservationKey {
+    day_number: i64,
+    sort_order: i64,
+    start_time: Option<String>,
+    itinerary_title: String,
+    reservation_type: String,
+    provider_name: String,
+    confirmation_code: Option<String>,
+}
+
+/// 1件の Reservation におけるフィールド変更
+struct ReservationFieldChange {
+    line: String,
+    field: String,
+    old_value: String,
+    new_value: String,
+}
+
 /// trip diff の結果
 pub(crate) struct TripDiff {
     trip_changes: Vec<(String, String, String)>,
@@ -50,6 +70,9 @@ pub(crate) struct TripDiff {
     note_added: Vec<ExportNote>,
     note_removed: Vec<ExportNote>,
     note_changed: Vec<ExportNote>,
+    reservation_added: Vec<ExportReservation>,
+    reservation_removed: Vec<ExportReservation>,
+    reservation_modified: Vec<ReservationFieldChange>,
 }
 
 fn itinerary_key(item: &ItineraryItem) -> ItineraryKey {
@@ -155,6 +178,126 @@ fn note_content_changed(old: &ExportNote, new: &ExportNote) -> bool {
             ExportNote::Itinerary { title: new_title, .. }
         ) if old_title != new_title
     )
+}
+
+fn reservation_key(reservation: &ExportReservation) -> ReservationKey {
+    ReservationKey {
+        day_number: reservation.itinerary_key.day_number,
+        sort_order: reservation.itinerary_key.sort_order,
+        start_time: reservation.itinerary_key.start_time.clone(),
+        itinerary_title: reservation.itinerary_key.title.clone(),
+        reservation_type: reservation.reservation.reservation_type.clone(),
+        provider_name: reservation.reservation.provider_name.clone(),
+        confirmation_code: reservation.reservation.confirmation_code.clone(),
+    }
+}
+
+fn compare_export_reservations(a: &ExportReservation, b: &ExportReservation) -> Ordering {
+    reservation_key(a).cmp(&reservation_key(b))
+}
+
+fn format_reservation_line(reservation: &ExportReservation) -> String {
+    let key = &reservation.itinerary_key;
+    let time = key.start_time.as_deref().unwrap_or("-");
+    let confirmation = reservation
+        .reservation
+        .confirmation_code
+        .as_deref()
+        .unwrap_or("-");
+    format!(
+        "Day{} {time} {} / {} / {} / {}",
+        key.day_number,
+        key.title,
+        reservation.reservation.reservation_type,
+        reservation.reservation.provider_name,
+        confirmation
+    )
+}
+
+fn reservation_content_changed(
+    old: &ExportReservation,
+    new: &ExportReservation,
+) -> Vec<(String, String, String)> {
+    let fields = [
+        (
+            "reservation_site_url",
+            fmt_diff_option_str(&old.reservation.reservation_site_url),
+            fmt_diff_option_str(&new.reservation.reservation_site_url),
+        ),
+        (
+            "remark",
+            fmt_diff_option_str(&old.reservation.remark),
+            fmt_diff_option_str(&new.reservation.remark),
+        ),
+        (
+            "start_at",
+            fmt_diff_option_str(&old.reservation.start_at),
+            fmt_diff_option_str(&new.reservation.start_at),
+        ),
+        (
+            "end_at",
+            fmt_diff_option_str(&old.reservation.end_at),
+            fmt_diff_option_str(&new.reservation.end_at),
+        ),
+    ];
+    fields
+        .into_iter()
+        .filter(|(_, old_value, new_value)| old_value != new_value)
+        .map(|(field, old_value, new_value)| (field.to_string(), old_value, new_value))
+        .collect()
+}
+
+fn compute_reservations_diff(
+    old_reservations: &[ExportReservation],
+    new_reservations: &[ExportReservation],
+) -> (
+    Vec<ExportReservation>,
+    Vec<ExportReservation>,
+    Vec<ReservationFieldChange>,
+) {
+    let old_map: HashMap<ReservationKey, &ExportReservation> = old_reservations
+        .iter()
+        .map(|reservation| (reservation_key(reservation), reservation))
+        .collect();
+    let new_map: HashMap<ReservationKey, &ExportReservation> = new_reservations
+        .iter()
+        .map(|reservation| (reservation_key(reservation), reservation))
+        .collect();
+
+    let mut reservation_removed: Vec<ExportReservation> = old_reservations
+        .iter()
+        .filter(|reservation| !new_map.contains_key(&reservation_key(reservation)))
+        .cloned()
+        .collect();
+    let mut reservation_added: Vec<ExportReservation> = new_reservations
+        .iter()
+        .filter(|reservation| !old_map.contains_key(&reservation_key(reservation)))
+        .cloned()
+        .collect();
+
+    let mut reservation_modified = Vec::new();
+    for (key, old_reservation) in &old_map {
+        let Some(new_reservation) = new_map.get(key) else {
+            continue;
+        };
+        let line = format_reservation_line(new_reservation);
+        for (field, old_value, new_value) in
+            reservation_content_changed(old_reservation, new_reservation)
+        {
+            reservation_modified.push(ReservationFieldChange {
+                line: line.clone(),
+                field,
+                old_value,
+                new_value,
+            });
+        }
+    }
+
+    reservation_removed.sort_by(compare_export_reservations);
+    reservation_added.sort_by(compare_export_reservations);
+    reservation_modified.sort_by(|a, b| a.line.cmp(&b.line).then_with(|| a.field.cmp(&b.field)));
+
+    (reservation_added, reservation_removed, reservation_modified)
 }
 
 fn compute_notes_diff(
@@ -369,6 +512,8 @@ pub(crate) fn compute_trip_diff(old: &TripExport, new: &TripExport) -> TripDiff 
     });
 
     let (note_added, note_removed, note_changed) = compute_notes_diff(old.notes(), new.notes());
+    let (reservation_added, reservation_removed, reservation_modified) =
+        compute_reservations_diff(&old.reservations, &new.reservations);
 
     TripDiff {
         trip_changes,
@@ -379,6 +524,9 @@ pub(crate) fn compute_trip_diff(old: &TripExport, new: &TripExport) -> TripDiff 
         note_added,
         note_removed,
         note_changed,
+        reservation_added,
+        reservation_removed,
+        reservation_modified,
     }
 }
 
@@ -463,6 +611,39 @@ pub(crate) fn print_trip_diff(diff: &TripDiff) {
             println!("~ Note changed: {}", format_note_line(note));
         }
     }
+
+    println!();
+    println!("Reservations:");
+    if diff.reservation_added.is_empty()
+        && diff.reservation_removed.is_empty()
+        && diff.reservation_modified.is_empty()
+    {
+        println!("  （変更なし）");
+    } else {
+        for reservation in &diff.reservation_removed {
+            println!(
+                "- Reservation removed: {}",
+                format_reservation_line(reservation)
+            );
+        }
+        for reservation in &diff.reservation_added {
+            println!(
+                "+ Reservation added: {}",
+                format_reservation_line(reservation)
+            );
+        }
+        let mut current_line: Option<String> = None;
+        for change in &diff.reservation_modified {
+            if current_line.as_deref() != Some(change.line.as_str()) {
+                println!("~ Reservation modified: {}", change.line);
+                current_line = Some(change.line.clone());
+            }
+            println!(
+                "  {}: {} -> {}",
+                change.field, change.old_value, change.new_value
+            );
+        }
+    }
 }
 
 /// 2つの JSON ファイルを比較して差分を表示する
@@ -477,7 +658,10 @@ pub(crate) fn run_trip_diff(old_path: &str, new_path: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{ExportNote, ItineraryItem, ItineraryNoteKey, Trip, TripExport};
+    use crate::models::{
+        ExportNote, ExportReservation, ExportReservationV3, ItineraryItem, ItineraryNoteKey, Trip,
+        TripExport,
+    };
 
     fn make_test_trip(name: &str) -> Trip {
         Trip {
@@ -521,6 +705,7 @@ mod tests {
             checklist_items: None,
             notes: None,
             day_summaries: vec![],
+            reservations: vec![],
         };
         let new = TripExport {
             schema_version: None,
@@ -532,6 +717,7 @@ mod tests {
             checklist_items: None,
             notes: None,
             day_summaries: vec![],
+            reservations: vec![],
         };
 
         let diff = compute_trip_diff(&old, &new);
@@ -564,6 +750,7 @@ mod tests {
             checklist_items: None,
             notes: None,
             day_summaries: vec![],
+            reservations: vec![],
         };
         let new = TripExport {
             schema_version: None,
@@ -575,6 +762,7 @@ mod tests {
             checklist_items: None,
             notes: None,
             day_summaries: vec![],
+            reservations: vec![],
         };
 
         let diff = compute_trip_diff(&old, &new);
@@ -613,6 +801,7 @@ mod tests {
             checklist_items: None,
             notes: None,
             day_summaries: vec![],
+            reservations: vec![],
         };
         let new = TripExport {
             schema_version: None,
@@ -624,6 +813,7 @@ mod tests {
             checklist_items: None,
             notes: None,
             day_summaries: vec![],
+            reservations: vec![],
         };
 
         let diff = compute_trip_diff(&old, &new);
@@ -644,6 +834,7 @@ mod tests {
             checklist_items: None,
             notes: None,
             day_summaries: vec![],
+            reservations: vec![],
         };
         let new = TripExport {
             schema_version: None,
@@ -655,6 +846,7 @@ mod tests {
             checklist_items: None,
             notes: None,
             day_summaries: vec![],
+            reservations: vec![],
         };
 
         let diff = compute_trip_diff(&old, &new);
@@ -692,6 +884,7 @@ mod tests {
             checklist_items: None,
             notes: None,
             day_summaries: vec![],
+            reservations: vec![],
         }
     }
 
@@ -828,6 +1021,55 @@ mod tests {
 
         let diff = compute_trip_diff(&changed_old, &changed_new);
         assert_eq!(diff.note_changed.len(), 1);
+    }
+
+    #[test]
+    fn test_diff_reservation_added_removed_modified() {
+        let reservation = ExportReservation {
+            itinerary_key: ItineraryNoteKey {
+                day_number: 1,
+                sort_order: 0,
+                start_time: Some("16:40".to_string()),
+                title: "Check-in".to_string(),
+            },
+            reservation: ExportReservationV3 {
+                reservation_type: "hotel".to_string(),
+                provider_name: "Hilton Sesoko Resort".to_string(),
+                confirmation_code: Some("ABC123".to_string()),
+                reservation_site_url: None,
+                remark: None,
+                start_at: None,
+                end_at: None,
+            },
+        };
+
+        let mut old = make_base_export(make_test_trip("Trip"));
+        let new = make_base_export(make_test_trip("Trip"));
+        old.reservations = vec![reservation.clone()];
+
+        let diff = compute_trip_diff(&old, &new);
+        assert_eq!(diff.reservation_removed.len(), 1);
+        assert!(diff.reservation_added.is_empty());
+
+        let diff = compute_trip_diff(&new, &old);
+        assert_eq!(diff.reservation_added.len(), 1);
+        assert!(diff.reservation_removed.is_empty());
+
+        let mut modified_old = make_base_export(make_test_trip("Trip"));
+        let mut modified_new = make_base_export(make_test_trip("Trip"));
+        modified_old.reservations = vec![reservation];
+        modified_new.reservations = vec![ExportReservation {
+            itinerary_key: modified_old.reservations[0].itinerary_key.clone(),
+            reservation: ExportReservationV3 {
+                remark: Some("Twin room".to_string()),
+                ..modified_old.reservations[0].reservation.clone()
+            },
+        }];
+        let diff = compute_trip_diff(&modified_old, &modified_new);
+        assert!(diff.reservation_added.is_empty());
+        assert!(diff.reservation_removed.is_empty());
+        assert_eq!(diff.reservation_modified.len(), 1);
+        assert_eq!(diff.reservation_modified[0].field, "remark");
     }
 
     #[test]

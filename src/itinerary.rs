@@ -215,6 +215,7 @@ pub(crate) fn delete_itinerary_item(conn: &Connection, id: i64) -> Result<()> {
     crate::db::with_transaction(conn, "itinerary delete", |tx| {
         crate::note::delete_notes_for_itinerary(tx, id)?;
         crate::expense::delete_expenses_for_itinerary(tx, id)?;
+        crate::reservation::delete_reservations_for_itinerary(tx, id)?;
         tx.execute("DELETE FROM itinerary_items WHERE id = ?1", params![id])
             .context("日程の削除に失敗しました")?;
         Ok(())
