@@ -260,7 +260,7 @@ Responsibilities Review  →  Entity Design  →  Implementation Plan
 
 | 概念 | 責務整理 | Entity Design | Implementation Plan | Hardening Review |
 |---|---|---|---|---|
-| **Summary** | v1.14.0 | v1.15.0（同梱） | v1.16.0 | （予定） |
+| **Summary** | v1.14.0 | v1.15.0（同梱） | v1.16.0 | v1.20.0 |
 | **Reservation** | v1.11.0 | v1.12.0 | v1.13.0 | v1.19.0 |
 
 実装着手順序は本ロードマップの **v1 優先（Summary → Reservation）** と整合させる。
@@ -269,14 +269,15 @@ Responsibilities Review  →  Entity Design  →  Implementation Plan
 
 **Reservation 実装:** v1.18.0 で Itinerary 配下 Reservation を実装済み（[v1.18.0-notes.md](releases/v1.18.0-notes.md)）。保存は Itinerary 配下、Trip 一覧は表示・集約ビュー。
 
-**v1 Hardening（documentation-first）:** v1.19.0 より、実装後の責務レビューをパッチリリースで記録する。第一弾: [Reservation Responsibilities Review](specifications/reservation-responsibilities-review.md)。コード変更は伴わない。
+**v1 Hardening（documentation-first）:** v1.19.0 より、実装後の責務レビューをパッチリリースで記録する。コード変更は伴わない。
 
 | 段階 | パッチ例 | 内容 |
 |---|---|---|
-| 設計 | v1.11–v1.13 | Reservation 系列（model / design / plan） |
-| 実装 | v1.18.0 | Reservation CRUD + export + diff |
-| **Hardening** | **v1.19.0** | **Reservation 実装後責務レビュー** |
-| Hardening（予定） | 将来 | Summary 実装後レビュー、canonical / doctor 等 |
+| 設計 | v1.11–v1.13 / v1.14–v1.16 | Reservation / Summary 系列 |
+| 実装 | v1.17.0 / v1.18.0 | Summary / Reservation CRUD + export |
+| **Hardening** | **v1.19.0** | Reservation 実装後責務レビュー |
+| **Hardening** | **v1.20.0** | **Summary 実装後責務再定義（Abstract / Journal 分離）** |
+| Hardening（予定） | 将来 | Generator、canonical、doctor 等 |
 
 ---
 

@@ -2,7 +2,9 @@
 
 Caglla.Travel CLI の **Travel Ledger Model** における **Summary** の責務を整理するレビューです。
 
-**v1.14.0 時点: 仕様整理のみ。** DB migration、CLI、export schema、Markdown export の変更は行いません。
+**v1.14.0 時点: 仕様整理のみ（設計前レビュー）。** DB migration、CLI、export schema、Markdown export の変更は行いません。
+
+> **実装後レビュー:** v1.17.0 実装後の責務再定義は [summary-post-implementation-review.md](summary-post-implementation-review.md)（v1.20.0）。本書（v1.14.0）は設計履歴として残す。
 
 | ドキュメント | 役割 |
 |---|---|

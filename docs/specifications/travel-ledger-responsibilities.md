@@ -29,10 +29,10 @@ Note / Summary / Reservation / Checklist / Photo / Attachment の責務を整理
 
 | Concept | Japanese label | Responsibility | v1.x scope |
 |---|---|---|---|
-| **Trip Summary** | 旅行の概要 | 旅行全体の共有向け説明（同行者・しおり・一覧） | 仕様のみ / 将来実装 |
-| **Day Summary** | この日の概要 / 主な行先 | 日別の共有向け要約（印刷・スキャン向き） | 仕様のみ / 将来実装 |
+| **Trip Summary** | 旅行の概要 | Trip を俯瞰する Abstract（生成物・要旨） | **v1.17.0 実装** — [summary-post-implementation-review.md](summary-post-implementation-review.md) |
+| **Day Summary** | この日の概要 / 主な行先 | 日別 Abstract（生成物・要旨） | **v1.17.0 実装** — 同上 |
 | **Itinerary Remark** | 備考 | 個別行動の短い補足（旅程表の行に載せる） | **既存** `itinerary_items.note` |
-| **Note entity** | メモ / 詳細メモ | 自由記述、検討、記録、振り返り（長文・複数件可） | **既存 CRUD**、責務は本書で再整理 |
+| **Note entity** | メモ / 詳細メモ | ユーザー入力 — 事実・注意・断片（0..N） | **既存 CRUD** — 振り返り・旅行記は **Travel Journal**（将来） |
 | **Reservation** | 予約情報 | 予約・確認・手続きに必要な構造化情報 | **v1.18.0 実装** — [reservation-responsibilities-review.md](reservation-responsibilities-review.md) |
 | **Expense** | （支出） | 金額・通貨・領収書（Itinerary 配下） | 実装済み — [expense-model.md](expense-model.md) |
 | **Checklist** | チェックリスト | 準備・忘れ物防止（Trip 配下） | 実装済み — 将来設計: [checklist-design-memo.md](checklist-design-memo.md)、[travel-support-design-memo.md](travel-support-design-memo.md) |
@@ -40,9 +40,9 @@ Note / Summary / Reservation / Checklist / Photo / Attachment の責務を整理
 英語上の責務:
 
 ```text
-Summary:  Readable overview for sharing, printing, and scanning.
+Summary:  Abstract overview of Trip/Day — primarily generated; not a travel journal.
 Remark:   Short inline supplement attached to one itinerary item.
-Note:     Long-form free text for context, planning, reflection, or records.
+Note:     User-entered facts, memos, and fragments (not the travel journal).
 Reservation: Structured booking / confirmation data to execute an activity.
 ```
 
@@ -52,9 +52,12 @@ Reservation: Structured booking / confirmation data to execute an activity.
 
 ## 2. Summary と Note は分ける
 
-詳細な責務整理: **[Summary Responsibilities Review](summary-responsibilities-review.md)**（v1.14.0）。
+詳細な責務整理:
 
-これまで「Trip Note」「Day Note」と呼んでいた用途の一部は、実際には **Summary** と呼ぶ方が自然です。
+- **設計前:** [Summary Responsibilities Review](summary-responsibilities-review.md)（v1.14.0）
+- **実装後:** [Summary Post-Implementation Review](summary-post-implementation-review.md)（v1.20.0）
+
+これまで「Trip Note」「Day Note」と呼んでいた用途の一部は、実際には **Summary** と呼ぶ方が自然です（v1.14）。v1.20 以降、**振り返り・旅行記** は **Travel Journal**（将来）の領域と整理します。
 
 ### 2.1 Trip Summary / Description
 
