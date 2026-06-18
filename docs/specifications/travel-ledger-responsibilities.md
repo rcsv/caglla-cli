@@ -2,7 +2,7 @@
 
 Caglla.Travel CLI の **Travel Ledger Model** における、説明・メモ・予約情報の責務分離です。
 
-関連: [Itinerary モデル](itinerary-model.md) / [Note モデル](note-model.md) / [Expense モデル](expense-model.md) / [Export Schema](export-schema.md) / [Ordering モデル](ordering-model.md) / [Summary Responsibilities Review](summary-responsibilities-review.md) / [Reservation Responsibilities Review](reservation-responsibilities-review.md)
+関連: [Itinerary モデル](itinerary-model.md) / [Note モデル](note-model.md) / [Expense モデル](expense-model.md) / [Export Schema](export-schema.md) / [Ordering モデル](ordering-model.md) / [Summary Post-Implementation Review](summary-post-implementation-review.md) / [Note Post-Implementation Review](note-post-implementation-review.md) / [Reservation Responsibilities Review](reservation-responsibilities-review.md)
 
 **背景（v1.9.0 時点）:**
 
@@ -32,7 +32,7 @@ Note / Summary / Reservation / Checklist / Photo / Attachment の責務を整理
 | **Trip Summary** | 旅行の概要 | Trip を俯瞰する Abstract（生成物・要旨） | **v1.17.0 実装** — [summary-post-implementation-review.md](summary-post-implementation-review.md) |
 | **Day Summary** | この日の概要 / 主な行先 | 日別 Abstract（生成物・要旨） | **v1.17.0 実装** — 同上 |
 | **Itinerary Remark** | 備考 | 個別行動の短い補足（旅程表の行に載せる） | **既存** `itinerary_items.note` |
-| **Note entity** | メモ / 詳細メモ | ユーザー入力 — 事実・注意・断片（0..N） | **既存 CRUD** — 振り返り・旅行記は **Travel Journal**（将来） |
+| **Note entity** | メモ / 詳細メモ | ユーザー入力 — Annotation（Fact / Observation / Decision / Reminder） | **既存 CRUD** — [note-post-implementation-review.md](note-post-implementation-review.md) |
 | **Reservation** | 予約情報 | 予約・確認・手続きに必要な構造化情報 | **v1.18.0 実装** — [reservation-responsibilities-review.md](reservation-responsibilities-review.md) |
 | **Expense** | （支出） | 金額・通貨・領収書（Itinerary 配下） | 実装済み — [expense-model.md](expense-model.md) |
 | **Checklist** | チェックリスト | 準備・忘れ物防止（Trip 配下） | 実装済み — 将来設計: [checklist-design-memo.md](checklist-design-memo.md)、[travel-support-design-memo.md](travel-support-design-memo.md) |
@@ -42,7 +42,7 @@ Note / Summary / Reservation / Checklist / Photo / Attachment の責務を整理
 ```text
 Summary:  Abstract overview of Trip/Day — primarily generated; not a travel journal.
 Remark:   Short inline supplement attached to one itinerary item.
-Note:     User-entered facts, memos, and fragments (not the travel journal).
+Note:     User-entered annotations on Trip/Day/Itinerary — no narrative (not the travel journal).
 Reservation: Structured booking / confirmation data to execute an activity.
 ```
 
@@ -56,8 +56,9 @@ Reservation: Structured booking / confirmation data to execute an activity.
 
 - **設計前:** [Summary Responsibilities Review](summary-responsibilities-review.md)（v1.14.0）
 - **実装後:** [Summary Post-Implementation Review](summary-post-implementation-review.md)（v1.20.0）
+- **Note 実装後:** [Note Post-Implementation Review](note-post-implementation-review.md)（v1.21.0）
 
-これまで「Trip Note」「Day Note」と呼んでいた用途の一部は、実際には **Summary** と呼ぶ方が自然です（v1.14）。v1.20 以降、**振り返り・旅行記** は **Travel Journal**（将来）の領域と整理します。
+これまで「Trip Note」「Day Note」と呼んでいた用途の一部は、実際には **Summary** と呼ぶ方が自然です（v1.14）。v1.20 以降、**振り返り・旅行記** は **Travel Journal**（将来）の領域と整理します。v1.21 以降、Note は **Annotation Layer**（Fact / Observation / Decision / Reminder）として整理します。
 
 ### 2.1 Trip Summary / Description
 
@@ -149,19 +150,20 @@ Remark のまま維持。Long-form へ昇格させる自動変換は行わない
 
 ## 4. Note entity（Long-form Note）
 
+詳細な責務整理: [Note Post-Implementation Review](note-post-implementation-review.md)（v1.21.0）
+
 ### What it is
 
-**自由記述・補足・記録・検討・振り返り** 向けの長文メモ。Trip / Day / Itinerary に **0..N 件** 付与可能。
+**Annotation Layer** — Trip / Day / Itinerary に付与する補足・説明・検討・記録（**Narrative なし**）。**0..N 件** 付与可能。
 
 **Examples:**
 
 ```text
-旅行全体の検討メモ
-日別の振り返り
-行動単位の詳細記録
+レンタカー返却は16:00まで          （Fact）
+美ら海水族館は朝イチ推奨          （Observation）
+古宇利島は体力を見て判断          （Decision）
+サンダルを持参する                （Reminder）
 雨天時の代替案
-次回改善
-旅行後の感想
 予約時のやり取りメモ（背景・経緯）
 ```
 
@@ -172,6 +174,7 @@ Remark のまま維持。Long-form へ昇格させる自動変換は行わない
 長文可
 詳細画面・専用表示向き
 旅行前・旅行中・旅行後の文脈を持てる
+Narrative を持たない（体験の語りは Travel Journal）
 ```
 
 ### What it is not
@@ -179,6 +182,7 @@ Remark のまま維持。Long-form へ昇格させる自動変換は行わない
 - 共有向けの一行要約 → **Summary**
 - 旅程表行の短文 → **Remark**（`itinerary_items.note`）
 - 予約番号・チェックイン手順の正本 → **Reservation**
+- 体験・感情・旅行記（Narrative あり）→ **Travel Journal**（将来）
 
 ### v1.x scope
 

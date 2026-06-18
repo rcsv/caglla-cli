@@ -4,6 +4,7 @@ GitHub Release 用ノート一覧（新しい順）。
 
 | Version | Title | File |
 |---|---|---|
+| v1.21.0 | Note post-implementation review | [v1.21.0-notes.md](v1.21.0-notes.md) |
 | v1.20.0 | Summary post-implementation review | [v1.20.0-notes.md](v1.20.0-notes.md) |
 | v1.19.0 | Reservation responsibilities review | [v1.19.0-notes.md](v1.19.0-notes.md) |
 | v1.18.0 | Reservation implementation | [v1.18.0-notes.md](v1.18.0-notes.md) |

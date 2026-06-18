@@ -4,6 +4,8 @@ Caglla.Travel CLI の **Travel Ledger Model** における **Summary** の責務
 
 **v1.20.0 時点: 仕様整理のみ（v1 Hardening 第二弾）。** 本書は実装変更を伴わない。改善候補は §8 に記録する。
 
+> **Note 実装後レビュー:** v1.21.0 で Note を **Annotation Layer** と再定義（`Fact` 略記の精緻化）は [note-post-implementation-review.md](note-post-implementation-review.md)。本書の三層モデル（Fact / Abstract / Story）は v1.21 で Annotation / Abstract / Story に読み替え可能。
+
 | ドキュメント | 役割 |
 |---|---|
 | [summary-responsibilities-review.md](summary-responsibilities-review.md) (v1.14.0) | **設計前**の責務整理 — 当時の前提での判断。**上書きしない** |

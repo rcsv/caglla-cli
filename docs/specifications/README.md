@@ -15,6 +15,7 @@ Caglla CLI の内部モデル・設計仕様（実装前の設計メモを含む
 | [reservation-implementation-plan.md](reservation-implementation-plan.md) | Reservation Implementation Plan（v1.13.0 実装計画） |
 | [reservation-responsibilities-review.md](reservation-responsibilities-review.md) | Reservation Responsibilities Review（v1.19.0 実装後責務整理 — v1 Hardening） |
 | [note-model.md](note-model.md) | Note モデル（v1.3.0 CRUD、v1.4.0 export v2） |
+| [note-post-implementation-review.md](note-post-implementation-review.md) | Note Post-Implementation Review（v1.21.0 実装後責務再定義 — v1 Hardening） |
 | [expense-model.md](expense-model.md) | Expense モデル（v1.5.0 CRUD） |
 | [checklist-design-memo.md](checklist-design-memo.md) | Checklist 設計メモ（自動生成・Provenance — 将来設計参考、v1.x 対象外） |
 | [travel-support-design-memo.md](travel-support-design-memo.md) | Travel Support 設計メモ（旅行支援情報・Destination・注意喚起 — 将来設計参考、v1.x 対象外） |
