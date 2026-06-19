@@ -4,7 +4,7 @@ Caglla CLI では、旅行計画を次の階層で表現します。
 
 ```text
 Trip（旅行全体）
- ├─ Participant（同行者）← v2 予定
+ ├─ Participant（参加関係）← v2 予定。Trip 内の参加行（TripParticipant-like）。人そのものの正本ではない
  └─ Day（日付コンテナ：何日目か）
       └─ Itinerary（行動：旅行中の予定／実績）
            ├─ Expense（支出）
@@ -35,6 +35,12 @@ Trip / Day / Itinerary に付けられる **自由記述メモ**（`note` コマ
 ### Checklist
 
 チェックリストは **Trip ID** に紐づきます。`trip checklist-generate` により、カテゴリ定義・組み合わせルールから自動生成できます。
+
+### Participant と Person / Traveler Profile（v2）
+
+v2 の **Participant** は Trip 配下の **参加行**（`participants` テーブル）であり、その Trip に誰が参加しているかを識別・表示するためのデータです。**人そのものの正本ではありません。**
+
+将来、Root スコープに **Person / Traveler Profile**（パスポート・生年月日・マイレージ・連絡先等）を導入し、参加行が `person_id` で参照する構造が拡張候補です。**v2.0.0 では Person は実装しません。** 詳細は [participant-model.md](specifications/participant-model.md#conceptual-model-person-vs-trip-participation)。
 
 ## 仕様ドキュメント
 

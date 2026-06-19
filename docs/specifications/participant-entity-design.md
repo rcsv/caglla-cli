@@ -4,6 +4,8 @@ Caglla.Travel CLI / 将来 Web 版に向けた **Participant エンティティ*
 
 **v2.0.0 設計フェーズ 2/6: Entity Design のみ。** 本書は DB migration・CLI・export schema の変更を伴わない。実装手順は Issue #9 以降。
 
+> **設計補正（#8 後・#9 前）:** v2 の `participants` は **Trip-scoped participation record**（TripParticipant-like）として扱う。Root の **Person / Traveler Profile** は将来候補で v2.0.0 では実装しない。詳細は [participant-model.md §Conceptual model](participant-model.md#conceptual-model-person-vs-trip-participation) および本書 §Person vs Trip participation。
+
 | ドキュメント | 役割 |
 |---|---|
 | [participant-model.md](participant-model.md) (#7) | 責務・境界（What it is / is not） |
@@ -46,8 +48,9 @@ Caglla.Travel CLI / 将来 Web 版に向けた **Participant エンティティ*
 ### v2 の到達点（Entity レベル）
 
 ```text
-participants テーブル — Trip スコープの同行者正本
+participants テーブル — Trip スコープの参加関係（TripParticipant-like record）
 最小フィールド: name + sort_order + 監査列
+（人そのものの正本ではない — §Person vs Trip participation）
 ```
 
 精算・Expense FK・Reservation リンクは **v3 以降**（[participant-model.md §Deferred](participant-model.md#deferred-scope)）。
@@ -61,7 +64,7 @@ participants テーブル — Trip スコープの同行者正本
 | 項目 | 前提 |
 |---|---|
 | **親** | Trip のみ |
-| **スコープ** | 同行者レジストリ。精算ではない |
+| **スコープ** | Trip 内の参加関係レジストリ。精算ではない |
 | **Expense** | v2 では構造リンクなし |
 | **Reservation** | v2 では直接リンクなし |
 | **export** | 将来 schema v4、`participants[]` top-level |
@@ -73,24 +76,36 @@ participants テーブル — Trip スコープの同行者正本
 
 ## Entity Definition
 
+### Person vs Trip participation
+
+| レイヤー | スコープ | v2.0.0 | 役割 |
+|---|---|---|---|
+| **Person / Traveler Profile** | Root（将来） | **未実装** | パスポート・生年月日・マイレージ・連絡先等の **再利用可能な人物正本** |
+| **Participant（本書の entity）** | Trip | **実装** | ある Trip への **参加行**。`trip_id` + Trip 内 `name` + `sort_order` |
+
+v2 の `participants` テーブルは、将来 `person_id`（nullable）で Person を参照できるよう拡張する余地を残す。**v2.0.0 では `person_id` 列も `persons` テーブルも導入しない。**
+
 ### What Participant is
 
 ```text
-Participant is a Trip-scoped identity for a person who travels on that trip.
+Participant is a Trip-scoped participation record for someone who takes part in that trip.
+It identifies and displays them within the trip; it is not the master record for the person.
 ```
 
 日本語:
 
 ```text
-Participant = ある Trip に同行する人を表すエンティティ（Trip 内 ID）
+Participant = ある Trip に参加している人を表す参加行（Trip 内 ID）
+（概念的には TripParticipant-like record）
 ```
 
 ### What Participant is not（v2.0.0）
 
 | 誤解しやすい概念 | 関係 |
 |---|---|
+| **Person / Traveler Profile** | **ではない** — 人そのものの正本は将来 Root スコープで検討。v2 では未実装 |
 | **User account** | ではない — Identity（製品 v7）の領域 |
-| **連絡先帳 / アドレス帳** | ではない — グローバル再利用しない |
+| **グローバル連絡帳 / アドレス帳** | v2.0.0 では **Root-level の再利用可能 Person は実装しない**。将来 Person を導入し participation が参照する構造は **拡張候補** |
 | **Expense payer / debtor** | **まだではない** — v3 で Expense と構造リンク |
 | **Reservation guest** | **まだではない** — v2 では Reservation に Participant 列なし |
 | **Settlement 単位** | ではない — v3 |
@@ -359,7 +374,7 @@ Participant には **影響なし**（Trip スコープのため）。
 | 論点 | 方針 |
 |---|---|
 | **owner** | `add` / `list` は `--trip` **必須** |
-| **ID 指定** | `show` / `update` / `delete` は **Participant ID**（グローバル） |
+| **ID 指定** | `show` / `update` / `delete` は **Participant 行 ID**（DB 全体で一意。Person マスター ID ではない） |
 | **`--json`** | `list` / `show` で対応（既存エンティティと同型） |
 | **`--sort-order`** | `add` / `update` で任意 |
 | **Expense 連携** | v2 では `expense` 側オプション **追加しない** |
@@ -539,8 +554,40 @@ Photo / Journal と Participant の紐づけ
 memo / role 列
 Checklist assigned_participant_id
 Reservation guest_participant_id
-User / contact book / permissions / cloud sync
+User / permissions / cloud sync
 ```
+
+### 将来: Person / Traveler Profile（Root）
+
+v2.0.0 では **実装しない**。将来候補として以下を整理する。
+
+| 候補名（未確定） | Person, Traveler, TravelerProfile, Contact 等 |
+|---|---|
+| **スコープ** | Root — Trip 横断で再利用 |
+| **持ちうる属性** | legal name, display name, date of birth, passport, mileage, contact, allergy/care notes, emergency contact |
+| **participation との関係** | `participants.person_id`（nullable FK）で参照する案 |
+
+**v2.0.0 では `persons` テーブル・`person_id` 列・`trip_participants` rename は行わない。**
+
+#### 将来 migration path（参考）
+
+```text
+persons
+  id
+  display_name
+  ...
+
+participants   （テーブル名は v2 維持想定）
+  id
+  trip_id
+  person_id    NULL  -- 未リンク時は standalone 参加行
+  name           -- Trip 内表示名
+  sort_order
+  created_at
+  updated_at
+```
+
+`participants` → `trip_participants` へのリネームは **Open Question**（§Open Questions #7）。
 
 ---
 
@@ -556,6 +603,8 @@ Implementation Plan（#9）で解決:
 | 4 | `participant list` テキスト出力の列（ID / name / sort_order） |
 | 5 | v3 同名 Participant 許可時の UX（一覧で区別表示するか） |
 | 6 | canonical sample への Participant 投入タイミング（#10 後の任意タスク） |
+| 7 | 将来 `participants` を `trip_participants` にリネームするか、テーブル名を維持するか |
+| 8 | 将来 `person_id` 追加時の backfill / 同一 Trip 内 display name 上書き方針 |
 
 ---
 
@@ -576,6 +625,14 @@ Issue #8（Entity Design）の完了条件:
 
 ## Next phase notes（Implementation Plan #9）
 
+Person / Trip 境界補正後の前提で #9 を進める:
+
+| 前提 | 内容 |
+|---|---|
+| **v2.0.0** | `participants` = Trip-scoped **participation record**。Person / Traveler Profile は **実装しない** |
+| **テーブル** | `id`, `trip_id`, `name`, `sort_order`, `created_at`, `updated_at` のみ（`person_id` なし） |
+| **将来** | `person_id` 追加または `trip_participants` 整理の余地を残す |
+
 #9 で確定する主な項目:
 
 - migration ファイル名・`db.rs` 組み込み
@@ -583,5 +640,6 @@ Issue #8（Entity Design）の完了条件:
 - export v4 フィールド正式定義と `validate-export` ルール
 - CLI オプション詳細・エラーメッセージ一覧
 - `trip duplicate` / import 順序の手順書
+- participation record としての命名・コメント方針（将来 Person 追加を妨げない）
 
 Release は #12（v2.0.0）。
