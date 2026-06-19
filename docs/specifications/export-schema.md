@@ -10,7 +10,8 @@ Caglla CLI の trip export / import JSON 形式。
 | Expense の親子関係 | [Expense モデル](expense-model.md) |
 | Note の owner 解決 | [Note モデル](note-model.md) |
 | Reservation（将来） | [Reservation Implementation Plan](reservation-implementation-plan.md) §7 |
-| Summary（将来） | [Summary Responsibilities Review](summary-responsibilities-review.md) §9 |
+| Summary | [Summary Responsibilities Review](summary-responsibilities-review.md) §9 |
+| Participant（v4） | [participant-implementation-plan.md](participant-implementation-plan.md) |
 | Day と `day_number` | [Day モデル](day-model.md) |
 | 並び順（`sort_order` / `start_time`） | [Ordering モデル](ordering-model.md) |
 
@@ -24,7 +25,7 @@ Caglla CLI の trip export / import JSON 形式。
 | `1` | v1 | 明示的 v1。`notes` なし |
 | `2` | v2 | Note を含む（`itinerary_items` フラット） |
 | `3` | v3 | Note + **nested Expense**（`days[]`） |
-| `4` | v4（**現行 export**） | v3 + top-level **`participants[]`**（`is_self` 含む）— 詳細は [participant-implementation-plan.md](participant-implementation-plan.md) |
+| `4` | v4（**現行 export**） | v3 + top-level **`participants[]`**（`is_self` 含む）— [participant-implementation-plan.md](participant-implementation-plan.md) |
 
 Import 時の解釈:
 
@@ -204,53 +205,77 @@ v3 export では Itinerary Note の `itinerary_key` 解決に、flatten 後の `
 
 ## validate-export
 
+`trip validate-export` は export JSON を **import 前に検証** します。DB は使いません。v3 / v4 export では [Note モデル](note-model.md) の owner 解決・Expense / Reservation ネスト構造も検証します。
+
+### 共通（全 schema）
+
+- JSON パース可能であること
+- `trip.name` / `trip.start_date` / `trip.end_date` が import 可能な値であること
+
 ### v1 / v2
 
-- `schema_version` がサポート範囲（未指定 / 1 / 2 / 3）
+- `schema_version` がサポート範囲（未指定 / 1 / 2）
 - `notes` が配列（キーがある場合）
 - `owner_type` が有効値
 - Day Note の `day_number` が旅行期間内
 - Itinerary Note の `itinerary_key` 存在・解決可能性
 - `title` / `body` の型（JSON 構造）
 
-v1 / v2 では `expenses` チェックは **非対象**（`✗ expenses`）です。
+v1 / v2 では nested `days[]` / `expenses` / `participants` チェックは **非対象**（`✗ expenses` / `✗ participants` 等）。
 
 ### v3 追加検証
 
+- `schema_version: 3`（または v4 として読み込むが `participants` 省略 = 空配列）
 - `days` が配列であること
 - 各 `day_number` が旅行期間内
 - 各 Itinerary の `title` 必須
 - nested `expenses[]` の `currency` 必須・形式検証
 - nested `expenses[]` の `expense_date` 形式（指定時）
+- nested `reservations[]`（存在時）の必須フィールド
+- Trip / Day `summary` 長さ（存在時）
 
 解決不能な Note は validation error です。
 
-## trip diff (v1.4.1+)
+**v3 import 互換:** `participants` キーがなくても import 可能（空配列として扱う）。`validate-export` では v3 ファイルに `participants` が無い場合、warning のみのことがあります。
 
-`trip diff` は export JSON 2 件を比較し、`notes[]` の差分を表示します。
+### v4 追加検証（現行 export）
 
-| 表示 | 意味 |
+v4 は v3 の検証に加え:
+
+| ルール | 内容 |
 |---|---|
-| `+ Note added: ...` | 新側にのみ存在 |
-| `- Note removed: ...` | 旧側にのみ存在 |
-| `~ Note changed: ...` | 同一キーで `body` または（Itinerary Note の）`title` が変化 |
+| `participants` キー | **配列であること**（空配列可）。省略時は v3 互換として warning の可能性 |
+| 各 Participant | `name` 非空、`sort_order` ≥ 0、`is_self` は boolean |
+| **multiple self** | 同一 Trip で `is_self: true` は **最大 1 件**。2 件以上は **validation error**（import も拒否） |
 
-比較キー:
+Participant の export 検証は import 前チェックと **同一ロジック**（`collect_export_participant_validation_errors`）です。
 
-| 種別 | キー |
+## trip diff
+
+`trip diff <old.json> <new.json>` は 2 つの export JSON を比較します。v3 / v4 export は flatten 後の Itinerary / Expense / Reservation コンテキストで比較します。
+
+| 対象 | 表示例 |
 |---|---|
-| Trip Note | `owner_type=trip`, `title` |
-| Day Note | `owner_type=day`, `day_number`, `title` |
-| Itinerary Note | `owner_type=itinerary`, `day_number`, `sort_order`, `itinerary_key.title` |
+| Trip フィールド | `- name: 旧名` / `+ name: 新名` / Trip summary |
+| Itinerary | `- Day1 09:00 首里城` / `+ ...` / `~ ...`（フィールド変更） |
+| Note | `- Note removed: ...` / `+ Note added: ...` / `~ Note changed: ...` |
+| Summary | Trip / Day summary の追加・削除・変更 |
+| Reservation | added / removed / modified |
+| **Participant (v4)** | added / removed / `is_self` changed（キー: `sort_order` + `name`）。rename / reorder は **removed + added** として保守的に検出 |
 
-v3 export を `load_trip_export_from_file` で読むと Itinerary は flatten されますが、**Expense は diff 非対象**（v1.6.0 時点）です。
+**現時点の非対象:** nested **Expense** の diff（[planning-foundation-completion-review.md](planning-foundation-completion-review.md) §9 — Maintenance 候補）。
 
-## 非対象（将来バージョン）
+v1 export（`notes` なし）と v2 export（`notes: []`）を比較しても異常終了しません。v3 同士で `participants` が無い場合は空配列として比較します。
 
-以下は schema v3 では含めません:
+## 将来バージョン（現 schema に含めないもの）
 
-- Photo / Attachment
-- Expense diff
-- Participant / Settlement / Shared Expense
-- Multi Currency conversion
-- XML / XSD export
+以下は **v4 時点では export JSON に含めません**（Participant **参加行** は v4 で **含む**。Shared Expense / Settlement は別テーマ）:
+
+| 項目 | 備考 |
+|---|---|
+| Photo / Attachment | 製品 v6 想定 |
+| Expense **diff** | CLI 未実装（export 自体は v3+ で nested `expenses[]`） |
+| **`paid_by_participant_id` / beneficiary / Settlement** | v3 Shared Expense（未着手） |
+| Person / Traveler Profile（Root 正本） | 将来。v4 Participant は Trip スコープの参加行のみ |
+| Multi-currency conversion | 将来 |
+| XML / XSD export | 非対象 |
