@@ -4,10 +4,12 @@ Caglla CLI では、旅行計画を次の階層で表現します。
 
 ```text
 Trip（旅行全体）
+ ├─ Participant（同行者）← v2 予定
  └─ Day（日付コンテナ：何日目か）
       └─ Itinerary（行動：旅行中の予定／実績）
            ├─ Expense（支出）
-           └─ Note（メモ）
+           ├─ Note（メモ）
+           └─ Reservation（予約）← v1.18+
 ```
 
 ## 設計原則
@@ -43,6 +45,7 @@ Trip / Day / Itinerary に付けられる **自由記述メモ**（`note` コマ
 | Ordering | [specifications/ordering-model.md](specifications/ordering-model.md) |
 | Note モデル | [specifications/note-model.md](specifications/note-model.md) |
 | Expense モデル | [specifications/expense-model.md](specifications/expense-model.md) |
+| Participant モデル | [specifications/participant-model.md](specifications/participant-model.md)（v2 Responsibilities Review） |
 | Export JSON スキーマ | [specifications/export-schema.md](specifications/export-schema.md) |
 | 全仕様の索引 | [specifications/README.md](specifications/README.md) |
 
