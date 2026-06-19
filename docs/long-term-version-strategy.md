@@ -278,7 +278,8 @@ Responsibilities Review  →  Entity Design  →  Implementation Plan
 | **Hardening** | **v1.19.0** | Reservation 実装後責務レビュー |
 | **Hardening** | **v1.20.0** | **Summary 実装後責務再定義（Abstract / Journal 分離）** |
 | **Hardening** | **v1.21.0** | **Note 実装後責務再定義（Annotation / Narrative 境界）** |
-| Hardening（予定） | 将来 | Generator、canonical、doctor 等 |
+| **Hardening** | **v1.22.0** | **Expense 実装後責務定義（Transaction Record / Budget 分離）** |
+| Hardening（予定） | 将来 | Generator、canonical、diff 等 |
 
 ---
 

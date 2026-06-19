@@ -2,7 +2,7 @@
 
 Caglla.Travel CLI の **Travel Ledger Model** における、説明・メモ・予約情報の責務分離です。
 
-関連: [Itinerary モデル](itinerary-model.md) / [Note モデル](note-model.md) / [Expense モデル](expense-model.md) / [Export Schema](export-schema.md) / [Ordering モデル](ordering-model.md) / [Summary Post-Implementation Review](summary-post-implementation-review.md) / [Note Post-Implementation Review](note-post-implementation-review.md) / [Reservation Responsibilities Review](reservation-responsibilities-review.md)
+関連: [Itinerary モデル](itinerary-model.md) / [Note モデル](note-model.md) / [Expense モデル](expense-model.md) / [Export Schema](export-schema.md) / [Ordering モデル](ordering-model.md) / [Summary Post-Implementation Review](summary-post-implementation-review.md) / [Note Post-Implementation Review](note-post-implementation-review.md) / [Expense Post-Implementation Review](expense-post-implementation-review.md) / [Reservation Responsibilities Review](reservation-responsibilities-review.md)
 
 **背景（v1.9.0 時点）:**
 
@@ -34,7 +34,7 @@ Note / Summary / Reservation / Checklist / Photo / Attachment の責務を整理
 | **Itinerary Remark** | 備考 | 個別行動の短い補足（旅程表の行に載せる） | **既存** `itinerary_items.note` |
 | **Note entity** | メモ / 詳細メモ | ユーザー入力 — Annotation（Fact / Observation / Decision / Reminder） | **既存 CRUD** — [note-post-implementation-review.md](note-post-implementation-review.md) |
 | **Reservation** | 予約情報 | 予約・確認・手続きに必要な構造化情報 | **v1.18.0 実装** — [reservation-responsibilities-review.md](reservation-responsibilities-review.md) |
-| **Expense** | （支出） | 金額・通貨・領収書（Itinerary 配下） | 実装済み — [expense-model.md](expense-model.md) |
+| **Expense** | （支出） | 金銭トランザクション記録（Actual Money、Itinerary 配下） | **実装済み** — [expense-post-implementation-review.md](expense-post-implementation-review.md) |
 | **Checklist** | チェックリスト | 準備・忘れ物防止（Trip 配下） | 実装済み — 将来設計: [checklist-design-memo.md](checklist-design-memo.md)、[travel-support-design-memo.md](travel-support-design-memo.md) |
 
 英語上の責務:
