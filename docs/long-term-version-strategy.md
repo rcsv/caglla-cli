@@ -89,6 +89,8 @@ Participant
 
 参加者情報を Trip に紐付けられることが目的。
 
+設計系列（GitHub Epic #6）: [participant-model.md](specifications/participant-model.md)（Responsibilities Review）→ Entity Design → Implementation → export v4。
+
 ---
 
 ## v3 — Shared Expense
