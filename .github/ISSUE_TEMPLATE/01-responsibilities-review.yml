@@ -1,0 +1,103 @@
+name: Responsibilities Review
+description: 新概念・拡張の責務整理（設計フェーズ 1/6）
+title: "[Responsibilities Review] "
+labels:
+  - phase:responsibilities-review
+  - type:spec
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Responsibilities Review** — 対象概念が *何であるか / 何でないか* を整理します。
+        成果物は `docs/specifications/` 配下の Markdown（例: `*-model.md`, `*-responsibilities-review.md`）。
+
+        設計系列: Responsibilities Review → Entity Design → Implementation Plan → Implementation → Post-Implementation Review → Release
+
+  - type: input
+    id: concept
+    attributes:
+      label: 対象概念
+      description: 例: Participant, Shared Expense, Travel Book
+      placeholder: Participant
+    validations:
+      required: true
+
+  - type: dropdown
+    id: domain
+    attributes:
+      label: ドメイン
+      options:
+        - participant
+        - expense
+        - reservation
+        - summary
+        - note
+        - itinerary
+        - checklist
+        - export
+        - travel-book
+        - photo
+        - attachment
+        - planning-foundation
+        - other
+    validations:
+      required: true
+
+  - type: input
+    id: milestone
+    attributes:
+      label: 対象 Milestone
+      description: 例: v2 Participant Foundation
+      placeholder: v2 Participant Foundation
+    validations:
+      required: true
+
+  - type: textarea
+    id: goals
+    attributes:
+      label: Goals（この概念が解決すること）
+      placeholder: |
+        - 同行者を Trip に紐付けて記録できる
+        - Expense 精算の前提データを持てる
+    validations:
+      required: true
+
+  - type: textarea
+    id: non_goals
+    attributes:
+      label: Non-goals（今回扱わないこと）
+      placeholder: |
+        - 精算ロジック（v3 Shared Expense へ defer）
+        - クラウド同期
+    validations:
+      required: true
+
+  - type: textarea
+    id: boundaries
+    attributes:
+      label: 既存概念との境界
+      description: Trip / Day / Itinerary / Expense / Note 等との関係
+      placeholder: |
+        | 概念 | 境界 |
+        |---|---|
+        | Expense | 金額の正本。Participant は支払者参照のみ（将来） |
+    validations:
+      required: false
+
+  - type: textarea
+    id: doc_path
+    attributes:
+      label: 成果物ドキュメント（予定パス）
+      placeholder: docs/specifications/participant-model.md
+    validations:
+      required: true
+
+  - type: textarea
+    id: references
+    attributes:
+      label: 参照
+      placeholder: |
+        - docs/specifications/travel-ledger-responsibilities.md
+        - docs/long-term-version-strategy.md §v2
+    validations:
+      required: false

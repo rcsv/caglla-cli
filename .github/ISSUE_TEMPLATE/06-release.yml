@@ -1,0 +1,64 @@
+name: Release
+description: タグ付け・Release notes・検証（設計フェーズ 6/6）
+title: "[Release] "
+labels:
+  - phase:release
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Release** — タグ `v*` push で [Release workflow](https://github.com/rcsv/caglla-cli/blob/master/.github/workflows/release.yml) が実行されます。
+        手順: [docs/releases/README.md](https://github.com/rcsv/caglla-cli/blob/master/docs/releases/README.md)
+
+  - type: input
+    id: version
+    attributes:
+      label: リリースバージョン
+      placeholder: v2.0.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: release_type
+    attributes:
+      label: リリース種別
+      options:
+        - documentation-only（コード変更なし）
+        - feature（実装を含む）
+        - patch / fix
+        - infrastructure
+    validations:
+      required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Release summary
+      placeholder: Participant Foundation — CRUD + export v4
+    validations:
+      required: true
+
+  - type: textarea
+    id: related_issues
+    attributes:
+      label: 関連 Issue / PR
+      placeholder: |
+        Closes #10, #11, #12
+        PR #15
+    validations:
+      required: false
+
+  - type: textarea
+    id: checklist
+    attributes:
+      label: リリース前チェックリスト
+      value: |
+        - [ ] `make check` 成功
+        - [ ] GitHub Actions Rust CI 成功
+        - [ ] `docs/releases/vX.Y.Z-notes.md` 作成
+        - [ ] `docs/releases/README.md` 更新
+        - [ ] `docs/specifications/README.md` 更新（仕様変更時）
+        - [ ] タグ `vX.Y.Z` push
+        - [ ] GitHub Release 作成・バイナリアセット確認
+    validations:
+      required: false

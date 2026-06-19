@@ -80,6 +80,7 @@ cargo run -- itinerary timeline 1
 | [docs/export-import.md](docs/export-import.md) | JSON export/import・`--json` 出力 |
 | [docs/markdown-export.md](docs/markdown-export.md) | Markdown 旅行しおり出力 |
 | [docs/development.md](docs/development.md) | 開発・CI・サンプルデータ |
+| [docs/github-workflow.md](docs/github-workflow.md) | Issue / Milestone / Project による開発運用 |
 | [docs/specifications/](docs/specifications/) | 内部モデル・設計仕様 |
 | [docs/releases/](docs/releases/) | リリースノート |
 

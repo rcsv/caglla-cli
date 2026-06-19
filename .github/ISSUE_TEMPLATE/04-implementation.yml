@@ -1,0 +1,62 @@
+name: Implementation
+description: コード・テスト・サンプルデータの実装（設計フェーズ 4/6）
+title: "[Implementation] "
+labels:
+  - phase:implementation
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Implementation** — Implementation Plan に基づくコード変更。
+        実装 PR では対応する Issue を `Closes #` でリンクしてください。
+
+  - type: input
+    id: concept
+    attributes:
+      label: 対象概念
+      placeholder: Participant
+    validations:
+      required: true
+
+  - type: input
+    id: plan_issue
+    attributes:
+      label: 前提 Issue（Implementation Plan）
+      placeholder: "#"
+    validations:
+      required: false
+
+  - type: textarea
+    id: tasks
+    attributes:
+      label: 実装チェックリスト
+      placeholder: |
+        - [ ] migration
+        - [ ] models + CRUD
+        - [ ] export/import
+        - [ ] diff / export-md
+        - [ ] unit tests
+        - [ ] canonical sample 更新（必要なら）
+    validations:
+      required: true
+
+  - type: textarea
+    id: breaking
+    attributes:
+      label: Breaking changes
+      description: なければ「なし」
+      placeholder: なし
+    validations:
+      required: true
+
+  - type: textarea
+    id: verification
+    attributes:
+      label: 検証手順
+      placeholder: |
+        make check
+        cargo run -- participant add 1 "父"
+        cargo run -- trip export 1 > /tmp/t.json
+    validations:
+      required: true
