@@ -36,6 +36,15 @@ Trip / Day / Itinerary に付けられる **自由記述メモ**（`note` コマ
 
 チェックリストは **Trip ID** に紐づきます。`trip checklist-generate` により、カテゴリ定義・組み合わせルールから自動生成できます。
 
+### Participant count semantics（v2）
+
+- **Participant** = その Trip の旅行参加者 **全員**（**自分を含む**）
+- **Companion** = **自分以外** の同行者
+- **`participant_count` / `traveler_count`** = 自分を含む参加人数
+- **`companion_count`** = 自分以外の人数 — `is_self = true` が 1 件あるときのみ `count(participants) - 1` で算出
+- participants **未登録** の一人旅は **0 人ではなく unknown / not recorded**
+- v2.0.0 の `participants` テーブルに **`is_self`** 列を含める（詳細は [participant-model.md](specifications/participant-model.md#participant-count-semantics)）
+
 ### Participant と Person / Traveler Profile（v2）
 
 v2 の **Participant** は Trip 配下の **参加行**（`participants` テーブル）であり、その Trip に誰が参加しているかを識別・表示するためのデータです。**人そのものの正本ではありません。**
