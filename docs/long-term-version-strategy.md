@@ -74,12 +74,14 @@ Participant
 ### 追加予定
 
 ```text
-Participant
+Participant（Trip-scoped participation record）
 ```
+
+v2 の `participants` は **ある Trip への参加行**（TripParticipant-like）であり、**人そのものの正本ではない**。パスポート・生年月日・マイレージ等の Trip 横断プロフィールは、将来 Root スコープの **Person / Traveler Profile** として検討する（v2.0.0 では未実装）。詳細は [participant-model.md](specifications/participant-model.md#conceptual-model-person-vs-trip-participation)。
 
 ### スコープ
 
-この段階では **精算機能は持ち込まない**。
+この段階では **精算機能は持ち込まない**。Root-level Person / Traveler Profile も **持ち込まない**。
 
 例:
 
@@ -87,9 +89,9 @@ Participant
 父 / 母 / 妻 / 長男 / 次男
 ```
 
-参加者情報を Trip に紐付けられることが目的。
+参加者情報を Trip に紐付けられることが目的（参加関係のレジストリ）。
 
-設計系列（GitHub Epic #6）: [participant-model.md](specifications/participant-model.md)（#7）→ [participant-entity-design.md](specifications/participant-entity-design.md)（#8）→ Implementation Plan → export v4。
+設計系列（GitHub Epic #6）: [participant-model.md](specifications/participant-model.md)（#7）→ [participant-entity-design.md](specifications/participant-entity-design.md)（#8）→ Person/Trip 境界補正 → Implementation Plan → export v4。
 
 ---
 
