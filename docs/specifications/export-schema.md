@@ -24,6 +24,7 @@ Caglla CLI の trip export / import JSON 形式。
 | `1` | v1 | 明示的 v1。`notes` なし |
 | `2` | v2 | Note を含む（`itinerary_items` フラット） |
 | `3` | v3（**現行 export**） | Note + **nested Expense**（`days[]`） |
+| `4` | v4（**v2.0.0 予定**） | v3 + top-level **`participants[]`**（`is_self` 含む）— 詳細は [participant-implementation-plan.md](participant-implementation-plan.md) |
 
 Import 時の解釈:
 
