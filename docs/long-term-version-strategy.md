@@ -91,7 +91,7 @@ v2 の `participants` は **ある Trip への参加行**（TripParticipant-like
 
 参加者情報を Trip に紐付けられることが目的（参加関係のレジストリ）。**Participant は自分を含む旅行参加者全員** を指す（Companion は自分以外）。人数統計では `participant_count` と `companion_count` を混同しない。v2.0.0 では `is_self` 列で「この Trip における自分」をマークする。詳細は [participant-model.md §Participant count semantics](specifications/participant-model.md#participant-count-semantics)。
 
-設計系列（GitHub Epic #6）: [participant-model.md](specifications/participant-model.md)（#7）→ [participant-entity-design.md](specifications/participant-entity-design.md)（#8）→ Person/Trip 境界補正 → count 意味論補正 → Implementation Plan → export v4。
+設計系列（GitHub Epic #6）: [participant-model.md](specifications/participant-model.md)（#7）→ [participant-entity-design.md](specifications/participant-entity-design.md)（#8）→ 設計補正（#21 / #22）→ [participant-implementation-plan.md](specifications/participant-implementation-plan.md)（#9）→ Implementation（#10）→ export v4。
 
 ---
 

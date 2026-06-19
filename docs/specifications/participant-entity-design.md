@@ -12,7 +12,7 @@ Caglla.Travel CLI / 将来 Web 版に向けた **Participant エンティティ*
 |---|---|
 | [participant-model.md](participant-model.md) (#7) | 責務・境界（What it is / is not） |
 | **本書** (#8) | テーブル・フィールド・関係・検証（How we model it） |
-| [participant-implementation-plan.md](participant-implementation-plan.md) (#9 予定) | 実装計画（If we build it, how） |
+| [participant-implementation-plan.md](participant-implementation-plan.md) (#9) | 実装計画（How to build） |
 
 関連: [note-model.md](note-model.md) / [expense-model.md](expense-model.md) / [ordering-model.md](ordering-model.md) / [export-schema.md](export-schema.md) / [github-workflow.md](../github-workflow.md)
 
@@ -21,7 +21,7 @@ Caglla.Travel CLI / 将来 Web 版に向けた **Participant エンティティ*
 ```text
 #7  Responsibilities Review   → participant-model.md
 #8  Entity Design             → participant-entity-design.md（本書）
-#9  Implementation Plan        → participant-implementation-plan.md（予定）
+#9  Implementation Plan        → participant-implementation-plan.md
 #10 Implementation             → CRUD + export v4（予定）
 ```
 
@@ -652,26 +652,8 @@ Issue #8（Entity Design）の完了条件:
 
 ---
 
-## Next phase notes（Implementation Plan #9）
+## Next phase notes（Implementation #10）
 
-Person / Trip 境界補正後の前提で #9 を進める:
-
-| 前提 | 内容 |
-|---|---|
-| **v2.0.0** | `participants` = Trip-scoped **participation record**。Person / Traveler Profile は **実装しない** |
-| **テーブル** | `id`, `trip_id`, `name`, `sort_order`, `is_self`, `created_at`, `updated_at`（`person_id` なし） |
-| **人数意味論** | Participant は自分を含む。`is_self` で companion_count を安全に算出（[participant-model.md §Participant count semantics](participant-model.md#participant-count-semantics)） |
-| **将来** | `person_id` 追加または `trip_participants` 整理の余地を残す |
-
-#9 で確定する主な項目:
-
-- migration ファイル名・`db.rs` 組み込み
-- `src/participant.rs` 関数一覧とテスト矩阵
-- export v4 フィールド正式定義（`is_self` 含む）と `validate-export` ルール
-- CLI オプション詳細（`--self`）・エラーメッセージ一覧
-- `trip duplicate` / import 順序の手順書
-- participation record としての命名・コメント方針（将来 Person 追加を妨げない）
-- `trip add` 時の default self participant 要否（Open Question）
-- statistics: unknown vs 0 の表示方針
+[participant-implementation-plan.md](participant-implementation-plan.md)（#9）を参照。#10 で migration / CLI / export v4 を実装。
 
 Release は #12（v2.0.0）。
