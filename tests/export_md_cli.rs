@@ -175,3 +175,70 @@ fn cli_export_md_includes_expenses_under_itinerary() {
     assert!(stdout.contains("Expenses:"));
     assert!(stdout.contains("- 入館料: 2,500 JPY"));
 }
+
+#[test]
+fn cli_export_md_includes_participants_section() {
+    let dir = temp_workdir();
+    assert!(run_cli(&dir, &["db", "reset"]).status.success());
+    assert!(run_cli(
+        &dir,
+        &[
+            "trip",
+            "add",
+            "Participant MD Trip",
+            "--start",
+            "2026-08-01",
+            "--end",
+            "2026-08-03",
+        ]
+    )
+    .status
+    .success());
+    assert!(run_cli(
+        &dir,
+        &[
+            "participant",
+            "add",
+            "--trip",
+            "1",
+            "--name",
+            "ともさん",
+            "--self",
+            "--sort-order",
+            "0",
+        ]
+    )
+    .status
+    .success());
+    assert!(run_cli(
+        &dir,
+        &[
+            "participant",
+            "add",
+            "--trip",
+            "1",
+            "--name",
+            "妻",
+            "--sort-order",
+            "1",
+        ]
+    )
+    .status
+    .success());
+
+    let output = run_cli(&dir, &["trip", "export-md", "1"]);
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("## Overview"));
+    assert!(stdout.contains("## Participants"));
+    assert!(stdout.contains("| Name | Self |"));
+    assert!(stdout.contains("ともさん"));
+    assert!(stdout.contains("妻"));
+    assert!(stdout.contains("| yes |"));
+    assert!(stdout.contains("| no |"));
+    assert!(stdout.contains("Travelers: 2 (companions: 1)"));
+    assert!(
+        stdout.find("## Participants").unwrap() > stdout.find("## Overview").unwrap(),
+        "Participants section should follow Overview"
+    );
+}

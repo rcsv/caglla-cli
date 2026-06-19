@@ -20,38 +20,40 @@ cargo run -- trip export 1
 cargo run -- trip export 1 --output backup.json
 ```
 
-出力例（構造）:
+出力例（構造 — **現行 v4**）:
 
 ```json
 {
-  "schema_version": 2,
+  "schema_version": 4,
   "generator": "caglla-cli",
-  "generator_version": "1.4.0",
+  "generator_version": "2.0.0",
   "exported_at": "2026-06-07T00:00:00Z",
   "trip": {
-    "id": 1,
     "name": "沖縄旅行",
     "start_date": "2026-04-26",
     "end_date": "2026-04-29",
-    "created_at": "...",
-    "updated_at": "..."
+    "summary": null
   },
-  "itinerary_items": [
+  "days": [
     {
-      "id": 1,
-      "trip_id": 1,
-      "day": 1,
-      "title": "首里城",
-      "start_time": "09:00",
-      "duration_minutes": 90,
-      "travel_minutes": 20,
-      "location": "沖縄県那覇市首里金城町1-2"
+      "day_number": 1,
+      "summary": null,
+      "itineraries": [
+        {
+          "title": "首里城",
+          "sort_order": 0,
+          "start_time": "09:00",
+          "duration_minutes": 90,
+          "travel_minutes": 20,
+          "location": "沖縄県那覇市首里金城町1-2",
+          "expenses": [],
+          "reservations": []
+        }
+      ]
     }
   ],
   "checklist_items": [
     {
-      "id": 1,
-      "trip_id": 1,
       "title": "パスポート",
       "is_done": false,
       "sort_order": 0
@@ -63,11 +65,27 @@ cargo run -- trip export 1 --output backup.json
       "title": "全体メモ",
       "body": "..."
     }
+  ],
+  "participants": [
+    {
+      "name": "ともさん",
+      "sort_order": 0,
+      "is_self": true
+    },
+    {
+      "name": "妻",
+      "sort_order": 1,
+      "is_self": false
+    }
   ]
 }
 ```
 
-`itinerary_items` は一覧表示と同じく、**日目 → 並び順（`sort_order`）→ `id`** でソートされた状態で出力されます。`checklist_items` は一覧表示と同じく、未完了 → 完了済み、同状態内では `sort_order` → `id` の順で出力されます。
+現行 export では Itinerary は **`days[].itineraries[]`** にネストします（top-level `itinerary_items` は v2 まで）。内部 DB id（`trip.id` / `itinerary_id` 等）は export しません。
+
+Itinerary は **日目 → 並び順（`sort_order`）** でソートされた状態で出力されます（Sequence-first — [ordering-model.md](specifications/ordering-model.md)）。`checklist_items` は一覧表示と同じく、未完了 → 完了済み、同状態内では `sort_order` → `id` の順で出力されます。
+
+**Participant（v4）:** top-level `participants[]` に Trip スコープの参加行を出力します。`is_self` は同一 Trip で最大 1 件。v3 export を import する場合、`participants` キーがなくても **空配列として復元** されます。
 
 ### 旧フォーマットとの互換
 
@@ -77,7 +95,9 @@ Import は次の旧形式も読み込めます（**ただし `trip.start_date` /
 |---|---|
 | `trip.start_date` / `trip.end_date` なし | **import 不可** |
 | `schema_version` 未指定 / `1` | v1 形式として import（`notes` なし） |
-| `schema_version: 2` | v2 形式として import（`notes` あり） |
+| `schema_version: 2` | v2 形式として import（`notes` あり、flat `itinerary_items`） |
+| `schema_version: 3` | v3 形式（nested `days[]`、Expense / Reservation）。**`participants` 省略可** → 空配列 |
+| `schema_version: 4` | v4 形式（v3 + `participants[]`）。multiple `is_self: true` は **import / validate 拒否** |
 | `schema_version` / `generator` / `generator_version` / `exported_at` なし | メタデータなしとして import（問題なし） |
 | `generator: "unknown"` や旧 `generator_version` | import 可能（warning なし） |
 | `checklist_items` なし（v1.0.2 以前） | チェックリストは空として import |
@@ -97,7 +117,9 @@ cargo run -- trip import backup.json
 | 日時 | `created_at` / `updated_at` はインポート時に新しく設定される |
 | 旅行期間 | `trip.start_date` / `trip.end_date` は必須。import 時に Day 1..N を自動生成 |
 | Checklist | `checklist_items` があれば復元する。省略時は空配列として扱う |
-| Note | `notes` があれば復元する（schema v2）。省略時は空配列として扱う |
+| Note | `notes` があれば復元する（schema v2+）。省略時は空配列として扱う |
+| Expense / Reservation | schema v3+ の nested `days[].itineraries[]` 配下から復元 |
+| **Participant** | schema v4 の `participants[]` から復元。**v3 JSON でキー省略時は空配列** |
 | メタデータ | `schema_version` / `exported_at` は import 時に無視される |
 
 **import 後の Trip ID について:** export JSON 内の `trip.id` は、import 後の DB 上の ID を保証しません。import 完了サマリーに表示される ID を使ってください。
@@ -127,9 +149,11 @@ cargo run -- trip validate-export backup.json --json
 
 終了コード: `valid: true` → exit 0 / `valid: false` またはファイル読込エラー → exit 1。
 
+**v4 Participant 検証:** 同一 Trip に `is_self: true` が 2 件以上ある export は **`valid: false`** になります（import も拒否）。詳細は [export-schema.md](specifications/export-schema.md) §validate-export。
+
 ## 旅行 JSON の比較（trip diff）
 
-2 つの `trip export` JSON を比較し、Trip 名・日程・Note の追加・削除・変更を表示します。
+2 つの `trip export` JSON を比較し、Trip・Itinerary・Note・Summary・Reservation・**Participant（v4）** の差分を表示します。
 
 ```bash
 cargo run -- trip diff trip-old.json trip-new.json
@@ -139,11 +163,14 @@ cargo run -- trip diff trip-old.json trip-new.json
 
 | 種別 | 表示例 |
 |---|---|
-| Trip | `- name: 旧名` / `+ name: 新名` |
+| Trip | `- name: 旧名` / `+ name: 新名` / summary 変更 |
 | Itinerary | `- Day1 09:00 首里城` / `+ ...` / `~ ...`（フィールド変更） |
 | Note | `- Note removed: Day 2 / 夕食候補` / `+ Note added: Trip / 持ち物メモ` |
+| Summary | Trip / Day summary の追加・削除・変更 |
+| Reservation | added / removed / modified |
+| Participant | `Participants:` 見出し下に added / removed / `is_self` changed |
 
-v1 export（`notes` なし）と v2 export（`notes: []` 含む）を比較しても異常終了しません。
+**非対象:** nested Expense の diff（将来 Maintenance）。v1 export（`notes` なし）と v2 export（`notes: []`）を比較しても異常終了しません。v3 export に `participants` が無い場合は空配列として比較します。
 
 ## JSON 出力について
 

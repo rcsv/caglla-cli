@@ -428,3 +428,67 @@ fn cli_validate_export_v3_expense_valid_nested_structure_succeeds() {
         .expect("expenses check");
     assert_eq!(expenses_check["passed"], true);
 }
+
+#[test]
+fn cli_validate_export_v4_multiple_self_fails() {
+    let dir = temp_workdir();
+    let export_path = dir.join("multiple-self.json");
+    fs::write(
+        &export_path,
+        r#"{
+  "schema_version": 4,
+  "trip": {
+    "id": 1,
+    "name": "Multiple Self Trip",
+    "start_date": "2026-01-01",
+    "end_date": "2026-01-03",
+    "created_at": "2026-01-01 00:00:00",
+    "updated_at": "2026-01-01 00:00:00"
+  },
+  "days": [
+    {
+      "day_number": 1,
+      "itineraries": [
+        { "title": "Sightseeing", "sort_order": 0 }
+      ]
+    }
+  ],
+  "checklist_items": [],
+  "notes": [],
+  "participants": [
+    { "name": "A", "sort_order": 0, "is_self": true },
+    { "name": "B", "sort_order": 1, "is_self": true }
+  ]
+}"#,
+    )
+    .unwrap();
+
+    let output = run_cli(
+        &dir,
+        &["trip", "validate-export", export_path.to_str().unwrap()],
+    );
+    assert!(!output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("無効な export ファイル"));
+    assert!(stdout.contains("is_self"));
+
+    let json_output = run_cli(
+        &dir,
+        &[
+            "trip",
+            "validate-export",
+            export_path.to_str().unwrap(),
+            "--json",
+        ],
+    );
+    assert!(!json_output.status.success());
+    let parsed: serde_json::Value = serde_json::from_slice(&json_output.stdout).unwrap();
+    assert_eq!(parsed["valid"], false);
+    let errors = parsed["errors"].as_array().unwrap();
+    assert!(
+        errors
+            .iter()
+            .any(|e| e.as_str().unwrap().contains("is_self")),
+        "expected multiple self validation error, got {errors:?}"
+    );
+}
