@@ -1,0 +1,40 @@
+name: Maintenance
+description: CI・依存関係・リファクタ・既知ギャップの改善
+title: "[Maintenance] "
+labels:
+  - type:infra
+body:
+  - type: dropdown
+    id: category
+    attributes:
+      label: カテゴリ
+      options:
+        - CI / GitHub Actions
+        - dependencies
+        - refactoring
+        - documentation
+        - known gap（v1 改善候補）
+        - other
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: 背景・動機
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 提案内容
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 完了条件
+    validations:
+      required: false

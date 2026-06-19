@@ -1,0 +1,77 @@
+name: Implementation Plan
+description: 実装タスク・順序・受け入れ条件の計画（設計フェーズ 3/6）
+title: "[Implementation Plan] "
+labels:
+  - phase:implementation-plan
+  - type:spec
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Implementation Plan** — Entity Design を実装可能なタスクに分解します。
+        前提: Entity Design Issue が完了していること。
+
+  - type: input
+    id: concept
+    attributes:
+      label: 対象概念
+      placeholder: Participant
+    validations:
+      required: true
+
+  - type: input
+    id: entity_design_issue
+    attributes:
+      label: 前提 Issue（Entity Design）
+      placeholder: "#"
+    validations:
+      required: false
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: 実装スコープ
+      placeholder: |
+        - [ ] DB migration
+        - [ ] models.rs
+        - [ ] CRUD commands
+        - [ ] export v4 / import roundtrip
+        - [ ] trip diff
+        - [ ] export-md 表示
+        - [ ] tests
+    validations:
+      required: true
+
+  - type: textarea
+    id: out_of_scope
+    attributes:
+      label: スコープ外（本リリースでやらない）
+    validations:
+      required: false
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 受け入れ条件
+      placeholder: |
+        - `participant add/list/show/update/delete` が動作する
+        - `trip export` → `trip import` で participants が roundtrip する
+        - `make check` が通る
+    validations:
+      required: true
+
+  - type: textarea
+    id: release_target
+    attributes:
+      label: 想定リリース
+      placeholder: v2.0.0（Participant implementation）
+    validations:
+      required: true
+
+  - type: textarea
+    id: doc_path
+    attributes:
+      label: 成果物ドキュメント（予定パス）
+      placeholder: docs/specifications/participant-implementation-plan.md
+    validations:
+      required: true

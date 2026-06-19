@@ -12,6 +12,7 @@ Caglla CLI のドキュメント索引です。GitHub トップの [README.md](.
 | [export-import.md](export-import.md) | JSON export/import・validate-export・diff・`--json` |
 | [markdown-export.md](markdown-export.md) | `trip export-md` による旅行しおり出力 |
 | [development.md](development.md) | `make check`・CI・プロジェクト構成・サンプル |
+| [github-workflow.md](github-workflow.md) | Issue / Milestone / Project による開発運用 |
 
 ## Planning
 

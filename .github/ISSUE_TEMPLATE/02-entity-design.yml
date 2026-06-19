@@ -1,0 +1,79 @@
+name: Entity Design
+description: フィールド・種別・保存/表示モデルの設計（設計フェーズ 2/6）
+title: "[Entity Design] "
+labels:
+  - phase:entity-design
+  - type:spec
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Entity Design** — 責務整理を踏まえ、フィールド・種別・export 形状・拡張戦略を定義します。
+        前提: 対応する Responsibilities Review が完了していること（または本 Issue で同時進行する場合はリンク）。
+
+  - type: input
+    id: concept
+    attributes:
+      label: 対象概念
+      placeholder: Participant
+    validations:
+      required: true
+
+  - type: input
+    id: responsibilities_issue
+    attributes:
+      label: 前提 Issue（Responsibilities Review）
+      description: "#123 形式。未作成の場合は N/A"
+      placeholder: "#"
+    validations:
+      required: false
+
+  - type: textarea
+    id: fields
+    attributes:
+      label: フィールド案
+      placeholder: |
+        | フィールド | 型 | 必須 | 説明 |
+        |---|---|---|---|
+        | name | text | yes | 表示名 |
+        | role | enum | no | adult / child / infant |
+    validations:
+      required: true
+
+  - type: textarea
+    id: storage_model
+    attributes:
+      label: 保存モデル
+      description: DB テーブル配置、親子関係、外部キー
+      placeholder: |
+        - `participants.trip_id NOT NULL`
+        - Trip 直下。Itinerary 配下ではない
+    validations:
+      required: true
+
+  - type: textarea
+    id: display_model
+    attributes:
+      label: 表示モデル
+      description: list / show / export-md での集約方針
+    validations:
+      required: false
+
+  - type: textarea
+    id: export_schema
+    attributes:
+      label: Export schema 変更
+      description: schema バージョン、JSON 形状、後方互換
+      placeholder: |
+        - export v4: `trip.participants[]`
+        - v3 import は participants なしで通過
+    validations:
+      required: true
+
+  - type: textarea
+    id: doc_path
+    attributes:
+      label: 成果物ドキュメント（予定パス）
+      placeholder: docs/specifications/participant-entity-design.md
+    validations:
+      required: true

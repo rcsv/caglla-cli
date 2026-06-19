@@ -30,6 +30,10 @@ make check
 
 リリース前後の確認手順は [`docs/releases/README.md`](releases/README.md#release-verification) を参照してください。
 
+## GitHub 開発運用
+
+Issue / PR / Milestone / Project を使った設計・実装・リリースの流れは [`docs/github-workflow.md`](github-workflow.md) を参照してください。
+
 ## プロジェクト構成
 
 ```
