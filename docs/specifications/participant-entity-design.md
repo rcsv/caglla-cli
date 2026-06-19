@@ -13,6 +13,7 @@ Caglla.Travel CLI / 将来 Web 版に向けた **Participant エンティティ*
 | [participant-model.md](participant-model.md) (#7) | 責務・境界（What it is / is not） |
 | **本書** (#8) | テーブル・フィールド・関係・検証（How we model it） |
 | [participant-implementation-plan.md](participant-implementation-plan.md) (#9) | 実装計画（How to build） |
+| [participant-post-implementation-review.md](participant-post-implementation-review.md) (#11) | 実装後レビュー（#10 完了後） |
 
 関連: [note-model.md](note-model.md) / [expense-model.md](expense-model.md) / [ordering-model.md](ordering-model.md) / [export-schema.md](export-schema.md) / [github-workflow.md](../github-workflow.md)
 
@@ -22,7 +23,8 @@ Caglla.Travel CLI / 将来 Web 版に向けた **Participant エンティティ*
 #7  Responsibilities Review   → participant-model.md
 #8  Entity Design             → participant-entity-design.md（本書）
 #9  Implementation Plan        → participant-implementation-plan.md
-#10 Implementation             → CRUD + export v4（予定）
+#10 Implementation             → PR #24 (export v4)
+#11 Post-Implementation Review → participant-post-implementation-review.md
 ```
 
 ---
