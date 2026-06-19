@@ -9,7 +9,7 @@ Caglla.Travel のコマンドライン版です。旅行の計画を、ターミ
 - **Trip（旅行）** の登録・一覧・詳細・更新・削除・複製
 - **Day（日）** の一覧・詳細・Itinerary 入れ替え（`day swap`）
 - **Itinerary（行動・予定）** の登録・一覧・詳細・更新・削除・タイムライン表示
-- **Note（メモ）** / **Expense（支出）** の CRUD
+- **Note（メモ）** / **Expense（支出）** / **Participant（参加者）** の CRUD
 - **Checklist（持ち物・準備リスト）** の管理と自動生成（`checklist-generate`）
 - **JSON エクスポート / インポート**（`trip export` / `trip import`）と `trip diff`
 - **Markdown エクスポート**（`trip export-md`）による旅行しおり出力
@@ -97,7 +97,7 @@ cargo run -- itinerary timeline 1
 
 ## Releases
 
-GitHub Release 用ノートは [docs/releases/](docs/releases/) にあります。最新: [v1.22.0](docs/releases/v1.22.0-notes.md)
+GitHub Release 用ノートは [docs/releases/](docs/releases/) にあります。最新: [v2.0.0](docs/releases/v2.0.0-notes.md)
 
 ## Security
 

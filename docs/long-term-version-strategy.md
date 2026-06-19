@@ -63,7 +63,7 @@ Participant
 
 ---
 
-## v2 — Participant Foundation
+## v2 — Participant Foundation（**v2.0.0 リリース済み**）
 
 ### テーマ
 
@@ -71,11 +71,13 @@ Participant
 誰と旅行するか
 ```
 
-### 追加予定
+### 実装内容（v2.0.0）
 
 ```text
 Participant（Trip-scoped participation record）
 ```
+
+リリースノート: [v2.0.0-notes.md](releases/v2.0.0-notes.md)
 
 v2 の `participants` は **ある Trip への参加行**（TripParticipant-like）であり、**人そのものの正本ではない**。パスポート・生年月日・マイレージ等の Trip 横断プロフィールは、将来 Root スコープの **Person / Traveler Profile** として検討する（v2.0.0 では未実装）。詳細は [participant-model.md](specifications/participant-model.md#conceptual-model-person-vs-trip-participation)。
 

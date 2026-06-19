@@ -6,9 +6,11 @@ JSON エクスポート・インポート・検証・比較の手順です。ス
 
 旅行 1 件と、紐づく日程・チェックリストを JSON で出力します。将来の Web 版や Firebase / Firestore への移行を想定した形式です。
 
-**export / import の対象:** **Trip**、**Itinerary（`itinerary_items`）**、**Checklist（`checklist_items`）**、**Note（`notes`、v1.4.0+ / schema v2）** です。`trip export` → `db reset` → `trip import` で、これらのデータをバックアップ／リストアできます。
+**export / import の対象:** **Trip**、**Itinerary（`itinerary_items` / `days[]`）**、**Checklist**、**Note（schema v2+）**、**Expense（schema v3+）**、**Reservation（schema v3+）**、**Participant（schema v4+）** です。`trip export` → `db reset` → `trip import` でバックアップ／リストアできます。
 
-Export JSON には **`schema_version`**（現在は `2`）、**`generator`**（`caglla-cli`）、**`generator_version`**（export 実行時の CLI バージョン）、**`exported_at`**（export 実行時刻、RFC3339）が含まれます。Import は **`schema_version` 未指定 / `1`（v1 形式）** および **`schema_version: 2`（v2 形式）** の両方に対応します。`generator` / `generator_version` / `exported_at` が無い旧形式とも後方互換です。
+現行 export は **`schema_version: 4`** です。Import は **v1 / v2 / v3 / v4** に対応します（v3 以前の JSON に `participants` がなくても import 可能）。スキーマ詳細は [specifications/export-schema.md](specifications/export-schema.md) を正としてください。
+
+Export JSON には **`schema_version`**、**`generator`**（`caglla-cli`）、**`generator_version`**、**`exported_at`**（RFC3339）が含まれます。旧形式（メタデータ省略）とも後方互換です。
 
 ```bash
 # 標準出力に表示

@@ -4,6 +4,7 @@ GitHub Release 用ノート一覧（新しい順）。
 
 | Version | Title | File |
 |---|---|---|
+| v2.0.0 | Participant Foundation | [v2.0.0-notes.md](v2.0.0-notes.md) |
 | v1.22.0 | Expense post-implementation review | [v1.22.0-notes.md](v1.22.0-notes.md) |
 | v1.21.0 | Note post-implementation review | [v1.21.0-notes.md](v1.21.0-notes.md) |
 | v1.20.0 | Summary post-implementation review | [v1.20.0-notes.md](v1.20.0-notes.md) |
