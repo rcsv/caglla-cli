@@ -3,13 +3,15 @@
 Caglla CLI における **Itinerary（予定）** の責務とフィールド定義です。  
 v1.8.0 で **CLI 側のモデルを正として明文化** します。実装は v1.0.x〜v1.7.0 で既に本仕様に沿って動作しています。
 
-関連: [Day モデル](day-model.md) / [Expense モデル](expense-model.md) / [Note モデル](note-model.md) / [Export Schema](export-schema.md) / [Ordering モデル](ordering-model.md)
+関連: [Day モデル](day-model.md) / [Expense モデル](expense-model.md) / [Note モデル](note-model.md) / [Export Schema](export-schema.md) / [Ordering モデル](ordering-model.md) / [Planning Design Principles](planning-design-principles.md)
 
 検証データ: [沖縄・瀬底 canonical sample](../../samples/okinawa_sesoko_2026/README.md)
 
 ---
 
 ## 1. 設計原則
+
+横断的な判断軸（Itinerary と Checklist の `is_done` の有無、Note の柔軟性、Reservation / Expense の複数紐づき）は [planning-design-principles.md](planning-design-principles.md) を参照。
 
 ### Itinerary is not a venue
 
@@ -35,7 +37,11 @@ v1.8.0 で **CLI 側のモデルを正として明文化** します。実装は
 
 ### 費用は Itinerary 配下の Expense
 
-Itinerary 自身は金額を持たない。支出は **Expense エンティティ** として Itinerary の子にぶら下げる（[Expense モデル](expense-model.md) 参照）。
+Itinerary 自身は金額を持たない。支出は **Expense エンティティ** として Itinerary の子にぶら下げる（[Expense モデル](expense-model.md) 参照）。**1 Itinerary に複数 Expense** は自然 — [planning-design-principles.md §6](planning-design-principles.md#6-multiple-expenses-under-one-itinerary--natural)。
+
+### Itinerary is not a task row
+
+Itinerary に **`is_done` は持たない**（意図的）。旅行行動の流れを表し、タスク消化の行ではない — [planning-design-principles.md §2](planning-design-principles.md#2-itinerary-is-not-a-task-row)。確認したい事項は **Checklist**（`is_done` あり）に置く。
 
 ---
 
