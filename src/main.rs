@@ -994,8 +994,8 @@ fn main() -> Result<()> {
                 day_a,
                 day_b,
             } => {
-                let updated = crate::day::swap_day_itineraries(&conn, trip_id, day_a, day_b)?;
-                println!("Day {day_a} と Day {day_b} の日程を入れ替えました");
+                let updated = crate::day::swap_day_plan_payload(&conn, trip_id, day_a, day_b)?;
+                println!("Day {day_a} と Day {day_b} の計画内容を入れ替えました");
                 println!("  更新件数: {updated}");
             }
         },

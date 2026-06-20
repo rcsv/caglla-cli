@@ -175,12 +175,141 @@ fn cli_day_swap_exchanges_itineraries() {
         String::from_utf8_lossy(&output.stderr)
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("Day 2 と Day 3 の日程を入れ替えました"));
+    assert!(stdout.contains("Day 2 と Day 3 の計画内容を入れ替えました"));
 
     let day2 = run_cli(&dir, &["day", "show", "1", "2"]);
     let day3 = run_cli(&dir, &["day", "show", "1", "3"]);
     assert!(String::from_utf8_lossy(&day2.stdout).contains("Day3 Plan"));
     assert!(String::from_utf8_lossy(&day3.stdout).contains("Day2 Plan"));
+}
+
+#[test]
+fn cli_day_swap_exchanges_plan_payload() {
+    let dir = temp_workdir();
+    setup_trip(&dir);
+    assert!(run_cli(
+        &dir,
+        &[
+            "day",
+            "update",
+            "1",
+            "2",
+            "--summary",
+            "美ら海水族館を中心に回る",
+        ],
+    )
+    .status
+    .success());
+    assert!(run_cli(
+        &dir,
+        &[
+            "day",
+            "update",
+            "1",
+            "3",
+            "--summary",
+            "瀬底ビーチでゆっくりする",
+        ],
+    )
+    .status
+    .success());
+    assert!(run_cli(
+        &dir,
+        &[
+            "note",
+            "add",
+            "--trip",
+            "1",
+            "--day",
+            "2",
+            "--body",
+            "午後は無理しない",
+        ],
+    )
+    .status
+    .success());
+    assert!(run_cli(
+        &dir,
+        &[
+            "note",
+            "add",
+            "--trip",
+            "1",
+            "--day",
+            "3",
+            "--body",
+            "天気が悪ければ室内案",
+        ],
+    )
+    .status
+    .success());
+    assert!(
+        run_cli(&dir, &["note", "add", "--trip", "1", "--body", "trip note"],)
+            .status
+            .success()
+    );
+    assert!(run_cli(
+        &dir,
+        &[
+            "itinerary",
+            "add",
+            "1",
+            "--day",
+            "2",
+            "--time",
+            "09:00",
+            "美ら海水族館",
+        ],
+    )
+    .status
+    .success());
+    assert!(run_cli(
+        &dir,
+        &[
+            "itinerary",
+            "add",
+            "1",
+            "--day",
+            "3",
+            "--time",
+            "10:00",
+            "瀬底ビーチ",
+        ],
+    )
+    .status
+    .success());
+
+    assert!(run_cli(&dir, &["day", "swap", "1", "2", "3"])
+        .status
+        .success());
+
+    let day2 = run_cli(&dir, &["day", "show", "1", "2", "--json"]);
+    let day3 = run_cli(&dir, &["day", "show", "1", "3", "--json"]);
+    let day2_json: serde_json::Value = serde_json::from_slice(&day2.stdout).unwrap();
+    let day3_json: serde_json::Value = serde_json::from_slice(&day3.stdout).unwrap();
+    assert_eq!(day2_json["date"], "2026-04-27");
+    assert_eq!(day3_json["date"], "2026-04-28");
+    assert_eq!(day2_json["summary"], "瀬底ビーチでゆっくりする");
+    assert_eq!(day3_json["summary"], "美ら海水族館を中心に回る");
+    assert_eq!(day2_json["itineraries"][0]["title"], "瀬底ビーチ");
+    assert_eq!(day3_json["itineraries"][0]["title"], "美ら海水族館");
+
+    let day2_notes = run_cli(
+        &dir,
+        &["note", "list", "--trip", "1", "--day", "2", "--json"],
+    );
+    let day3_notes = run_cli(
+        &dir,
+        &["note", "list", "--trip", "1", "--day", "3", "--json"],
+    );
+    let day2_notes_json: serde_json::Value = serde_json::from_slice(&day2_notes.stdout).unwrap();
+    let day3_notes_json: serde_json::Value = serde_json::from_slice(&day3_notes.stdout).unwrap();
+    assert_eq!(day2_notes_json["notes"][0]["body"], "天気が悪ければ室内案");
+    assert_eq!(day3_notes_json["notes"][0]["body"], "午後は無理しない");
+
+    let trip_notes = run_cli(&dir, &["note", "list", "--trip", "1", "--json"]);
+    let trip_notes_json: serde_json::Value = serde_json::from_slice(&trip_notes.stdout).unwrap();
+    assert_eq!(trip_notes_json["notes"][0]["body"], "trip note");
 }
 
 #[test]

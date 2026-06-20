@@ -267,8 +267,9 @@ pub(crate) fn run_day_update(
     Ok(())
 }
 
-/// 2 つの Day 配下の Itinerary を入れ替える（day_number / Trip 日付は変更しない）
-pub(crate) fn swap_day_itineraries(
+/// 2 つの Day の plan payload（Itinerary、title、summary、Day-level notes）を入れ替える。
+/// `day_number` / カレンダー日付 / `days.id` / `created_at` は変更しない。
+pub(crate) fn swap_day_plan_payload(
     conn: &Connection,
     trip_id: i64,
     day_a: i64,
@@ -280,11 +281,15 @@ pub(crate) fn swap_day_itineraries(
     crate::trip::get_trip(conn, trip_id)?;
     let day_a_row = find_day_by_trip_and_day_number(conn, trip_id, day_a)?;
     let day_b_row = find_day_by_trip_and_day_number(conn, trip_id, day_b)?;
+    let title_a = day_a_row.title.clone();
+    let title_b = day_b_row.title.clone();
+    let summary_a = day_a_row.summary.clone();
+    let summary_b = day_b_row.summary.clone();
     let now = now_string();
     let tx = conn
         .unchecked_transaction()
         .context("Day swap トランザクションの開始に失敗しました")?;
-    let updated = tx
+    let itinerary_updated = tx
         .execute(
             "UPDATE itinerary_items SET
                day_id = CASE
@@ -307,10 +312,22 @@ pub(crate) fn swap_day_itineraries(
                 &now,
             ],
         )
-        .context("Day swap の更新に失敗しました")?;
+        .context("Day swap の Itinerary 更新に失敗しました")?;
+    tx.execute(
+        "UPDATE days SET title = ?1, summary = ?2, updated_at = ?3 WHERE id = ?4",
+        params![title_b, summary_b, &now, day_a_row.id],
+    )
+    .context("Day swap の title/summary 更新に失敗しました")?;
+    tx.execute(
+        "UPDATE days SET title = ?1, summary = ?2, updated_at = ?3 WHERE id = ?4",
+        params![title_a, summary_a, &now, day_b_row.id],
+    )
+    .context("Day swap の title/summary 更新に失敗しました")?;
+    crate::note::swap_day_note_owners(&tx, day_a_row.id, day_b_row.id, &now)
+        .context("Day swap の Day Note 更新に失敗しました")?;
     tx.commit()
         .context("Day swap トランザクションの確定に失敗しました")?;
-    Ok(updated)
+    Ok(itinerary_updated)
 }
 
 fn print_day_list(trip: &Trip, days: &[Day]) -> Result<()> {
@@ -539,8 +556,157 @@ mod tests {
         assert!(run_day_show(&conn, trip_id, 99, false).is_err());
     }
 
+    fn set_day_metadata(
+        conn: &Connection,
+        trip_id: i64,
+        day_number: i64,
+        title: &str,
+        summary: Option<&str>,
+    ) {
+        let day = find_day_by_trip_and_day_number(conn, trip_id, day_number).unwrap();
+        let now = now_string();
+        conn.execute(
+            "UPDATE days SET title = ?1, summary = ?2, updated_at = ?3 WHERE id = ?4",
+            params![title, summary, &now, day.id],
+        )
+        .unwrap();
+    }
+
     #[test]
-    fn test_swap_day_itineraries_exchanges_day2_and_day3() {
+    fn test_swap_day_plan_payload_exchanges_plan_metadata() {
+        use crate::models::NoteOwnerType;
+        use crate::note::{add_note, list_notes_for_owner, ResolvedNoteOwner};
+
+        let conn = test_db();
+        let trip_id = add_trip(&conn, "Swap Trip", "2026-04-26", "2026-04-29", None).unwrap();
+        let trip = crate::trip::get_trip(&conn, trip_id).unwrap();
+        let day2_before = find_day_by_trip_and_day_number(&conn, trip_id, 2).unwrap();
+        let day3_before = find_day_by_trip_and_day_number(&conn, trip_id, 3).unwrap();
+        let date2_before = day_date_for_trip(&trip, 2).unwrap();
+        let date3_before = day_date_for_trip(&trip, 3).unwrap();
+
+        set_day_metadata(
+            &conn,
+            trip_id,
+            2,
+            "水族館の日",
+            Some("美ら海水族館を中心に回る"),
+        );
+        set_day_metadata(
+            &conn,
+            trip_id,
+            3,
+            "ビーチの日",
+            Some("瀬底ビーチでゆっくりする"),
+        );
+        add_itinerary_item(
+            &conn,
+            trip_id,
+            2,
+            "美ら海水族館",
+            None,
+            Some("09:00"),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        add_itinerary_item(
+            &conn,
+            trip_id,
+            2,
+            "海邦丸",
+            None,
+            Some("13:00"),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        add_itinerary_item(
+            &conn,
+            trip_id,
+            3,
+            "瀬底ビーチ",
+            None,
+            Some("10:00"),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        let day2 = find_day_by_trip_and_day_number(&conn, trip_id, 2).unwrap();
+        let day3 = find_day_by_trip_and_day_number(&conn, trip_id, 3).unwrap();
+        add_note(
+            &conn,
+            ResolvedNoteOwner::Day(day2.id),
+            None,
+            "午後は無理しない",
+        )
+        .unwrap();
+        add_note(
+            &conn,
+            ResolvedNoteOwner::Day(day3.id),
+            None,
+            "天気が悪ければ室内案",
+        )
+        .unwrap();
+        add_note(
+            &conn,
+            ResolvedNoteOwner::Trip(trip_id),
+            None,
+            "trip level note",
+        )
+        .unwrap();
+
+        swap_day_plan_payload(&conn, trip_id, 2, 3).unwrap();
+
+        let day2_after = find_day_by_trip_and_day_number(&conn, trip_id, 2).unwrap();
+        let day3_after = find_day_by_trip_and_day_number(&conn, trip_id, 3).unwrap();
+        assert_eq!(day2_after.id, day2_before.id);
+        assert_eq!(day3_after.id, day3_before.id);
+        assert_eq!(day2_after.day_number, 2);
+        assert_eq!(day3_after.day_number, 3);
+        assert_eq!(day_date_for_trip(&trip, 2).unwrap(), date2_before);
+        assert_eq!(day_date_for_trip(&trip, 3).unwrap(), date3_before);
+
+        assert_eq!(day2_after.title, "ビーチの日");
+        assert_eq!(day3_after.title, "水族館の日");
+        assert_eq!(
+            day2_after.summary.as_deref(),
+            Some("瀬底ビーチでゆっくりする")
+        );
+        assert_eq!(
+            day3_after.summary.as_deref(),
+            Some("美ら海水族館を中心に回る")
+        );
+
+        let day2_items = crate::itinerary::list_itinerary_items_for_day(&conn, trip_id, 2).unwrap();
+        let day3_items = crate::itinerary::list_itinerary_items_for_day(&conn, trip_id, 3).unwrap();
+        assert_eq!(day2_items.len(), 1);
+        assert_eq!(day3_items.len(), 2);
+        assert_eq!(day2_items[0].title, "瀬底ビーチ");
+        assert_eq!(day3_items[0].title, "美ら海水族館");
+        assert_eq!(day3_items[1].title, "海邦丸");
+
+        let day2_notes = list_notes_for_owner(&conn, NoteOwnerType::Day, day2_after.id).unwrap();
+        let day3_notes = list_notes_for_owner(&conn, NoteOwnerType::Day, day3_after.id).unwrap();
+        assert_eq!(day2_notes[0].body, "天気が悪ければ室内案");
+        assert_eq!(day3_notes[0].body, "午後は無理しない");
+
+        let trip_notes = list_notes_for_owner(&conn, NoteOwnerType::Trip, trip_id).unwrap();
+        assert_eq!(trip_notes.len(), 1);
+        assert_eq!(trip_notes[0].body, "trip level note");
+    }
+
+    #[test]
+    fn test_swap_day_plan_payload_exchanges_day2_and_day3() {
         let conn = test_db();
         let trip_id = add_trip(&conn, "Swap Trip", "2026-04-26", "2026-04-29", None).unwrap();
         add_itinerary_item(
@@ -586,7 +752,7 @@ mod tests {
         )
         .unwrap();
 
-        let updated = swap_day_itineraries(&conn, trip_id, 2, 3).unwrap();
+        let updated = swap_day_plan_payload(&conn, trip_id, 2, 3).unwrap();
         assert_eq!(updated, 3);
 
         let day2 = crate::itinerary::list_itinerary_items_for_day(&conn, trip_id, 2).unwrap();
@@ -615,7 +781,7 @@ mod tests {
         )
         .unwrap();
         let before = crate::itinerary::list_itinerary_items(&conn, trip_id).unwrap();
-        swap_day_itineraries(&conn, trip_id, 2, 3).unwrap();
+        swap_day_plan_payload(&conn, trip_id, 2, 3).unwrap();
         let after = crate::itinerary::list_itinerary_items(&conn, trip_id).unwrap();
         assert_eq!(before.len(), after.len());
         assert_eq!(after.iter().filter(|item| item.day == 2).count(), 2);
@@ -631,7 +797,7 @@ mod tests {
         )
         .unwrap();
         let before = crate::itinerary::list_itinerary_items_for_day(&conn, trip_id, 2).unwrap();
-        let err = swap_day_itineraries(&conn, trip_id, 2, 2).unwrap_err();
+        let err = swap_day_plan_payload(&conn, trip_id, 2, 2).unwrap_err();
         assert!(err.to_string().contains("同じ Day"));
         let after = crate::itinerary::list_itinerary_items_for_day(&conn, trip_id, 2).unwrap();
         assert_eq!(before.len(), after.len());
@@ -648,7 +814,7 @@ mod tests {
         )
         .unwrap();
         let before = crate::itinerary::list_itinerary_items_for_day(&conn, trip_id, 2).unwrap();
-        assert!(swap_day_itineraries(&conn, trip_id, 2, 99).is_err());
+        assert!(swap_day_plan_payload(&conn, trip_id, 2, 99).is_err());
         let after = crate::itinerary::list_itinerary_items_for_day(&conn, trip_id, 2).unwrap();
         assert_eq!(before.len(), after.len());
         assert_eq!(before[0].title, after[0].title);
