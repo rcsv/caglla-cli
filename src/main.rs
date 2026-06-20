@@ -596,6 +596,15 @@ enum ExpenseAction {
         /// 支払者名（任意）
         #[arg(long)]
         paid_by_name: Option<String>,
+        /// 構造化 payer（Participant ID または name）
+        #[arg(long)]
+        paid_by_participant: Option<String>,
+        /// shared beneficiary（繰り返し可）
+        #[arg(long)]
+        beneficiary: Vec<String>,
+        /// Trip 全 Participant を beneficiary に展開
+        #[arg(long)]
+        shared_with: Option<String>,
         /// 支出日 YYYY-MM-DD（任意）
         #[arg(long)]
         expense_date: Option<String>,
@@ -636,6 +645,21 @@ enum ExpenseAction {
         /// 支払者名
         #[arg(long)]
         paid_by_name: Option<String>,
+        /// 構造化 payer（Participant ID または name）
+        #[arg(long)]
+        paid_by_participant: Option<String>,
+        /// shared beneficiary（繰り返し可、指定時は全置換）
+        #[arg(long)]
+        beneficiary: Vec<String>,
+        /// Trip 全 Participant を beneficiary に展開（全置換）
+        #[arg(long)]
+        shared_with: Option<String>,
+        /// payer ID と paid_by_name をクリア
+        #[arg(long)]
+        clear_paid_by: bool,
+        /// beneficiary を全削除（personal に戻す）
+        #[arg(long)]
+        clear_beneficiaries: bool,
         /// 支出日 YYYY-MM-DD
         #[arg(long)]
         expense_date: Option<String>,
@@ -995,8 +1019,18 @@ fn main() -> Result<()> {
                 title,
                 note,
                 paid_by_name,
+                paid_by_participant,
+                beneficiary,
+                shared_with,
                 expense_date,
             } => {
+                let shared = crate::expense::parse_expense_shared_options_for_add(
+                    &conn,
+                    itinerary,
+                    paid_by_participant.as_deref(),
+                    &beneficiary,
+                    shared_with.as_deref(),
+                )?;
                 let id = crate::expense::add_expense(
                     &conn,
                     itinerary,
@@ -1006,10 +1040,11 @@ fn main() -> Result<()> {
                     note.as_deref(),
                     paid_by_name.as_deref(),
                     expense_date.as_deref(),
+                    &shared,
                 )?;
                 println!("Expense を追加しました (ID: {id})");
                 let expense = crate::expense::get_expense(&conn, id)?;
-                crate::expense::print_expense_detail(&expense);
+                crate::expense::print_expense_detail(&conn, &expense)?;
             }
             ExpenseAction::List {
                 trip,
@@ -1030,21 +1065,25 @@ fn main() -> Result<()> {
                         crate::expense::ExpenseListTarget::Trip(id) => (Some(id), None),
                         crate::expense::ExpenseListTarget::Itinerary(id) => (None, Some(id)),
                     };
+                    let json_expenses: Vec<crate::expense::ExpenseJson> = expenses
+                        .iter()
+                        .map(|e| crate::expense::expense_to_json(&conn, e))
+                        .collect::<Result<Vec<_>>>()?;
                     crate::trip::print_json(&crate::expense::ExpenseListJson {
                         trip_id,
                         itinerary_id,
-                        expenses,
+                        expenses: json_expenses,
                     })?;
                 } else {
-                    crate::expense::print_expense_list(target, &expenses);
+                    crate::expense::print_expense_list(&conn, target, &expenses)?;
                 }
             }
             ExpenseAction::Show { id, json } => {
                 let expense = crate::expense::get_expense(&conn, id)?;
                 if json {
-                    crate::trip::print_json(&expense)?;
+                    crate::trip::print_json(&crate::expense::expense_to_json(&conn, &expense)?)?;
                 } else {
-                    crate::expense::print_expense_detail(&expense);
+                    crate::expense::print_expense_detail(&conn, &expense)?;
                 }
             }
             ExpenseAction::Update {
@@ -1053,9 +1092,24 @@ fn main() -> Result<()> {
                 amount,
                 currency,
                 paid_by_name,
+                paid_by_participant,
+                beneficiary,
+                shared_with,
+                clear_paid_by,
+                clear_beneficiaries,
                 expense_date,
                 note,
             } => {
+                let expense = crate::expense::get_expense(&conn, id)?;
+                let shared = crate::expense::parse_expense_shared_options_for_update(
+                    &conn,
+                    expense.itinerary_id,
+                    paid_by_participant.as_deref(),
+                    &beneficiary,
+                    shared_with.as_deref(),
+                    clear_paid_by,
+                    clear_beneficiaries,
+                )?;
                 crate::expense::update_expense(
                     &conn,
                     id,
@@ -1065,10 +1119,11 @@ fn main() -> Result<()> {
                     paid_by_name.as_deref(),
                     expense_date.as_deref(),
                     note.as_deref(),
+                    &shared,
                 )?;
                 println!("Expense を更新しました (ID: {id})");
                 let expense = crate::expense::get_expense(&conn, id)?;
-                crate::expense::print_expense_detail(&expense);
+                crate::expense::print_expense_detail(&conn, &expense)?;
             }
             ExpenseAction::Delete { id } => {
                 let expense = crate::expense::get_expense(&conn, id)?;

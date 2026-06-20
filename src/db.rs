@@ -165,6 +165,7 @@ pub(crate) fn init_db(conn: &Connection) -> Result<()> {
     migrate_summaries(conn)?;
     migrate_indexes(conn)?;
     crate::participant::migrate_participants(conn)?;
+    crate::expense::migrate_expenses_shared_expense(conn)?;
     Ok(())
 }
 
@@ -210,7 +211,7 @@ pub(crate) fn migrate_indexes(conn: &Connection) -> Result<()> {
 }
 
 /// 列がなければ ALTER TABLE で追加する（既にある場合は何もしない）
-fn add_column_if_not_exists(
+pub(crate) fn add_column_if_not_exists(
     conn: &Connection,
     table: &str,
     column: &str,
@@ -233,6 +234,15 @@ fn add_column_if_not_exists(
     Ok(())
 }
 
+fn add_column_if_not_exists_internal(
+    conn: &Connection,
+    table: &str,
+    column: &str,
+    definition: &str,
+) -> Result<()> {
+    add_column_if_not_exists(conn, table, column, definition)
+}
+
 /// 既存 DB 向け: Trip ごとに Day 行を backfill する
 pub(crate) fn migrate_days(conn: &Connection) -> Result<()> {
     crate::day::migrate_days(conn)
@@ -250,7 +260,7 @@ fn column_exists(conn: &Connection, table: &str, column: &str) -> Result<bool> {
 
 /// trips.summary 追加、days.description → summary リネーム（既存 DB 向け）
 pub(crate) fn migrate_summaries(conn: &Connection) -> Result<()> {
-    add_column_if_not_exists(conn, "trips", "summary", "TEXT")?;
+    add_column_if_not_exists_internal(conn, "trips", "summary", "TEXT")?;
 
     let has_summary = column_exists(conn, "days", "summary")?;
     let has_description = column_exists(conn, "days", "description")?;
@@ -258,14 +268,14 @@ pub(crate) fn migrate_summaries(conn: &Connection) -> Result<()> {
         conn.execute("ALTER TABLE days RENAME COLUMN description TO summary", [])
             .context("days.description → summary のリネームに失敗しました")?;
     } else if !has_summary {
-        add_column_if_not_exists(conn, "days", "summary", "TEXT")?;
+        add_column_if_not_exists_internal(conn, "days", "summary", "TEXT")?;
     }
     Ok(())
 }
 
 /// 既存 DB 向け: itinerary_items.day_id を backfill する
 pub(crate) fn migrate_itinerary_day_id(conn: &Connection) -> Result<()> {
-    add_column_if_not_exists(
+    add_column_if_not_exists_internal(
         conn,
         "itinerary_items",
         "day_id",
@@ -296,17 +306,17 @@ pub(crate) fn migrate_itinerary_day_id(conn: &Connection) -> Result<()> {
 
 /// 既存 DB 向け: itinerary_items に不足している列を追加する
 pub(crate) fn migrate_itinerary_items(conn: &Connection) -> Result<()> {
-    add_column_if_not_exists(conn, "itinerary_items", "start_time", "TEXT")?;
-    add_column_if_not_exists(
+    add_column_if_not_exists_internal(conn, "itinerary_items", "start_time", "TEXT")?;
+    add_column_if_not_exists_internal(
         conn,
         "itinerary_items",
         "sort_order",
         "INTEGER NOT NULL DEFAULT 0",
     )?;
-    add_column_if_not_exists(conn, "itinerary_items", "duration_minutes", "INTEGER")?;
-    add_column_if_not_exists(conn, "itinerary_items", "travel_minutes", "INTEGER")?;
-    add_column_if_not_exists(conn, "itinerary_items", "location", "TEXT")?;
-    add_column_if_not_exists(conn, "itinerary_items", "category", "TEXT")?;
+    add_column_if_not_exists_internal(conn, "itinerary_items", "duration_minutes", "INTEGER")?;
+    add_column_if_not_exists_internal(conn, "itinerary_items", "travel_minutes", "INTEGER")?;
+    add_column_if_not_exists_internal(conn, "itinerary_items", "location", "TEXT")?;
+    add_column_if_not_exists_internal(conn, "itinerary_items", "category", "TEXT")?;
     Ok(())
 }
 
@@ -320,6 +330,8 @@ pub(crate) fn reset_db(conn: &Connection) -> Result<()> {
         .context("notes の全削除に失敗しました")?;
     conn.execute("DELETE FROM reservations", [])
         .context("reservations の全削除に失敗しました")?;
+    conn.execute("DELETE FROM expense_beneficiaries", [])
+        .context("expense_beneficiaries の全削除に失敗しました")?;
     conn.execute("DELETE FROM expenses", [])
         .context("expenses の全削除に失敗しました")?;
     conn.execute("DELETE FROM participants", [])
@@ -333,7 +345,7 @@ pub(crate) fn reset_db(conn: &Connection) -> Result<()> {
     conn.execute("DELETE FROM trips", [])
         .context("trips の全削除に失敗しました")?;
     conn.execute(
-        "DELETE FROM sqlite_sequence WHERE name IN ('reservations', 'expenses', 'notes', 'participants', 'checklist_items', 'itinerary_items', 'days', 'trips')",
+        "DELETE FROM sqlite_sequence WHERE name IN ('expense_beneficiaries', 'reservations', 'expenses', 'notes', 'participants', 'checklist_items', 'itinerary_items', 'days', 'trips')",
         [],
     )
     .context("AUTOINCREMENT のリセットに失敗しました")?;
@@ -354,6 +366,22 @@ mod tests {
     use rusqlite::{params, Connection};
     fn test_db() -> Connection {
         open_db_at(":memory:").expect("インメモリ DB の作成に失敗")
+    }
+
+    #[test]
+    fn test_init_db_creates_expense_beneficiaries_table() {
+        let conn = Connection::open(":memory:").unwrap();
+        init_db(&conn).unwrap();
+
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master
+                 WHERE type = 'table' AND name = 'expense_beneficiaries'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 1);
     }
 
     #[test]

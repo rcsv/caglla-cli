@@ -5,10 +5,11 @@ use rusqlite::{params, Connection};
 use crate::db::now_string;
 use crate::models::{
     effective_export_schema_version, is_supported_export_schema_version, ExportDayV3,
-    ExportExpenseV3, ExportItineraryV3, ExportReservation, ExportReservationV3,
+    ExportExpense, ExportItineraryV3, ExportReservation, ExportReservationV3,
     ExportValidationCheck, ExportValidationCheckId, ExportValidationReport, ItineraryNoteKey, Trip,
     TripExport, TripExportMetadata, TripExportV3, TripImportSummary, TRIP_EXPORT_GENERATOR,
     TRIP_EXPORT_SCHEMA_VERSION, TRIP_EXPORT_SCHEMA_VERSION_V1, TRIP_EXPORT_SCHEMA_VERSION_V3,
+    TRIP_EXPORT_SCHEMA_VERSION_V4,
 };
 
 /// 新しい旅行を追加する
@@ -191,6 +192,7 @@ pub(crate) fn build_trip_export(conn: &Connection, trip_id: i64) -> Result<TripE
         day_summaries,
         reservations,
         participants: vec![],
+        expenses: vec![],
     })
 }
 
@@ -214,16 +216,8 @@ pub(crate) fn build_trip_export_v3(conn: &Connection, trip_id: i64) -> Result<Tr
     for item in &base.itinerary_items {
         let expenses = crate::expense::list_expenses_for_itinerary(conn, item.id)?
             .into_iter()
-            .map(|e| ExportExpenseV3 {
-                title: e.title,
-                amount: e.amount,
-                currency: e.currency,
-                paid_by_name: e.paid_by_name,
-                expense_date: e.expense_date,
-                note: e.note,
-                sort_order: e.sort_order,
-            })
-            .collect::<Vec<_>>();
+            .map(|e| crate::expense::build_export_expense_v3(conn, &e))
+            .collect::<Result<Vec<_>>>()?;
         let reservations = crate::reservation::list_reservations_for_itinerary(conn, item.id)?
             .into_iter()
             .map(|r| ExportReservationV3 {
@@ -473,6 +467,7 @@ fn validate_trip_export_v3(export: &TripExportV3) -> Result<()> {
         day_summaries,
         reservations: flatten_reservations_from_v3(export),
         participants: export.participants().to_vec(),
+        expenses: flatten_expenses_from_v3(export),
     };
     if let Some(error) = crate::note::collect_export_note_validation_errors(&v2_like)
         .into_iter()
@@ -506,7 +501,7 @@ pub(crate) fn validate_trip_export(export: &TripExport) -> Result<()> {
 fn is_v3_or_later_export_schema(schema_version: Option<i32>) -> bool {
     matches!(
         effective_export_schema_version(schema_version),
-        TRIP_EXPORT_SCHEMA_VERSION_V3 | TRIP_EXPORT_SCHEMA_VERSION
+        TRIP_EXPORT_SCHEMA_VERSION_V3 | TRIP_EXPORT_SCHEMA_VERSION_V4 | TRIP_EXPORT_SCHEMA_VERSION
     )
 }
 
@@ -667,7 +662,7 @@ pub(crate) fn analyze_trip_export_json(file: &str, json: &str) -> ExportValidati
         if effective_schema == TRIP_EXPORT_SCHEMA_VERSION && root.get("participants").is_none() {
             report
                 .warnings
-                .push("participants がありません（schema v4 では空配列を推奨）".to_string());
+                .push("participants がありません（schema v5 では空配列を推奨）".to_string());
         }
         push_check(&mut report.checks, ExportValidationCheckId::Expenses, true);
         push_check(
@@ -685,6 +680,16 @@ pub(crate) fn analyze_trip_export_json(file: &str, json: &str) -> ExportValidati
         {
             report.errors.push(error);
         }
+        let (expense_errors, expense_warnings) =
+            crate::expense::collect_export_expense_validation_errors(
+                &crate::expense::TripExportV3ForValidation {
+                    participants: export.participants(),
+                    days: &export.days,
+                },
+                effective_schema,
+            );
+        report.errors.extend(expense_errors);
+        report.warnings.extend(expense_warnings);
         report.valid = report.errors.is_empty();
         return report;
     }
@@ -839,6 +844,32 @@ fn export_validation_check_label(id: ExportValidationCheckId) -> &'static str {
         ExportValidationCheckId::Reservations => "reservations",
         ExportValidationCheckId::Participants => "participants",
     }
+}
+
+pub(crate) fn flatten_expenses_from_v3(export: &TripExportV3) -> Vec<ExportExpense> {
+    export
+        .days
+        .iter()
+        .flat_map(|day| {
+            day.itineraries.iter().map(|it| {
+                (
+                    ItineraryNoteKey {
+                        day_number: day.day_number,
+                        sort_order: it.sort_order,
+                        start_time: it.start_time.clone(),
+                        title: it.title.clone(),
+                    },
+                    &it.expenses,
+                )
+            })
+        })
+        .flat_map(|(itinerary_key, expenses)| {
+            expenses.iter().cloned().map(move |expense| ExportExpense {
+                itinerary_key: itinerary_key.clone(),
+                expense,
+            })
+        })
+        .collect()
 }
 
 pub(crate) fn flatten_reservations_from_v3(export: &TripExportV3) -> Vec<ExportReservation> {
@@ -1166,7 +1197,9 @@ fn parse_trip_export_for_import(
     let effective_schema = effective_export_schema_version(schema_version);
 
     match effective_schema {
-        TRIP_EXPORT_SCHEMA_VERSION_V3 | TRIP_EXPORT_SCHEMA_VERSION => {
+        TRIP_EXPORT_SCHEMA_VERSION_V3
+        | TRIP_EXPORT_SCHEMA_VERSION_V4
+        | TRIP_EXPORT_SCHEMA_VERSION => {
             let export: TripExportV3 =
                 serde_json::from_value(root.clone()).context("JSON の形式が不正です")?;
             // metadata は v2 構造体依存のため、必要最低限だけ拾う
@@ -1310,6 +1343,7 @@ pub(crate) fn load_trip_export_from_file(path: &str) -> Result<TripExport> {
             })
             .collect::<Vec<_>>();
         let reservations = flatten_reservations_from_v3(&export);
+        let expenses = flatten_expenses_from_v3(&export);
         let participants = export.participants().to_vec();
         Ok(TripExport {
             schema_version: export.schema_version,
@@ -1323,6 +1357,7 @@ pub(crate) fn load_trip_export_from_file(path: &str) -> Result<TripExport> {
             day_summaries,
             reservations,
             participants,
+            expenses,
         })
     } else {
         serde_json::from_str(&json).context("JSON の形式が不正です")
@@ -2200,13 +2235,13 @@ mod tests {
     }
 
     #[test]
-    fn test_export_schema_version_is_four() {
+    fn test_export_schema_version_is_five() {
         let conn = test_db();
         let trip_id = add_test_trip(&conn, "Metadata Trip").unwrap();
 
         let json = export_trip_to_json(&conn, trip_id).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
-        assert_eq!(parsed["schema_version"], 4);
+        assert_eq!(parsed["schema_version"], 5);
         assert!(parsed.get("notes").is_some());
         assert!(parsed.get("days").is_some());
         assert!(parsed.get("participants").is_some());
@@ -2244,7 +2279,7 @@ mod tests {
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed["generator"], TRIP_EXPORT_GENERATOR);
         assert_eq!(parsed["generator_version"], env!("CARGO_PKG_VERSION"));
-        assert_eq!(parsed["schema_version"], 4);
+        assert_eq!(parsed["schema_version"], 5);
     }
 
     #[test]
@@ -2465,6 +2500,7 @@ mod tests {
             None,
             None,
             None,
+            &crate::expense::ExpenseSharedOptions::default(),
         )
         .unwrap();
         crate::expense::add_expense(
@@ -2476,6 +2512,7 @@ mod tests {
             None,
             None,
             None,
+            &crate::expense::ExpenseSharedOptions::default(),
         )
         .unwrap();
 

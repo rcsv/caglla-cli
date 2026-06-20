@@ -24,6 +24,51 @@ pub(crate) fn analyze_trip_issues(conn: &Connection, trip_id: i64) -> Result<Vec
     let items = crate::itinerary::list_itinerary_items(conn, trip_id)?;
     let mut issues = collect_trip_issues(&items);
     issues.extend(collect_participant_issues(conn, trip_id)?);
+    issues.extend(collect_shared_expense_issues(conn, trip_id)?);
+    Ok(issues)
+}
+
+fn collect_shared_expense_issues(conn: &Connection, trip_id: i64) -> Result<Vec<DoctorIssue>> {
+    let mut issues = Vec::new();
+    let participants = crate::participant::list_participants_by_trip(conn, trip_id)?;
+    let mut name_counts: HashMap<&str, usize> = HashMap::new();
+    for participant in &participants {
+        *name_counts.entry(participant.name.as_str()).or_default() += 1;
+    }
+    if name_counts.values().any(|count| *count > 1) {
+        issues.push(DoctorIssue {
+            code: DoctorIssueCode::DuplicateParticipantNames,
+            target: DoctorIssueTarget::Trip,
+            day: None,
+            itinerary_count: None,
+            travel_minutes: None,
+        });
+    }
+
+    for expense in crate::expense::list_expenses_for_trip(conn, trip_id)? {
+        let beneficiaries = crate::expense::list_beneficiaries_for_expense(conn, expense.id)?;
+        if beneficiaries.len() == 1 {
+            issues.push(DoctorIssue {
+                code: DoctorIssueCode::SharedExpenseSingleBeneficiary,
+                target: DoctorIssueTarget::Expense(expense.id),
+                day: None,
+                itinerary_count: None,
+                travel_minutes: None,
+            });
+        }
+        if let Some(payer_id) = expense.paid_by_participant_id {
+            let participant = crate::participant::get_participant(conn, payer_id)?;
+            if expense.paid_by_name.as_deref() != Some(participant.name.as_str()) {
+                issues.push(DoctorIssue {
+                    code: DoctorIssueCode::PaidByNameParticipantMismatch,
+                    target: DoctorIssueTarget::Expense(expense.id),
+                    day: None,
+                    itinerary_count: None,
+                    travel_minutes: None,
+                });
+            }
+        }
+    }
     Ok(issues)
 }
 
@@ -185,6 +230,11 @@ fn issues_to_doctor_report(issues: &[DoctorIssue]) -> DoctorReport {
                 info.push(issue.warning_message());
             }
             DoctorIssueCode::MultipleSelfParticipants => {
+                warnings.push(issue.warning_message());
+            }
+            DoctorIssueCode::SharedExpenseSingleBeneficiary
+            | DoctorIssueCode::PaidByNameParticipantMismatch
+            | DoctorIssueCode::DuplicateParticipantNames => {
                 warnings.push(issue.warning_message());
             }
         }
@@ -725,5 +775,59 @@ mod tests {
             .any(|issue| issue.code == DoctorIssueCode::MissingDuration));
         assert_eq!(parsed["schema_version"], 1);
         assert!(parsed["issues"].as_array().unwrap().len() >= 3);
+    }
+
+    #[test]
+    fn test_doctor_detects_shared_expense_warnings() {
+        let conn = test_db();
+        let trip_id = add_test_trip(&conn, "Shared Expense Trip").unwrap();
+        let payer =
+            crate::participant::create_participant(&conn, trip_id, "Alice", None, true).unwrap();
+        crate::participant::create_participant(&conn, trip_id, "Alice", None, false).unwrap();
+        let itinerary_id = add_itinerary_item(
+            &conn, trip_id, 1, "Lunch", None, None, None, None, None, None, None,
+        )
+        .unwrap();
+        let expense_id = crate::expense::add_expense(
+            &conn,
+            itinerary_id,
+            "1000",
+            "JPY",
+            None,
+            None,
+            None,
+            None,
+            &crate::expense::ExpenseSharedOptions {
+                paid_by_participant_id: Some(payer),
+                beneficiary_participant_ids: Some(vec![payer]),
+                ..crate::expense::ExpenseSharedOptions::default()
+            },
+        )
+        .unwrap();
+        crate::expense::update_expense(
+            &conn,
+            expense_id,
+            None,
+            None,
+            None,
+            Some("Wrong Name"),
+            None,
+            None,
+            &crate::expense::ExpenseSharedOptions::default(),
+        )
+        .unwrap();
+
+        let issues = analyze_trip_issues(&conn, trip_id).unwrap();
+        assert!(issues
+            .iter()
+            .any(|i| i.code == DoctorIssueCode::DuplicateParticipantNames));
+        assert!(issues.iter().any(|i| {
+            i.code == DoctorIssueCode::SharedExpenseSingleBeneficiary
+                && matches!(i.target, DoctorIssueTarget::Expense(id) if id == expense_id)
+        }));
+        assert!(issues.iter().any(|i| {
+            i.code == DoctorIssueCode::PaidByNameParticipantMismatch
+                && matches!(i.target, DoctorIssueTarget::Expense(id) if id == expense_id)
+        }));
     }
 }
