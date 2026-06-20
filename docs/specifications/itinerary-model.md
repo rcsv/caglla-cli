@@ -41,7 +41,7 @@ Itinerary 自身は金額を持たない。
 
 | 種別 | エンティティ | 意味 |
 |---|---|---|
-| **事前見積** | **Estimate**（未実装） | Planned Money — 旅行前の見込み金額。[estimate-model.md](estimate-model.md) |
+| **事前見積** | **Estimate**（未実装） | Planned Money — 旅行前の見込み金額。[estimate-model.md](estimate-model.md) / [estimate-entity-design.md](estimate-entity-design.md) |
 | **実績支出** | **Expense** | Actual Money — 支払った金額。[expense-model.md](expense-model.md) |
 
 **1 Itinerary に複数 Estimate / 複数 Expense** は自然 — [planning-design-principles.md §6](planning-design-principles.md#6-multiple-expenses-under-one-itinerary--natural)（Expense について記載。Estimate も同型）。

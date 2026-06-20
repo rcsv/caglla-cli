@@ -161,7 +161,7 @@ CREATE INDEX IF NOT EXISTS idx_expenses_itinerary
 実装イメージ:
 
 - `--amount` は文字列として受け取り、通貨ごとの **小数桁数**（JPY=0、USD=2 等）に基づき整数へ変換
-- 変換ロジックは `parse_amount_for_currency(input: &str, currency: &str) -> Result<i64>` のように **単一関数へ集約**（amount セクションと export/import 将来実装で共用）
+- 変換ロジックは `parse_amount_for_currency(input: &str, currency: &str) -> Result<i64>` のように **単一関数へ集約**（amount セクションと export/import 将来実装で共用）。将来の [Estimate Entity Design](estimate-entity-design.md) でも **同一関数を共用** する方針
 - IEEE 754 への一度も変換しない方針を優先（必要なら十進文字列ライブラリまたは自前桁処理）
 
 Settlement フェーズで `amount_minor` 命名へ揃える余地は残すが、初版から整数で統一する。
