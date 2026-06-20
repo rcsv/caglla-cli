@@ -12,6 +12,9 @@ pub(crate) const ITINERARY_ITEM_SELECT_SQL: &str = "
 /// Itinerary 一覧の Sequence-first 並び（Day → sort_order → id）
 pub(crate) const ITINERARY_LIST_ORDER_BY: &str = "ORDER BY d.day_number, i.sort_order, i.id";
 
+/// Day 内 sort_order の標準間隔（sparse ordering）
+pub(crate) const SORT_ORDER_STEP: i64 = 1000;
+
 /// 新しい日程を追加する
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn add_itinerary_item(
@@ -27,13 +30,49 @@ pub(crate) fn add_itinerary_item(
     location: Option<&str>,
     category: Option<ItineraryCategory>,
 ) -> Result<i64> {
+    add_itinerary_item_extended(
+        conn,
+        trip_id,
+        day,
+        title,
+        note,
+        start_time,
+        sort_order,
+        duration_minutes,
+        travel_minutes,
+        location,
+        category,
+        None,
+        None,
+    )
+}
+
+/// `--after` / `--before` を指定して日程を追加する
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn add_itinerary_item_extended(
+    conn: &Connection,
+    trip_id: i64,
+    day: i64,
+    title: &str,
+    note: Option<&str>,
+    start_time: Option<&str>,
+    sort_order: Option<i64>,
+    duration_minutes: Option<i64>,
+    travel_minutes: Option<i64>,
+    location: Option<&str>,
+    category: Option<ItineraryCategory>,
+    after: Option<i64>,
+    before: Option<i64>,
+) -> Result<i64> {
+    validate_itinerary_position_options(sort_order, after, before)?;
     crate::trip::get_trip(conn, trip_id)?;
     if let Some(t) = start_time {
         parse_time_hhmm(t)?;
     }
     let day_id = crate::day::find_day_id_by_trip_and_day_number(conn, trip_id, day)?;
+    let resolved_sort_order =
+        resolve_sort_order_for_add(conn, trip_id, day, sort_order, after, before)?;
     let now = crate::db::now_string();
-    let sort_order = sort_order.unwrap_or(0);
     let category = category.map(|c| c.as_str().to_string());
     conn.execute(
         "INSERT INTO itinerary_items
@@ -47,7 +86,7 @@ pub(crate) fn add_itinerary_item(
             title,
             note,
             start_time,
-            sort_order,
+            resolved_sort_order,
             duration_minutes,
             travel_minutes,
             location,
@@ -58,6 +97,290 @@ pub(crate) fn add_itinerary_item(
     )
     .context("日程の追加に失敗しました")?;
     Ok(conn.last_insert_rowid())
+}
+
+fn validate_itinerary_position_options(
+    sort_order: Option<i64>,
+    after: Option<i64>,
+    before: Option<i64>,
+) -> Result<()> {
+    if after.is_some() && before.is_some() {
+        anyhow::bail!("--after と --before は同時に指定できません");
+    }
+    if sort_order.is_some() && (after.is_some() || before.is_some()) {
+        anyhow::bail!("--order と --after / --before は同時に指定できません");
+    }
+    Ok(())
+}
+
+fn validate_reference_itinerary(
+    reference: &ItineraryItem,
+    trip_id: i64,
+    day: i64,
+    label: &str,
+) -> Result<()> {
+    if reference.trip_id != trip_id {
+        anyhow::bail!(
+            "{label} の Itinerary (ID: {}) は旅行 ID {trip_id} に属していません",
+            reference.id
+        );
+    }
+    if reference.day != day {
+        anyhow::bail!(
+            "{label} の Itinerary (ID: {}) は Day {day} に属していません（Day {}）",
+            reference.id,
+            reference.day
+        );
+    }
+    Ok(())
+}
+
+fn max_sort_order_in_day(conn: &Connection, trip_id: i64, day_number: i64) -> Result<i64> {
+    let max: Option<i64> = conn
+        .query_row(
+            "SELECT MAX(i.sort_order)
+             FROM itinerary_items i
+             INNER JOIN days d ON i.day_id = d.id
+             WHERE i.trip_id = ?1 AND d.day_number = ?2",
+            params![trip_id, day_number],
+            |row| row.get(0),
+        )
+        .context("Day 内の最大 sort_order 取得に失敗しました")?;
+    Ok(max.unwrap_or(0))
+}
+
+fn sort_order_midpoint(prev: i64, next: i64) -> Option<i64> {
+    if next - prev > 1 {
+        Some(prev + (next - prev) / 2)
+    } else {
+        None
+    }
+}
+
+fn sort_order_before_first(next: i64) -> Option<i64> {
+    sort_order_midpoint(0, next)
+}
+
+/// Day 内の Itinerary を表示順のまま 1000, 2000, 3000... に振り直す
+pub(crate) fn normalize_day_sort_order(
+    conn: &Connection,
+    trip_id: i64,
+    day_number: i64,
+) -> Result<()> {
+    crate::trip::get_trip(conn, trip_id)?;
+    let _day = crate::day::find_day_by_trip_and_day_number(conn, trip_id, day_number)?;
+    crate::db::with_transaction(conn, "itinerary normalize sort order", |tx| {
+        let items = list_itinerary_items_for_day(tx, trip_id, day_number)?;
+        let now = crate::db::now_string();
+        for (idx, item) in items.iter().enumerate() {
+            let new_order = SORT_ORDER_STEP * (idx as i64 + 1);
+            if item.sort_order != new_order {
+                tx.execute(
+                    "UPDATE itinerary_items SET sort_order = ?1, updated_at = ?2 WHERE id = ?3",
+                    params![new_order, &now, item.id],
+                )
+                .context("sort_order の正規化に失敗しました")?;
+            }
+        }
+        Ok(())
+    })
+}
+
+fn resolve_sort_order_for_add(
+    conn: &Connection,
+    trip_id: i64,
+    day: i64,
+    sort_order: Option<i64>,
+    after: Option<i64>,
+    before: Option<i64>,
+) -> Result<i64> {
+    if let Some(order) = sort_order {
+        return Ok(order);
+    }
+    if let Some(ref_id) = after {
+        return resolve_sort_order_after(conn, trip_id, day, ref_id);
+    }
+    if let Some(ref_id) = before {
+        return resolve_sort_order_before(conn, trip_id, day, ref_id);
+    }
+    Ok(max_sort_order_in_day(conn, trip_id, day)? + SORT_ORDER_STEP)
+}
+
+fn resolve_sort_order_after(conn: &Connection, trip_id: i64, day: i64, ref_id: i64) -> Result<i64> {
+    resolve_sort_order_after_excluding(conn, trip_id, day, ref_id, None)
+}
+
+fn resolve_sort_order_after_excluding(
+    conn: &Connection,
+    trip_id: i64,
+    day: i64,
+    ref_id: i64,
+    exclude_id: Option<i64>,
+) -> Result<i64> {
+    let reference = get_itinerary_item(conn, ref_id)?;
+    validate_reference_itinerary(&reference, trip_id, day, "--after")?;
+    try_resolve_sort_order_after(conn, trip_id, day, ref_id, exclude_id).or_else(|_| {
+        normalize_day_sort_order(conn, trip_id, day)?;
+        try_resolve_sort_order_after(conn, trip_id, day, ref_id, exclude_id)
+    })
+}
+
+fn try_resolve_sort_order_after(
+    conn: &Connection,
+    trip_id: i64,
+    day: i64,
+    ref_id: i64,
+    exclude_id: Option<i64>,
+) -> Result<i64> {
+    let items = filter_day_items(conn, trip_id, day, exclude_id)?;
+    let Some(idx) = items.iter().position(|item| item.id == ref_id) else {
+        anyhow::bail!("Itinerary not found: {ref_id}");
+    };
+    let reference = &items[idx];
+    if let Some(next) = items.get(idx + 1) {
+        sort_order_midpoint(reference.sort_order, next.sort_order)
+            .ok_or_else(|| anyhow::anyhow!("sort_order の隙間が不足しています"))
+    } else {
+        Ok(reference.sort_order + SORT_ORDER_STEP)
+    }
+}
+
+fn resolve_sort_order_before(
+    conn: &Connection,
+    trip_id: i64,
+    day: i64,
+    ref_id: i64,
+) -> Result<i64> {
+    resolve_sort_order_before_excluding(conn, trip_id, day, ref_id, None)
+}
+
+fn resolve_sort_order_before_excluding(
+    conn: &Connection,
+    trip_id: i64,
+    day: i64,
+    ref_id: i64,
+    exclude_id: Option<i64>,
+) -> Result<i64> {
+    let reference = get_itinerary_item(conn, ref_id)?;
+    validate_reference_itinerary(&reference, trip_id, day, "--before")?;
+    normalize_if_before_first_with_low_sort_order(conn, trip_id, day, ref_id, exclude_id)?;
+    try_resolve_sort_order_before(conn, trip_id, day, ref_id, exclude_id).or_else(|_| {
+        normalize_day_sort_order(conn, trip_id, day)?;
+        try_resolve_sort_order_before(conn, trip_id, day, ref_id, exclude_id)
+    })
+}
+
+/// 先頭 item への `--before` で `sort_order <= 1` のとき、中間値が取れないため先に正規化する
+fn normalize_if_before_first_with_low_sort_order(
+    conn: &Connection,
+    trip_id: i64,
+    day: i64,
+    ref_id: i64,
+    exclude_id: Option<i64>,
+) -> Result<()> {
+    let items = filter_day_items(conn, trip_id, day, exclude_id)?;
+    if items
+        .first()
+        .is_some_and(|first| first.id == ref_id && first.sort_order <= 1)
+    {
+        normalize_day_sort_order(conn, trip_id, day)?;
+    }
+    Ok(())
+}
+
+fn try_resolve_sort_order_before(
+    conn: &Connection,
+    trip_id: i64,
+    day: i64,
+    ref_id: i64,
+    exclude_id: Option<i64>,
+) -> Result<i64> {
+    let items = filter_day_items(conn, trip_id, day, exclude_id)?;
+    let Some(idx) = items.iter().position(|item| item.id == ref_id) else {
+        anyhow::bail!("Itinerary not found: {ref_id}");
+    };
+    let reference = &items[idx];
+    if let Some(prev) = idx.checked_sub(1).and_then(|i| items.get(i)) {
+        sort_order_midpoint(prev.sort_order, reference.sort_order)
+            .ok_or_else(|| anyhow::anyhow!("sort_order の隙間が不足しています"))
+    } else {
+        sort_order_before_first(reference.sort_order)
+            .ok_or_else(|| anyhow::anyhow!("sort_order の隙間が不足しています"))
+    }
+}
+
+fn filter_day_items(
+    conn: &Connection,
+    trip_id: i64,
+    day: i64,
+    exclude_id: Option<i64>,
+) -> Result<Vec<ItineraryItem>> {
+    let items = list_itinerary_items_for_day(conn, trip_id, day)?;
+    Ok(match exclude_id {
+        Some(id) => items.into_iter().filter(|item| item.id != id).collect(),
+        None => items,
+    })
+}
+
+/// 既存 Itinerary を別の位置へ移動する
+pub(crate) fn move_itinerary_item(
+    conn: &Connection,
+    id: i64,
+    after: Option<i64>,
+    before: Option<i64>,
+) -> Result<()> {
+    if after.is_some() && before.is_some() {
+        anyhow::bail!("--after と --before は同時に指定できません");
+    }
+    if after.is_none() && before.is_none() {
+        anyhow::bail!("--after または --before のいずれかを指定してください");
+    }
+    if after == Some(id) || before == Some(id) {
+        anyhow::bail!("自分自身を基準位置に指定できません");
+    }
+
+    let item = get_itinerary_item(conn, id)?;
+    let target_day = if let Some(ref_id) = after {
+        let reference = get_itinerary_item(conn, ref_id)?;
+        if reference.trip_id != item.trip_id {
+            anyhow::bail!(
+                "--after の Itinerary (ID: {ref_id}) は旅行 ID {} に属していません",
+                item.trip_id
+            );
+        }
+        reference.day
+    } else {
+        let ref_id = before.expect("validated above");
+        let reference = get_itinerary_item(conn, ref_id)?;
+        if reference.trip_id != item.trip_id {
+            anyhow::bail!(
+                "--before の Itinerary (ID: {ref_id}) は旅行 ID {} に属していません",
+                item.trip_id
+            );
+        }
+        reference.day
+    };
+
+    let new_sort_order = if let Some(ref_id) = after {
+        resolve_sort_order_after_excluding(conn, item.trip_id, target_day, ref_id, Some(id))?
+    } else {
+        let ref_id = before.expect("validated above");
+        resolve_sort_order_before_excluding(conn, item.trip_id, target_day, ref_id, Some(id))?
+    };
+
+    update_itinerary_item(
+        conn,
+        id,
+        Some(target_day),
+        None,
+        None,
+        None,
+        Some(new_sort_order),
+        None,
+        None,
+        None,
+        None,
+    )
 }
 
 /// 旅行に紐づく日程一覧を取得する
@@ -300,15 +623,16 @@ pub(crate) fn print_itinerary_list(items: &[ItineraryItem]) {
     }
 
     println!(
-        "{:<6} {:<6} {:<8} {:<14} {:<20} {:<8} {:<8} {:<12}",
-        "ID", "日目", "時刻", "タイトル", "場所", "所要", "移動", "メモ"
+        "{:<6} {:<6} {:<8} {:<8} {:<14} {:<20} {:<8} {:<8} {:<12}",
+        "ID", "日目", "順序", "時刻", "タイトル", "場所", "所要", "移動", "メモ"
     );
-    println!("{}", "-".repeat(90));
+    println!("{}", "-".repeat(98));
     for item in items {
         println!(
-            "{:<6} {:<6} {:<8} {:<14} {:<20} {:<8} {:<8} {:<12}",
+            "{:<6} {:<6} {:<8} {:<8} {:<14} {:<20} {:<8} {:<8} {:<12}",
             item.id,
             item.day,
+            item.sort_order,
             fmt_text(&item.start_time),
             item.title,
             fmt_text(&item.location),
@@ -444,7 +768,7 @@ mod tests {
         assert_eq!(item.day, 1);
         assert_eq!(item.title, "首里城");
         assert_eq!(item.note.as_deref(), Some("午前"));
-        assert_eq!(item.sort_order, 0);
+        assert_eq!(item.sort_order, SORT_ORDER_STEP);
 
         let day_id: i64 = conn
             .query_row(
@@ -826,9 +1150,9 @@ mod tests {
 
         let items = list_itinerary_items(&conn, trip_id).unwrap();
         assert_eq!(items.len(), 4);
-        assert_eq!(items[0].title, "昼食");
-        assert_eq!(items[1].title, "首里城");
-        assert_eq!(items[2].title, "ホテル");
+        assert_eq!(items[0].title, "ホテル");
+        assert_eq!(items[1].title, "昼食");
+        assert_eq!(items[2].title, "首里城");
         assert_eq!(items[3].title, "2日目");
     }
 
@@ -1249,5 +1573,520 @@ mod tests {
             .expect("expected error");
         assert_eq!(err.to_string(), "Itinerary not found: 9999");
         assert!(!format!("{err:#}").contains("Query returned no rows"));
+    }
+
+    #[test]
+    fn test_add_itinerary_item_appends_to_day_end() {
+        let conn = test_db();
+        let trip_id = add_test_trip(&conn, "Sort Trip").unwrap();
+
+        let id1 = add_itinerary_item(
+            &conn, trip_id, 1, "First", None, None, None, None, None, None, None,
+        )
+        .unwrap();
+        let id2 = add_itinerary_item(
+            &conn, trip_id, 1, "Second", None, None, None, None, None, None, None,
+        )
+        .unwrap();
+
+        assert_eq!(get_itinerary_item(&conn, id1).unwrap().sort_order, 1000);
+        assert_eq!(get_itinerary_item(&conn, id2).unwrap().sort_order, 2000);
+    }
+
+    #[test]
+    fn test_add_itinerary_item_after_uses_midpoint() {
+        let conn = test_db();
+        let trip_id = add_test_trip(&conn, "Sort Trip").unwrap();
+
+        let first = add_itinerary_item(
+            &conn,
+            trip_id,
+            1,
+            "空港",
+            None,
+            None,
+            Some(1000),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        let second = add_itinerary_item(
+            &conn,
+            trip_id,
+            1,
+            "搭乗",
+            None,
+            None,
+            Some(2000),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        let wifi = add_itinerary_item_extended(
+            &conn,
+            trip_id,
+            1,
+            "Wi-Fi",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(first),
+            None,
+        )
+        .unwrap();
+
+        let item = get_itinerary_item(&conn, wifi).unwrap();
+        assert_eq!(item.sort_order, 1500);
+
+        let items = list_itinerary_items_for_day(&conn, trip_id, 1).unwrap();
+        let titles: Vec<_> = items.iter().map(|i| i.title.as_str()).collect();
+        assert_eq!(titles, vec!["空港", "Wi-Fi", "搭乗"]);
+        let _ = second;
+    }
+
+    #[test]
+    fn test_add_itinerary_item_before_uses_midpoint() {
+        let conn = test_db();
+        let trip_id = add_test_trip(&conn, "Sort Trip").unwrap();
+
+        add_itinerary_item(
+            &conn,
+            trip_id,
+            1,
+            "空港",
+            None,
+            None,
+            Some(1000),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        let boarding = add_itinerary_item(
+            &conn,
+            trip_id,
+            1,
+            "搭乗",
+            None,
+            None,
+            Some(2000),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        let wifi = add_itinerary_item_extended(
+            &conn,
+            trip_id,
+            1,
+            "Wi-Fi",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(boarding),
+        )
+        .unwrap();
+
+        assert_eq!(get_itinerary_item(&conn, wifi).unwrap().sort_order, 1500);
+    }
+
+    #[test]
+    fn test_add_itinerary_item_after_last_appends_with_step() {
+        let conn = test_db();
+        let trip_id = add_test_trip(&conn, "Sort Trip").unwrap();
+
+        let last = add_itinerary_item(
+            &conn,
+            trip_id,
+            1,
+            "搭乗",
+            None,
+            None,
+            Some(2000),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        let extra = add_itinerary_item_extended(
+            &conn,
+            trip_id,
+            1,
+            "出国審査",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(last),
+            None,
+        )
+        .unwrap();
+
+        assert_eq!(get_itinerary_item(&conn, extra).unwrap().sort_order, 3000);
+    }
+
+    #[test]
+    fn test_add_itinerary_item_normalizes_when_gap_too_small() {
+        let conn = test_db();
+        let trip_id = add_test_trip(&conn, "Sort Trip").unwrap();
+
+        add_itinerary_item(
+            &conn,
+            trip_id,
+            1,
+            "A",
+            None,
+            None,
+            Some(1000),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        let b = add_itinerary_item(
+            &conn,
+            trip_id,
+            1,
+            "B",
+            None,
+            None,
+            Some(1001),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        add_itinerary_item(
+            &conn,
+            trip_id,
+            1,
+            "C",
+            None,
+            None,
+            Some(1002),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        add_itinerary_item(
+            &conn,
+            trip_id,
+            1,
+            "D",
+            None,
+            None,
+            Some(1003),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let a = 1_i64;
+        let inserted = add_itinerary_item_extended(
+            &conn,
+            trip_id,
+            1,
+            "Wi-Fi",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(a),
+            None,
+        )
+        .unwrap();
+
+        let items = list_itinerary_items_for_day(&conn, trip_id, 1).unwrap();
+        assert_eq!(
+            items.iter().map(|i| i.title.as_str()).collect::<Vec<_>>(),
+            vec!["A", "Wi-Fi", "B", "C", "D"]
+        );
+        assert_eq!(
+            get_itinerary_item(&conn, inserted).unwrap().sort_order,
+            1500
+        );
+        assert_eq!(get_itinerary_item(&conn, b).unwrap().sort_order, 2000);
+    }
+
+    #[test]
+    fn test_normalize_day_sort_order_preserves_display_order() {
+        let conn = test_db();
+        let trip_id = add_test_trip(&conn, "Sort Trip").unwrap();
+
+        add_itinerary_item(
+            &conn,
+            trip_id,
+            1,
+            "A",
+            None,
+            None,
+            Some(0),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        add_itinerary_item(
+            &conn,
+            trip_id,
+            1,
+            "B",
+            None,
+            None,
+            Some(0),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        add_itinerary_item(
+            &conn,
+            trip_id,
+            1,
+            "C",
+            None,
+            None,
+            Some(0),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+
+        normalize_day_sort_order(&conn, trip_id, 1).unwrap();
+
+        let items = list_itinerary_items_for_day(&conn, trip_id, 1).unwrap();
+        assert_eq!(
+            items.iter().map(|i| i.title.as_str()).collect::<Vec<_>>(),
+            vec!["A", "B", "C"]
+        );
+        assert_eq!(
+            items.iter().map(|i| i.sort_order).collect::<Vec<_>>(),
+            vec![1000, 2000, 3000]
+        );
+    }
+
+    #[test]
+    fn test_add_itinerary_rejects_after_from_other_day() {
+        let conn = test_db();
+        let trip_id = add_test_trip(&conn, "Sort Trip").unwrap();
+
+        let day2_item = add_itinerary_item(
+            &conn, trip_id, 2, "Day2", None, None, None, None, None, None, None,
+        )
+        .unwrap();
+
+        let err = add_itinerary_item_extended(
+            &conn,
+            trip_id,
+            1,
+            "Wi-Fi",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(day2_item),
+            None,
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("Day 1"));
+    }
+
+    #[test]
+    fn test_add_itinerary_rejects_order_with_after() {
+        let conn = test_db();
+        let trip_id = add_test_trip(&conn, "Sort Trip").unwrap();
+        let anchor = add_itinerary_item(
+            &conn, trip_id, 1, "Anchor", None, None, None, None, None, None, None,
+        )
+        .unwrap();
+
+        let err = add_itinerary_item_extended(
+            &conn,
+            trip_id,
+            1,
+            "Wi-Fi",
+            None,
+            None,
+            Some(500),
+            None,
+            None,
+            None,
+            None,
+            Some(anchor),
+            None,
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("--order"));
+    }
+
+    #[test]
+    fn test_move_itinerary_item_after() {
+        let conn = test_db();
+        let trip_id = add_test_trip(&conn, "Sort Trip").unwrap();
+
+        let a = add_itinerary_item(
+            &conn,
+            trip_id,
+            1,
+            "A",
+            None,
+            None,
+            Some(1000),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        let b = add_itinerary_item(
+            &conn,
+            trip_id,
+            1,
+            "B",
+            None,
+            None,
+            Some(2000),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        let c = add_itinerary_item(
+            &conn,
+            trip_id,
+            1,
+            "C",
+            None,
+            None,
+            Some(3000),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+
+        move_itinerary_item(&conn, c, Some(a), None).unwrap();
+
+        let items = list_itinerary_items_for_day(&conn, trip_id, 1).unwrap();
+        let titles: Vec<_> = items.iter().map(|i| i.title.as_str()).collect();
+        assert_eq!(titles, vec!["A", "C", "B"]);
+        let _ = b;
+    }
+
+    #[test]
+    fn test_add_before_first_with_legacy_sort_order_zero() {
+        let conn = test_db();
+        let trip_id = add_test_trip(&conn, "Legacy Sort Trip").unwrap();
+
+        add_itinerary_item(
+            &conn,
+            trip_id,
+            1,
+            "First",
+            None,
+            None,
+            Some(0),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        add_itinerary_item(
+            &conn,
+            trip_id,
+            1,
+            "Second",
+            None,
+            None,
+            Some(0),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        let first_id = 1_i64;
+
+        let prep = add_itinerary_item_extended(
+            &conn,
+            trip_id,
+            1,
+            "Prep",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(first_id),
+        )
+        .unwrap();
+
+        let items = list_itinerary_items_for_day(&conn, trip_id, 1).unwrap();
+        assert_eq!(
+            items.iter().map(|i| i.title.as_str()).collect::<Vec<_>>(),
+            vec!["Prep", "First", "Second"]
+        );
+        assert!(get_itinerary_item(&conn, prep).unwrap().sort_order < 1000);
+        assert_eq!(
+            get_itinerary_item(&conn, first_id).unwrap().sort_order,
+            1000
+        );
+    }
+
+    #[test]
+    fn test_move_itinerary_item_rejects_self_reference() {
+        let conn = test_db();
+        let trip_id = add_test_trip(&conn, "Sort Trip").unwrap();
+        let id = add_itinerary_item(
+            &conn, trip_id, 1, "Only", None, None, None, None, None, None, None,
+        )
+        .unwrap();
+
+        let after_err = move_itinerary_item(&conn, id, Some(id), None).unwrap_err();
+        assert!(after_err.to_string().contains("自分自身"));
+
+        let before_err = move_itinerary_item(&conn, id, None, Some(id)).unwrap_err();
+        assert!(before_err.to_string().contains("自分自身"));
     }
 }

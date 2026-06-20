@@ -200,6 +200,8 @@ cargo run -- participant delete 2
 cargo run -- itinerary add 1 --day 1 --time 06:00 --order 1 "出発"
 cargo run -- itinerary add 1 --day 1 --time 09:00 --duration 90 --travel 20 "首里城"
 cargo run -- itinerary add 1 --day 1 --time 12:30 "昼食" --note "沖縄そば"
+cargo run -- itinerary add 1 --day 1 "Wi-Fiを借りる" --after 3
+cargo run -- itinerary add 1 --day 1 "保安検査へ向かう" --before 7
 ```
 
 | オプション | 説明 |
@@ -212,7 +214,16 @@ cargo run -- itinerary add 1 --day 1 --time 12:30 "昼食" --note "沖縄そば"
 | `--travel` | 次の Itinerary までの移動時間（分、任意） |
 | `--location` | 場所の自由記述（任意） |
 | `--note` | 短い補足メモ（任意） |
-| `--order` | 並び順（任意、小さいほど先） |
+| `--order` | 並び順を明示指定（任意。`--after` / `--before` と同時指定不可） |
+| `--after` | 指定 Itinerary ID の直後へ挿入（`--before` と同時指定不可） |
+| `--before` | 指定 Itinerary ID の直前へ挿入（`--after` と同時指定不可） |
+
+**並び順の挙動:**
+
+- `--order` 未指定時は、対象 Day の末尾へ自動追加される（`sort_order` は 1000 刻みで採番）
+- `--after` / `--before` 指定時は、対象 Itinerary の直後 / 直前へ挿入される
+- 参照先は同じ Trip / Day 内である必要がある
+- 前後の `sort_order` に隙間がない場合は、対象 Day を自動で正規化してから挿入する
 
 ### 一覧・詳細・更新・削除
 
@@ -224,7 +235,24 @@ cargo run -- itinerary update 1 --title "首里城公園" --travel 25
 cargo run -- itinerary delete 1
 ```
 
-一覧は **日目 → 並び順（`sort_order`）→ `id`** の順で表示されます。
+一覧は **日目 → 並び順（`sort_order`）→ `id`** の順で表示されます。通常表示では **順序** 列に `sort_order` が表示されます。
+
+### sort_order の正規化
+
+```bash
+cargo run -- itinerary normalize 1 --day 1
+```
+
+対象 Day の Itinerary の表示順を保ったまま、`sort_order` を `1000, 2000, 3000...` に再採番します。
+
+### Itinerary の移動
+
+```bash
+cargo run -- itinerary move 5 --after 3
+cargo run -- itinerary move 5 --before 7
+```
+
+既存 Itinerary を、対象 Itinerary の直後 / 直前へ移動します。`--after` と `--before` は同時指定できず、自分自身を基準位置に指定することもできません。
 
 ### カテゴリ
 

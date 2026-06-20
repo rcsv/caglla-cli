@@ -247,8 +247,14 @@ enum ItineraryAction {
         #[arg(long)]
         time: Option<String>,
         /// 並び順（小さいほど先）
-        #[arg(long)]
+        #[arg(long, conflicts_with_all = ["after", "before"])]
         order: Option<i64>,
+        /// 指定 Itinerary の直後に追加
+        #[arg(long, conflicts_with = "before")]
+        after: Option<i64>,
+        /// 指定 Itinerary の直前に追加
+        #[arg(long, conflicts_with = "after")]
+        before: Option<i64>,
         /// 所要時間（分）
         #[arg(long)]
         duration: Option<i64>,
@@ -316,6 +322,25 @@ enum ItineraryAction {
     Delete {
         /// 日程 ID
         id: i64,
+    },
+    /// Day 内の sort_order を正規化（1000, 2000, 3000...）
+    Normalize {
+        /// 旅行 ID
+        trip_id: i64,
+        /// 何日目か
+        #[arg(long)]
+        day: i64,
+    },
+    /// 日程を別の位置へ移動
+    Move {
+        /// 日程 ID
+        id: i64,
+        /// 指定 Itinerary の直後へ移動
+        #[arg(long, conflicts_with = "before")]
+        after: Option<i64>,
+        /// 指定 Itinerary の直前へ移動
+        #[arg(long, conflicts_with = "after")]
+        before: Option<i64>,
     },
 }
 
@@ -753,11 +778,13 @@ fn main() -> Result<()> {
                 note,
                 time,
                 order,
+                after,
+                before,
                 duration,
                 travel,
                 location,
             } => {
-                let id = crate::itinerary::add_itinerary_item(
+                let id = crate::itinerary::add_itinerary_item_extended(
                     &conn,
                     trip_id,
                     day,
@@ -769,12 +796,15 @@ fn main() -> Result<()> {
                     travel,
                     location.as_deref(),
                     None,
+                    after,
+                    before,
                 )?;
+                let item = crate::itinerary::get_itinerary_item(&conn, id)?;
                 println!("日程を追加しました (ID: {id})");
                 println!("  旅行 ID : {trip_id}");
                 println!("  日目    : {day}");
                 println!("  時刻    : {}", crate::itinerary::fmt_text(&time));
-                println!("  並び順  : {}", order.unwrap_or(0));
+                println!("  並び順  : {}", item.sort_order);
                 println!("  所要時間: {}", crate::itinerary::fmt_minutes(duration));
                 println!("  移動時間: {}", crate::itinerary::fmt_minutes(travel));
                 println!("  タイトル: {title}");
@@ -867,6 +897,18 @@ fn main() -> Result<()> {
                 crate::itinerary::delete_itinerary_item(&conn, id)?;
                 println!("日程を削除しました (ID: {id})");
                 println!("  タイトル: {}", item.title);
+            }
+            ItineraryAction::Normalize { trip_id, day } => {
+                crate::itinerary::normalize_day_sort_order(&conn, trip_id, day)?;
+                println!("Day {day} の sort_order を正規化しました (旅行 ID: {trip_id})");
+                let items = crate::itinerary::list_itinerary_items_for_day(&conn, trip_id, day)?;
+                crate::itinerary::print_itinerary_list(&items);
+            }
+            ItineraryAction::Move { id, after, before } => {
+                crate::itinerary::move_itinerary_item(&conn, id, after, before)?;
+                println!("日程を移動しました (ID: {id})");
+                let item = crate::itinerary::get_itinerary_item(&conn, id)?;
+                crate::itinerary::print_itinerary_detail(&item);
             }
         },
         Command::Checklist { action } => match action {
