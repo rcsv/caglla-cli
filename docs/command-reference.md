@@ -164,7 +164,8 @@ cargo run -- expense delete 1
 
 Itinerary 配下の **事前見積**（Planned Money）。Expense（実績支出）とは別概念です。**CLI 未実装。**
 
-責務整理: [specifications/estimate-model.md](specifications/estimate-model.md)
+責務整理: [specifications/estimate-model.md](specifications/estimate-model.md)  
+Entity Design: [specifications/estimate-entity-design.md](specifications/estimate-entity-design.md)
 
 ## Participant
 
