@@ -342,6 +342,21 @@ enum ItineraryAction {
         #[arg(long, conflicts_with = "after")]
         before: Option<i64>,
     },
+    /// 既存 Itinerary を指定 Day 群へ複製
+    Replicate {
+        /// 複製元 Itinerary ID（カンマ区切り）
+        #[arg(long)]
+        items: String,
+        /// コピー先 Day（例: 3, 3-5, 2,4-6）
+        #[arg(long)]
+        to_days: String,
+        /// Itinerary-level notes をコピーしない
+        #[arg(long)]
+        without_notes: bool,
+        /// DB を更新せず、作成予定のみ表示
+        #[arg(long)]
+        dry_run: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -909,6 +924,23 @@ fn main() -> Result<()> {
                 println!("日程を移動しました (ID: {id})");
                 let item = crate::itinerary::get_itinerary_item(&conn, id)?;
                 crate::itinerary::print_itinerary_detail(&item);
+            }
+            ItineraryAction::Replicate {
+                items,
+                to_days,
+                without_notes,
+                dry_run,
+            } => {
+                let item_ids = crate::itinerary::parse_item_id_list(&items)?;
+                let target_days = crate::itinerary::parse_target_day_list(&to_days)?;
+                let result = crate::itinerary::replicate_itinerary_items(
+                    &conn,
+                    &item_ids,
+                    &target_days,
+                    !without_notes,
+                    dry_run,
+                )?;
+                crate::itinerary::print_replicate_result(&result, dry_run);
             }
         },
         Command::Checklist { action } => match action {

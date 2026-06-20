@@ -156,6 +156,9 @@ ORDER BY day_number, sort_order, id
 | `itinerary add --order N` | `sort_order` を明示設定（**主操作**） |
 | `itinerary add --time HH:MM` | `start_time` ラベル（**副操作**） |
 | `itinerary update --order` / `--time` | 各フィールドを独立更新 |
+| `itinerary move` | 既存 Itinerary を `--after` / `--before` 基準で Day 内（または参照先 Day）へ移動 |
+| `itinerary normalize` | Day 内 `sort_order` を 1000 刻みに再採番 |
+| `itinerary replicate` | 既存 Itinerary を指定 Day 群へ **独立した複製** として追加。元の `sort_order` を維持（recurring リンクなし） |
 | `day swap` | Day 間で plan payload を交換（Itinerary / title / summary / Day-level notes）。`sort_order` / `start_time` は行ごとに維持 |
 
 **UX:** ユーザーは `--order` で「次に何をするか」を編集し、`--time` はあれば付ける。一覧順は **order と一致** する。

@@ -383,6 +383,342 @@ pub(crate) fn move_itinerary_item(
     )
 }
 
+/// `--items` のカンマ区切り ID リストをパースする
+pub(crate) fn parse_item_id_list(spec: &str) -> Result<Vec<i64>> {
+    let spec = spec.trim();
+    if spec.is_empty() {
+        anyhow::bail!("--items は1件以上指定してください");
+    }
+    let mut ids = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    for segment in spec.split(',') {
+        let segment = segment.trim();
+        if segment.is_empty() {
+            continue;
+        }
+        let id: i64 = segment
+            .parse()
+            .with_context(|| format!("不正な Itinerary ID です: {segment}"))?;
+        if id < 1 {
+            anyhow::bail!("Itinerary ID は 1 以上である必要があります: {id}");
+        }
+        if !seen.insert(id) {
+            anyhow::bail!("--items に重複する ID が含まれています: {id}");
+        }
+        ids.push(id);
+    }
+    if ids.is_empty() {
+        anyhow::bail!("--items は1件以上指定してください");
+    }
+    Ok(ids)
+}
+
+/// `--to-days` の Day 指定（`3`, `3,4,5`, `3-5`, `2,4-6`）をパースする
+pub(crate) fn parse_target_day_list(spec: &str) -> Result<Vec<i64>> {
+    let spec = spec.trim();
+    if spec.is_empty() {
+        anyhow::bail!("--to-days は1件以上指定してください");
+    }
+    let mut days = Vec::new();
+    for segment in spec.split(',') {
+        let segment = segment.trim();
+        if segment.is_empty() {
+            continue;
+        }
+        if let Some((start_str, end_str)) = segment.split_once('-') {
+            let start: i64 = start_str
+                .trim()
+                .parse()
+                .with_context(|| format!("不正な Day 範囲です: {segment}"))?;
+            let end: i64 = end_str
+                .trim()
+                .parse()
+                .with_context(|| format!("不正な Day 範囲です: {segment}"))?;
+            if start < 1 || end < 1 {
+                anyhow::bail!("Day 番号は 1 以上である必要があります: {segment}");
+            }
+            if start > end {
+                anyhow::bail!("不正な Day 範囲です: {segment}");
+            }
+            for day in start..=end {
+                if !days.contains(&day) {
+                    days.push(day);
+                }
+            }
+        } else {
+            let day: i64 = segment
+                .parse()
+                .with_context(|| format!("不正な Day 番号です: {segment}"))?;
+            if day < 1 {
+                anyhow::bail!("Day 番号は 1 以上である必要があります: {day}");
+            }
+            if !days.contains(&day) {
+                days.push(day);
+            }
+        }
+    }
+    if days.is_empty() {
+        anyhow::bail!("--to-days は1件以上指定してください");
+    }
+    days.sort_unstable();
+    Ok(days)
+}
+
+/// 1 コピー先 Day ごとの replicate 結果
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ReplicateDayResult {
+    pub day: i64,
+    pub created_ids: Vec<i64>,
+}
+
+/// replicate 全体の結果
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ReplicateResult {
+    pub source_day: i64,
+    pub target_days: Vec<i64>,
+    pub by_day: Vec<ReplicateDayResult>,
+}
+
+impl ReplicateResult {
+    pub(crate) fn total_created(&self) -> usize {
+        self.by_day.iter().map(|day| day.created_ids.len()).sum()
+    }
+}
+
+fn validate_replicate_inputs(
+    conn: &Connection,
+    item_ids: &[i64],
+    target_days: &[i64],
+) -> Result<(i64, i64, Vec<ItineraryItem>)> {
+    if item_ids.is_empty() {
+        anyhow::bail!("--items は1件以上指定してください");
+    }
+    if target_days.is_empty() {
+        anyhow::bail!("--to-days は1件以上指定してください");
+    }
+
+    let mut source_items = Vec::with_capacity(item_ids.len());
+    for &id in item_ids {
+        source_items.push(get_itinerary_item(conn, id)?);
+    }
+
+    let trip_id = source_items[0].trip_id;
+    if !source_items.iter().all(|item| item.trip_id == trip_id) {
+        anyhow::bail!("指定された Itinerary は同一 Trip に属している必要があります");
+    }
+
+    let source_day = source_items[0].day;
+    if !source_items.iter().all(|item| item.day == source_day) {
+        anyhow::bail!("指定された Itinerary は同一 Day に属している必要があります");
+    }
+
+    if target_days.contains(&source_day) {
+        anyhow::bail!("コピー先 Day に source Day ({source_day}) を含めることはできません");
+    }
+
+    for &day in target_days {
+        crate::day::find_day_by_trip_and_day_number(conn, trip_id, day)?;
+    }
+
+    source_items.sort_by(|a, b| {
+        a.sort_order
+            .cmp(&b.sort_order)
+            .then_with(|| a.id.cmp(&b.id))
+    });
+
+    Ok((trip_id, source_day, source_items))
+}
+
+fn insert_itinerary_item_copy(
+    conn: &Connection,
+    source: &ItineraryItem,
+    target_day: i64,
+) -> Result<i64> {
+    let day_id = crate::day::find_day_id_by_trip_and_day_number(conn, source.trip_id, target_day)?;
+    let now = crate::db::now_string();
+    let category = source.category.map(|c| c.as_str().to_string());
+    conn.execute(
+        "INSERT INTO itinerary_items
+         (trip_id, day_id, day, title, note, start_time, sort_order, duration_minutes, travel_minutes,
+          location, category, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+        params![
+            source.trip_id,
+            day_id,
+            target_day,
+            source.title,
+            source.note,
+            source.start_time,
+            source.sort_order,
+            source.duration_minutes,
+            source.travel_minutes,
+            source.location,
+            category,
+            &now,
+            &now
+        ],
+    )
+    .context("Itinerary の複製に失敗しました")?;
+    Ok(conn.last_insert_rowid())
+}
+
+fn copy_itinerary_level_notes(
+    conn: &Connection,
+    source_itinerary_id: i64,
+    new_itinerary_id: i64,
+) -> Result<()> {
+    use crate::models::NoteOwnerType;
+
+    let notes =
+        crate::note::list_notes_for_owner(conn, NoteOwnerType::Itinerary, source_itinerary_id)?;
+    let now = crate::db::now_string();
+    for note in notes {
+        conn.execute(
+            "INSERT INTO notes
+             (owner_type, owner_id, title, body, sort_order, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![
+                NoteOwnerType::Itinerary.as_str(),
+                new_itinerary_id,
+                note.title,
+                note.body,
+                note.sort_order,
+                &now,
+                &now
+            ],
+        )
+        .context("Itinerary-level Note の複製に失敗しました")?;
+    }
+    Ok(())
+}
+
+fn replicate_itinerary_items_inner(
+    conn: &Connection,
+    source_items: &[ItineraryItem],
+    target_days: &[i64],
+    copy_notes: bool,
+    dry_run: bool,
+    source_day: i64,
+) -> Result<ReplicateResult> {
+    let mut by_day = Vec::with_capacity(target_days.len());
+
+    for &target_day in target_days {
+        let mut created_ids = Vec::with_capacity(source_items.len());
+        if dry_run {
+            created_ids = vec![0; source_items.len()];
+        } else {
+            for source in source_items {
+                let new_id = insert_itinerary_item_copy(conn, source, target_day)?;
+                if copy_notes {
+                    copy_itinerary_level_notes(conn, source.id, new_id)?;
+                }
+                created_ids.push(new_id);
+            }
+        }
+        by_day.push(ReplicateDayResult {
+            day: target_day,
+            created_ids,
+        });
+    }
+
+    Ok(ReplicateResult {
+        source_day,
+        target_days: target_days.to_vec(),
+        by_day,
+    })
+}
+
+/// 既存 Itinerary を指定 Day 群へ独立した Itinerary として複製する
+pub(crate) fn replicate_itinerary_items(
+    conn: &Connection,
+    item_ids: &[i64],
+    target_days: &[i64],
+    copy_notes: bool,
+    dry_run: bool,
+) -> Result<ReplicateResult> {
+    let (_trip_id, source_day, source_items) =
+        validate_replicate_inputs(conn, item_ids, target_days)?;
+
+    if dry_run {
+        return replicate_itinerary_items_inner(
+            conn,
+            &source_items,
+            target_days,
+            copy_notes,
+            true,
+            source_day,
+        );
+    }
+
+    let mut result = None;
+    crate::db::with_transaction(conn, "itinerary replicate", |tx| {
+        result = Some(replicate_itinerary_items_inner(
+            tx,
+            &source_items,
+            target_days,
+            copy_notes,
+            false,
+            source_day,
+        )?);
+        Ok(())
+    })?;
+    result.ok_or_else(|| anyhow::anyhow!("replicate 結果の取得に失敗しました"))
+}
+
+fn format_day_number_list(days: &[i64]) -> String {
+    days.iter()
+        .map(|day| day.to_string())
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn format_id_list(ids: &[i64]) -> String {
+    ids.iter()
+        .map(|id| id.to_string())
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// replicate 結果を表示する
+pub(crate) fn print_replicate_result(result: &ReplicateResult, dry_run: bool) {
+    if dry_run {
+        println!("Dry run — no changes written.");
+        println!();
+    } else {
+        println!("Itineraries replicated.");
+    }
+    println!("Source Day: {}", result.source_day);
+    println!(
+        "Target Days: {}",
+        format_day_number_list(&result.target_days)
+    );
+    println!();
+    if dry_run {
+        println!("Would create:");
+    } else {
+        println!("Created:");
+    }
+    for day_result in &result.by_day {
+        println!(
+            "  Day {}: {} items",
+            day_result.day,
+            day_result.created_ids.len()
+        );
+    }
+    println!();
+    println!("Total: {} items", result.total_created());
+    if !dry_run && result.total_created() > 0 {
+        println!();
+        for day_result in &result.by_day {
+            println!(
+                "Day {}: {}",
+                day_result.day,
+                format_id_list(&day_result.created_ids)
+            );
+        }
+    }
+}
+
 /// 旅行に紐づく日程一覧を取得する
 pub(crate) fn list_itinerary_items(conn: &Connection, trip_id: i64) -> Result<Vec<ItineraryItem>> {
     crate::trip::get_trip(conn, trip_id)?;
@@ -2088,5 +2424,404 @@ mod tests {
 
         let before_err = move_itinerary_item(&conn, id, None, Some(id)).unwrap_err();
         assert!(before_err.to_string().contains("自分自身"));
+    }
+
+    fn add_five_day_trip(conn: &Connection) -> i64 {
+        crate::trip::add_trip(conn, "Replicate Trip", "2026-01-01", "2026-01-05", None).unwrap()
+    }
+
+    fn add_hotel_pattern(conn: &Connection, trip_id: i64, day: i64) -> Vec<i64> {
+        vec![
+            add_itinerary_item(
+                &conn,
+                trip_id,
+                day,
+                "ホテルで朝食",
+                Some("7:00頃"),
+                Some("07:00"),
+                Some(1000),
+                Some(45),
+                Some(10),
+                Some("ホテル"),
+                Some(ItineraryCategory::Restaurant),
+            )
+            .unwrap(),
+            add_itinerary_item(
+                &conn,
+                trip_id,
+                day,
+                "ホテルを出発",
+                None,
+                Some("08:30"),
+                Some(2000),
+                None,
+                Some(20),
+                None,
+                Some(ItineraryCategory::Transport),
+            )
+            .unwrap(),
+            add_itinerary_item(
+                &conn,
+                trip_id,
+                day,
+                "ホテルに戻る",
+                None,
+                Some("18:00"),
+                Some(7000),
+                None,
+                None,
+                None,
+                Some(ItineraryCategory::Hotel),
+            )
+            .unwrap(),
+            add_itinerary_item(
+                &conn,
+                trip_id,
+                day,
+                "ラウンジで夕食",
+                None,
+                Some("19:00"),
+                Some(8000),
+                Some(90),
+                None,
+                Some("ラウンジ"),
+                Some(ItineraryCategory::Restaurant),
+            )
+            .unwrap(),
+        ]
+    }
+
+    #[test]
+    fn test_parse_target_day_list_supports_mixed_spec() {
+        assert_eq!(parse_target_day_list("3-5").unwrap(), vec![3, 4, 5]);
+        assert_eq!(parse_target_day_list("3,4,5").unwrap(), vec![3, 4, 5]);
+        assert_eq!(parse_target_day_list("2,4-6").unwrap(), vec![2, 4, 5, 6]);
+    }
+
+    #[test]
+    fn test_replicate_single_item_to_multiple_days() {
+        let conn = test_db();
+        let trip_id = add_five_day_trip(&conn);
+        let source_id = add_itinerary_item(
+            &conn,
+            trip_id,
+            2,
+            "朝食",
+            Some("短いメモ"),
+            Some("07:00"),
+            Some(1500),
+            Some(30),
+            Some(5),
+            Some("Lobby"),
+            Some(ItineraryCategory::Restaurant),
+        )
+        .unwrap();
+
+        let result =
+            replicate_itinerary_items(&conn, &[source_id], &[3, 4, 5], true, false).unwrap();
+        assert_eq!(result.source_day, 2);
+        assert_eq!(result.total_created(), 3);
+
+        for day_result in &result.by_day {
+            let copied = get_itinerary_item(&conn, day_result.created_ids[0]).unwrap();
+            assert_eq!(copied.day, day_result.day);
+            assert_eq!(copied.title, "朝食");
+            assert_eq!(copied.note.as_deref(), Some("短いメモ"));
+            assert_eq!(copied.start_time.as_deref(), Some("07:00"));
+            assert_eq!(copied.sort_order, 1500);
+            assert_eq!(copied.duration_minutes, Some(30));
+            assert_eq!(copied.travel_minutes, Some(5));
+            assert_eq!(copied.location.as_deref(), Some("Lobby"));
+            assert_eq!(copied.category, Some(ItineraryCategory::Restaurant));
+        }
+    }
+
+    #[test]
+    fn test_replicate_multiple_items_preserves_sort_order() {
+        let conn = test_db();
+        let trip_id = add_five_day_trip(&conn);
+        let source_ids = add_hotel_pattern(&conn, trip_id, 2);
+
+        let result =
+            replicate_itinerary_items(&conn, &source_ids, &[3, 4, 5], true, false).unwrap();
+        assert_eq!(result.total_created(), 12);
+
+        for day in [3, 4, 5] {
+            let items = list_itinerary_items_for_day(&conn, trip_id, day).unwrap();
+            assert_eq!(items.len(), 4);
+            assert_eq!(
+                items.iter().map(|i| i.sort_order).collect::<Vec<_>>(),
+                vec![1000, 2000, 7000, 8000]
+            );
+            assert_eq!(
+                items.iter().map(|i| i.title.as_str()).collect::<Vec<_>>(),
+                vec![
+                    "ホテルで朝食",
+                    "ホテルを出発",
+                    "ホテルに戻る",
+                    "ラウンジで夕食"
+                ]
+            );
+        }
+    }
+
+    #[test]
+    fn test_replicate_copies_itinerary_level_notes_by_default() {
+        use crate::models::NoteOwnerType;
+        use crate::note::{add_note, list_notes_for_owner, ResolvedNoteOwner};
+
+        let conn = test_db();
+        let trip_id = add_five_day_trip(&conn);
+        let source_id = add_itinerary_item(
+            &conn,
+            trip_id,
+            2,
+            "朝食",
+            None,
+            None,
+            Some(1000),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        add_note(
+            &conn,
+            ResolvedNoteOwner::Itinerary(source_id),
+            Some("補足"),
+            "アレルギー確認",
+        )
+        .unwrap();
+
+        let result = replicate_itinerary_items(&conn, &[source_id], &[3], true, false).unwrap();
+        let copied_id = result.by_day[0].created_ids[0];
+        let notes = list_notes_for_owner(&conn, NoteOwnerType::Itinerary, copied_id).unwrap();
+        assert_eq!(notes.len(), 1);
+        assert_eq!(notes[0].title.as_deref(), Some("補足"));
+        assert_eq!(notes[0].body, "アレルギー確認");
+    }
+
+    #[test]
+    fn test_replicate_without_notes_skips_itinerary_level_notes() {
+        use crate::models::NoteOwnerType;
+        use crate::note::{add_note, list_notes_for_owner, ResolvedNoteOwner};
+
+        let conn = test_db();
+        let trip_id = add_five_day_trip(&conn);
+        let source_id = add_itinerary_item(
+            &conn,
+            trip_id,
+            2,
+            "朝食",
+            Some("本体メモ"),
+            None,
+            Some(1000),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        add_note(
+            &conn,
+            ResolvedNoteOwner::Itinerary(source_id),
+            None,
+            "Itinerary note",
+        )
+        .unwrap();
+
+        let result = replicate_itinerary_items(&conn, &[source_id], &[3], false, false).unwrap();
+        let copied_id = result.by_day[0].created_ids[0];
+        let copied = get_itinerary_item(&conn, copied_id).unwrap();
+        assert_eq!(copied.note.as_deref(), Some("本体メモ"));
+        let notes = list_notes_for_owner(&conn, NoteOwnerType::Itinerary, copied_id).unwrap();
+        assert!(notes.is_empty());
+    }
+
+    #[test]
+    fn test_replicate_does_not_copy_expense_or_reservation() {
+        use crate::expense::add_expense;
+        use crate::reservation::add_reservation;
+
+        let conn = test_db();
+        let trip_id = add_five_day_trip(&conn);
+        let source_id = add_itinerary_item(
+            &conn,
+            trip_id,
+            2,
+            "朝食",
+            None,
+            None,
+            Some(1000),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        add_expense(
+            &conn,
+            source_id,
+            "1500",
+            "JPY",
+            None,
+            None,
+            None,
+            None,
+            &Default::default(),
+        )
+        .unwrap();
+        add_reservation(
+            &conn,
+            source_id,
+            "hotel",
+            "ホテル",
+            Some("ABC123"),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let result = replicate_itinerary_items(&conn, &[source_id], &[3], true, false).unwrap();
+        let copied_id = result.by_day[0].created_ids[0];
+
+        let source_expenses =
+            crate::expense::list_expenses_for_itinerary(&conn, source_id).unwrap();
+        let copied_expenses =
+            crate::expense::list_expenses_for_itinerary(&conn, copied_id).unwrap();
+        assert_eq!(source_expenses.len(), 1);
+        assert!(copied_expenses.is_empty());
+
+        let source_reservations =
+            crate::reservation::list_reservations_for_itinerary(&conn, source_id).unwrap();
+        let copied_reservations =
+            crate::reservation::list_reservations_for_itinerary(&conn, copied_id).unwrap();
+        assert_eq!(source_reservations.len(), 1);
+        assert!(copied_reservations.is_empty());
+    }
+
+    #[test]
+    fn test_replicate_rejects_mixed_trips() {
+        let conn = test_db();
+        let trip_a = add_five_day_trip(&conn);
+        let trip_b = add_five_day_trip(&conn);
+        let a = add_itinerary_item(
+            &conn, trip_a, 2, "A", None, None, None, None, None, None, None,
+        )
+        .unwrap();
+        let b = add_itinerary_item(
+            &conn, trip_b, 2, "B", None, None, None, None, None, None, None,
+        )
+        .unwrap();
+
+        let err = replicate_itinerary_items(&conn, &[a, b], &[3], true, false).unwrap_err();
+        assert!(err.to_string().contains("同一 Trip"));
+    }
+
+    #[test]
+    fn test_replicate_rejects_mixed_source_days() {
+        let conn = test_db();
+        let trip_id = add_five_day_trip(&conn);
+        let day2 = add_itinerary_item(
+            &conn, trip_id, 2, "A", None, None, None, None, None, None, None,
+        )
+        .unwrap();
+        let day3 = add_itinerary_item(
+            &conn, trip_id, 3, "B", None, None, None, None, None, None, None,
+        )
+        .unwrap();
+
+        let err = replicate_itinerary_items(&conn, &[day2, day3], &[4], true, false).unwrap_err();
+        assert!(err.to_string().contains("同一 Day"));
+    }
+
+    #[test]
+    fn test_replicate_rejects_source_day_in_target_days() {
+        let conn = test_db();
+        let trip_id = add_five_day_trip(&conn);
+        let source_id = add_itinerary_item(
+            &conn, trip_id, 2, "A", None, None, None, None, None, None, None,
+        )
+        .unwrap();
+
+        let err = replicate_itinerary_items(&conn, &[source_id], &[2, 3], true, false).unwrap_err();
+        assert!(err.to_string().contains("source Day"));
+    }
+
+    #[test]
+    fn test_replicate_rejects_missing_target_day() {
+        let conn = test_db();
+        let trip_id = add_five_day_trip(&conn);
+        let source_id = add_itinerary_item(
+            &conn, trip_id, 2, "A", None, None, None, None, None, None, None,
+        )
+        .unwrap();
+
+        let err = replicate_itinerary_items(&conn, &[source_id], &[6], true, false).unwrap_err();
+        assert!(err.to_string().contains("Day not found"));
+    }
+
+    #[test]
+    fn test_replicated_items_are_independent() {
+        let conn = test_db();
+        let trip_id = add_five_day_trip(&conn);
+        let source_id = add_itinerary_item(
+            &conn,
+            trip_id,
+            2,
+            "朝食",
+            None,
+            Some("07:00"),
+            Some(1000),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let result = replicate_itinerary_items(&conn, &[source_id], &[3], true, false).unwrap();
+        let copied_id = result.by_day[0].created_ids[0];
+
+        update_itinerary_item(
+            &conn,
+            copied_id,
+            None,
+            Some("早めの朝食"),
+            None,
+            Some(Some("06:30")),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let source = get_itinerary_item(&conn, source_id).unwrap();
+        let copied = get_itinerary_item(&conn, copied_id).unwrap();
+        assert_eq!(source.title, "朝食");
+        assert_eq!(source.start_time.as_deref(), Some("07:00"));
+        assert_eq!(copied.title, "早めの朝食");
+        assert_eq!(copied.start_time.as_deref(), Some("06:30"));
+    }
+
+    #[test]
+    fn test_replicate_dry_run_does_not_write() {
+        let conn = test_db();
+        let trip_id = add_five_day_trip(&conn);
+        let source_ids = add_hotel_pattern(&conn, trip_id, 2);
+
+        let result = replicate_itinerary_items(&conn, &source_ids, &[3, 4], true, true).unwrap();
+        assert_eq!(result.total_created(), 8);
+        assert!(list_itinerary_items_for_day(&conn, trip_id, 3)
+            .unwrap()
+            .is_empty());
+        assert!(list_itinerary_items_for_day(&conn, trip_id, 4)
+            .unwrap()
+            .is_empty());
     }
 }
