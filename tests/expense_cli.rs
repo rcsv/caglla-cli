@@ -180,6 +180,43 @@ fn cli_expense_rejects_shared_with_and_beneficiary_on_add() {
 }
 
 #[test]
+fn cli_expense_rejects_shared_with_and_beneficiary_on_update() {
+    let dir = temp_workdir();
+    setup_trip_with_itinerary_and_participants(&dir);
+    assert!(run_cli(
+        &dir,
+        &[
+            "expense",
+            "add",
+            "--itinerary",
+            "1",
+            "--amount",
+            "1000",
+            "--currency",
+            "JPY",
+        ],
+    )
+    .status
+    .success());
+
+    let output = run_cli(
+        &dir,
+        &[
+            "expense",
+            "update",
+            "1",
+            "--shared-with",
+            "all",
+            "--beneficiary",
+            "Bob",
+        ],
+    );
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr)
+        .contains("cannot combine --shared-with and --beneficiary"));
+}
+
+#[test]
 fn cli_expense_update_clear_beneficiaries() {
     let dir = temp_workdir();
     setup_trip_with_itinerary_and_participants(&dir);
