@@ -1,0 +1,374 @@
+use std::fs;
+use std::process::Command;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+static TEST_DIR_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+fn run_cli(cwd: &std::path::Path, args: &[&str]) -> std::process::Output {
+    Command::new(env!("CARGO_BIN_EXE_caglla-cli"))
+        .current_dir(cwd)
+        .args(args)
+        .output()
+        .expect("failed to run CLI")
+}
+
+fn temp_workdir() -> std::path::PathBuf {
+    let n = TEST_DIR_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let dir = std::env::temp_dir().join(format!("caglla-cli-itinerary-{n}"));
+    let _ = fs::remove_dir_all(&dir);
+    fs::create_dir_all(&dir).unwrap();
+    dir
+}
+
+fn setup_trip(dir: &std::path::Path) {
+    assert!(run_cli(dir, &["db", "reset"]).status.success());
+    assert!(run_cli(
+        dir,
+        &[
+            "trip",
+            "add",
+            "Okinawa Trip",
+            "--start",
+            "2026-04-26",
+            "--end",
+            "2026-04-28",
+        ],
+    )
+    .status
+    .success());
+}
+
+#[test]
+fn cli_itinerary_add_appends_to_day_end() {
+    let dir = temp_workdir();
+    setup_trip(&dir);
+
+    assert!(
+        run_cli(&dir, &["itinerary", "add", "1", "--day", "1", "First"],)
+            .status
+            .success()
+    );
+    let second = run_cli(&dir, &["itinerary", "add", "1", "--day", "1", "Second"]);
+    assert!(second.status.success());
+    let stdout = String::from_utf8_lossy(&second.stdout);
+    assert!(stdout.contains("並び順  : 2000"));
+
+    let list = run_cli(&dir, &["itinerary", "list", "1"]);
+    assert!(list.status.success());
+    let list_out = String::from_utf8_lossy(&list.stdout);
+    assert!(list_out.contains("1000"));
+    assert!(list_out.contains("2000"));
+}
+
+#[test]
+fn cli_itinerary_add_respects_explicit_order() {
+    let dir = temp_workdir();
+    setup_trip(&dir);
+
+    let output = run_cli(
+        &dir,
+        &[
+            "itinerary",
+            "add",
+            "1",
+            "--day",
+            "1",
+            "--order",
+            "42",
+            "Custom",
+        ],
+    );
+    assert!(output.status.success());
+    assert!(String::from_utf8_lossy(&output.stdout).contains("並び順  : 42"));
+}
+
+#[test]
+fn cli_itinerary_add_after_inserts_midpoint() {
+    let dir = temp_workdir();
+    setup_trip(&dir);
+
+    assert!(run_cli(
+        &dir,
+        &[
+            "itinerary",
+            "add",
+            "1",
+            "--day",
+            "1",
+            "--order",
+            "1000",
+            "空港",
+        ],
+    )
+    .status
+    .success());
+    assert!(run_cli(
+        &dir,
+        &[
+            "itinerary",
+            "add",
+            "1",
+            "--day",
+            "1",
+            "--order",
+            "2000",
+            "搭乗",
+        ],
+    )
+    .status
+    .success());
+    let wifi = run_cli(
+        &dir,
+        &[
+            "itinerary",
+            "add",
+            "1",
+            "--day",
+            "1",
+            "--after",
+            "1",
+            "Wi-Fi",
+        ],
+    );
+    assert!(wifi.status.success());
+    assert!(String::from_utf8_lossy(&wifi.stdout).contains("並び順  : 1500"));
+
+    let list = run_cli(&dir, &["itinerary", "list", "1", "--json"]);
+    assert!(list.status.success());
+    let parsed: serde_json::Value = serde_json::from_slice(&list.stdout).expect("valid json");
+    let titles: Vec<_> = parsed
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v["title"].as_str().unwrap())
+        .collect();
+    assert_eq!(titles, vec!["空港", "Wi-Fi", "搭乗"]);
+}
+
+#[test]
+fn cli_itinerary_add_before_inserts_midpoint() {
+    let dir = temp_workdir();
+    setup_trip(&dir);
+
+    assert!(run_cli(
+        &dir,
+        &[
+            "itinerary",
+            "add",
+            "1",
+            "--day",
+            "1",
+            "--order",
+            "1000",
+            "空港",
+        ],
+    )
+    .status
+    .success());
+    assert!(run_cli(
+        &dir,
+        &[
+            "itinerary",
+            "add",
+            "1",
+            "--day",
+            "1",
+            "--order",
+            "2000",
+            "搭乗",
+        ],
+    )
+    .status
+    .success());
+    let wifi = run_cli(
+        &dir,
+        &[
+            "itinerary",
+            "add",
+            "1",
+            "--day",
+            "1",
+            "--before",
+            "2",
+            "Wi-Fi",
+        ],
+    );
+    assert!(wifi.status.success());
+    assert!(String::from_utf8_lossy(&wifi.stdout).contains("並び順  : 1500"));
+}
+
+#[test]
+fn cli_itinerary_add_rejects_after_from_other_day() {
+    let dir = temp_workdir();
+    setup_trip(&dir);
+
+    assert!(
+        run_cli(&dir, &["itinerary", "add", "1", "--day", "2", "Day2 item"],)
+            .status
+            .success()
+    );
+    let output = run_cli(
+        &dir,
+        &[
+            "itinerary",
+            "add",
+            "1",
+            "--day",
+            "1",
+            "--after",
+            "1",
+            "Wi-Fi",
+        ],
+    );
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("Day 1"));
+}
+
+#[test]
+fn cli_itinerary_add_rejects_order_with_after() {
+    let dir = temp_workdir();
+    setup_trip(&dir);
+
+    assert!(
+        run_cli(&dir, &["itinerary", "add", "1", "--day", "1", "Anchor"],)
+            .status
+            .success()
+    );
+    let output = run_cli(
+        &dir,
+        &[
+            "itinerary",
+            "add",
+            "1",
+            "--day",
+            "1",
+            "--order",
+            "500",
+            "--after",
+            "1",
+            "Wi-Fi",
+        ],
+    );
+    assert!(!output.status.success());
+}
+
+#[test]
+fn cli_itinerary_normalize_rebalances_day() {
+    let dir = temp_workdir();
+    setup_trip(&dir);
+
+    assert!(
+        run_cli(&dir, &["itinerary", "add", "1", "--day", "1", "A"],)
+            .status
+            .success()
+    );
+    assert!(
+        run_cli(&dir, &["itinerary", "add", "1", "--day", "1", "B"],)
+            .status
+            .success()
+    );
+    assert!(
+        run_cli(&dir, &["itinerary", "add", "1", "--day", "1", "C"],)
+            .status
+            .success()
+    );
+
+    let output = run_cli(&dir, &["itinerary", "normalize", "1", "--day", "1"]);
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("1000"));
+    assert!(stdout.contains("2000"));
+    assert!(stdout.contains("3000"));
+}
+
+#[test]
+fn cli_itinerary_add_before_first_with_legacy_sort_order_zero() {
+    let dir = temp_workdir();
+    setup_trip(&dir);
+
+    assert!(run_cli(
+        &dir,
+        &[
+            "itinerary",
+            "add",
+            "1",
+            "--day",
+            "1",
+            "--order",
+            "0",
+            "First",
+        ],
+    )
+    .status
+    .success());
+    assert!(run_cli(
+        &dir,
+        &[
+            "itinerary",
+            "add",
+            "1",
+            "--day",
+            "1",
+            "--order",
+            "0",
+            "Second",
+        ],
+    )
+    .status
+    .success());
+
+    let prep = run_cli(
+        &dir,
+        &[
+            "itinerary",
+            "add",
+            "1",
+            "--day",
+            "1",
+            "--before",
+            "1",
+            "Prep",
+        ],
+    );
+    assert!(
+        prep.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&prep.stderr)
+    );
+
+    let list = run_cli(&dir, &["itinerary", "list", "1", "--json"]);
+    assert!(list.status.success());
+    let parsed: serde_json::Value = serde_json::from_slice(&list.stdout).expect("valid json");
+    let titles: Vec<_> = parsed
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v["title"].as_str().unwrap())
+        .collect();
+    assert_eq!(titles, vec!["Prep", "First", "Second"]);
+}
+
+#[test]
+fn cli_itinerary_move_rejects_self_reference() {
+    let dir = temp_workdir();
+    setup_trip(&dir);
+
+    assert!(
+        run_cli(&dir, &["itinerary", "add", "1", "--day", "1", "Only"],)
+            .status
+            .success()
+    );
+
+    let after_self = run_cli(&dir, &["itinerary", "move", "1", "--after", "1"]);
+    assert!(!after_self.status.success());
+    assert!(String::from_utf8_lossy(&after_self.stderr).contains("自分自身"));
+
+    let before_self = run_cli(&dir, &["itinerary", "move", "1", "--before", "1"]);
+    assert!(!before_self.status.success());
+    assert!(String::from_utf8_lossy(&before_self.stderr).contains("自分自身"));
+}
