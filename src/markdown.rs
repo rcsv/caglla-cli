@@ -26,7 +26,11 @@ pub(crate) fn format_trip_date_range(trip: &Trip) -> Option<String> {
 }
 
 /// 1件の日程を Markdown 形式に整形する
-pub(crate) fn format_itinerary_item_markdown(item: &ItineraryItem, expenses: &[Expense]) -> String {
+pub(crate) fn format_itinerary_item_markdown(
+    conn: &Connection,
+    item: &ItineraryItem,
+    expenses: &[Expense],
+) -> Result<String> {
     let mut lines = Vec::new();
     let heading = match &item.start_time {
         Some(time) => format!("### {time} {}", item.title),
@@ -60,11 +64,11 @@ pub(crate) fn format_itinerary_item_markdown(item: &ItineraryItem, expenses: &[E
         lines.push(String::new());
         lines.push("Expenses:".to_string());
         for expense in expenses {
-            lines.push(crate::expense::format_expense_markdown_line(expense));
+            lines.push(crate::expense::format_expense_markdown_line(conn, expense)?);
         }
     }
 
-    lines.join("\n")
+    Ok(lines.join("\n"))
 }
 
 /// チェックリスト一覧を Markdown 形式に整形する（項目がなければ None）
@@ -190,6 +194,7 @@ fn append_overview_section(output: &mut String, stats: &TripStats) {
 /// 旅行と日程一覧から Markdown 文字列を組み立てる
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn format_trip_markdown(
+    conn: &Connection,
     trip: &Trip,
     days: &[Day],
     items: &[ItineraryItem],
@@ -198,7 +203,7 @@ pub(crate) fn format_trip_markdown(
     stats: &TripStats,
     expenses_by_itinerary: &HashMap<i64, Vec<Expense>>,
     reservations: &[ReservationWithContext],
-) -> String {
+) -> Result<String> {
     let day_summaries: HashMap<i64, Option<String>> = days
         .iter()
         .map(|d| (d.day_number, d.summary.clone()))
@@ -244,14 +249,14 @@ pub(crate) fn format_trip_markdown(
             .get(&item.id)
             .map(|list| list.as_slice())
             .unwrap_or(&[]);
-        output.push_str(&format_itinerary_item_markdown(item, expenses));
+        output.push_str(&format_itinerary_item_markdown(conn, item, expenses)?);
     }
 
     if let Some(checklist_md) = format_checklist_markdown(checklist) {
         output.push_str(&checklist_md);
     }
 
-    output
+    Ok(output)
 }
 
 /// 旅行しおりを Markdown 文字列として組み立てる
@@ -270,7 +275,8 @@ pub(crate) fn generate_trip_markdown(conn: &Connection, trip_id: i64) -> Result<
     }
     let reservations = crate::reservation::list_reservations_for_trip(conn, trip_id)?;
     let participants = crate::participant::list_participants_by_trip(conn, trip_id)?;
-    Ok(format_trip_markdown(
+    format_trip_markdown(
+        conn,
         &trip,
         &days,
         &items,
@@ -279,7 +285,7 @@ pub(crate) fn generate_trip_markdown(conn: &Connection, trip_id: i64) -> Result<
         &stats,
         &expenses_by_itinerary,
         &reservations,
-    ))
+    )
 }
 
 /// Markdown を標準出力に出力する
@@ -740,6 +746,7 @@ mod tests {
             None,
             None,
             None,
+            &crate::expense::ExpenseSharedOptions::default(),
         )
         .unwrap();
         crate::expense::add_expense(
@@ -751,6 +758,7 @@ mod tests {
             None,
             None,
             None,
+            &crate::expense::ExpenseSharedOptions::default(),
         )
         .unwrap();
 

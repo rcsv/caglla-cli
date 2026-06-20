@@ -204,7 +204,7 @@ fn cli_export_import_reexport_roundtrip_with_notes() {
 
     let exported: serde_json::Value =
         serde_json::from_str(&fs::read_to_string(&export_path).unwrap()).unwrap();
-    assert_eq!(exported["schema_version"], 4);
+    assert_eq!(exported["schema_version"], 5);
     assert_eq!(exported["notes"].as_array().unwrap().len(), 3);
 
     assert!(run_cli(&dir, &["db", "reset"]).status.success());
@@ -328,7 +328,7 @@ fn cli_export_import_reexport_roundtrip_with_expenses() {
 
     let exported: serde_json::Value =
         serde_json::from_str(&fs::read_to_string(&export_path).unwrap()).unwrap();
-    assert_eq!(exported["schema_version"], 4);
+    assert_eq!(exported["schema_version"], 5);
     assert_eq!(
         exported["days"][1]["itineraries"][0]["expenses"]
             .as_array()
@@ -411,7 +411,7 @@ fn comparable_export_json(value: &serde_json::Value) -> serde_json::Value {
     let trip = &value["trip"];
     let schema_version = value.get("schema_version").and_then(|v| v.as_i64());
 
-    let itinerary = if matches!(schema_version, Some(3) | Some(4)) {
+    let itinerary = if matches!(schema_version, Some(3) | Some(4) | Some(5)) {
         value["days"]
             .as_array()
             .cloned()

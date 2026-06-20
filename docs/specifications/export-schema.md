@@ -25,7 +25,8 @@ Caglla CLI の trip export / import JSON 形式。
 | `1` | v1 | 明示的 v1。`notes` なし |
 | `2` | v2 | Note を含む（`itinerary_items` フラット） |
 | `3` | v3 | Note + **nested Expense**（`days[]`） |
-| `4` | v4（**現行 export**） | v3 + top-level **`participants[]`**（`is_self` 含む）— [participant-implementation-plan.md](participant-implementation-plan.md) |
+| `4` | v4 | v3 + top-level **`participants[]`**（`is_self` 含む） |
+| `5` | v5（**現行 export**） | v4 + Expense **`paid_by_participant_ref`** / **`beneficiaries[]`** — [shared-expense-entity-design.md](shared-expense-entity-design.md) |
 
 Import 時の解釈:
 
@@ -34,8 +35,20 @@ Import 時の解釈:
 - `schema_version: 2` → v2
 - `schema_version: 3` → v3（`participants` 省略時は空配列扱い）
 - `schema_version: 4` → v4
+- `schema_version: 5` → v5
 
-v1 / v2 / v3 export は引き続き import 可能です。現行 CLI の `trip export` は `schema_version: 4` を出力します。
+v1 / v2 / v3 / v4 export は引き続き import 可能です。現行 CLI の `trip export` は `schema_version: 5` を出力します。
+
+## Top-level structure (v5)
+
+v4 と同一の top-level 構造。Expense オブジェクトに optional フィールドが追加されます（下記）。
+
+### Expense shared fields (v5)
+
+| フィールド | 必須 | 説明 |
+|---|---|---|
+| `paid_by_participant_ref` | 任意 | payer の Participant 参照（`participants[].name` と完全一致） |
+| `beneficiaries` | 任意 | `{ "participant_ref": "名前", "sort_order": 0 }` の配列。省略 = personal |
 
 ## Top-level structure (v4)
 

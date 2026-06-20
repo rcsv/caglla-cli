@@ -84,9 +84,22 @@ pub struct Expense {
     pub amount: i64,
     pub currency: String,
     pub paid_by_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub paid_by_participant_id: Option<i64>,
     pub expense_date: Option<String>,
     pub note: Option<String>,
     pub sort_order: i64,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// expense_beneficiaries テーブルの1行分のデータ
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExpenseBeneficiary {
+    pub id: i64,
+    pub expense_id: i64,
+    pub participant_id: i64,
+    pub sort_order: i32,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -116,6 +129,9 @@ pub enum DoctorIssueCode {
     ParticipantsNotRecorded,
     SelfParticipantUnknown,
     MultipleSelfParticipants,
+    SharedExpenseSingleBeneficiary,
+    PaidByNameParticipantMismatch,
+    DuplicateParticipantNames,
 }
 
 /// trip doctor / advisor が検出した問題の対象（内部モデル）
@@ -124,6 +140,7 @@ pub enum DoctorIssueTarget {
     Trip,
     Day(i64),
     Itinerary(i64),
+    Expense(i64),
 }
 
 /// JSON 出力用の issue 対象種別
@@ -133,6 +150,7 @@ pub enum IssueTargetType {
     Trip,
     Day,
     Itinerary,
+    Expense,
 }
 
 /// JSON 出力用の issue 対象（`target.id` の意味は `type` 依存）
@@ -158,6 +176,10 @@ impl IssueTarget {
                 target_type: IssueTargetType::Itinerary,
                 id,
             },
+            DoctorIssueTarget::Expense(id) => Self {
+                target_type: IssueTargetType::Expense,
+                id,
+            },
         }
     }
 }
@@ -173,6 +195,8 @@ pub struct IssueDetails {
     pub itinerary_count: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub travel_minutes: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expense_id: Option<i64>,
 }
 
 impl IssueDetails {
@@ -181,6 +205,7 @@ impl IssueDetails {
             && self.itinerary_id.is_none()
             && self.itinerary_count.is_none()
             && self.travel_minutes.is_none()
+            && self.expense_id.is_none()
     }
 }
 
@@ -314,6 +339,21 @@ impl DoctorIssue {
             DoctorIssueCode::MultipleSelfParticipants => {
                 "Multiple self participants are recorded (data error).".to_string()
             }
+            DoctorIssueCode::SharedExpenseSingleBeneficiary => match self.target {
+                DoctorIssueTarget::Expense(id) => {
+                    format!("Expense {id} has only one beneficiary (shared split with one person)")
+                }
+                _ => "Expense has only one beneficiary (shared split with one person)".to_string(),
+            },
+            DoctorIssueCode::PaidByNameParticipantMismatch => match self.target {
+                DoctorIssueTarget::Expense(id) => {
+                    format!("Expense {id}: paid_by_name does not match payer participant name")
+                }
+                _ => "paid_by_name does not match payer participant name".to_string(),
+            },
+            DoctorIssueCode::DuplicateParticipantNames => {
+                "Duplicate participant names in this trip (ambiguous export refs)".to_string()
+            }
         }
     }
 
@@ -322,7 +362,10 @@ impl DoctorIssue {
             DoctorIssueCode::EmptyItinerary
             | DoctorIssueCode::ParticipantsNotRecorded
             | DoctorIssueCode::SelfParticipantUnknown => DoctorIssueSeverity::Info,
-            DoctorIssueCode::MultipleSelfParticipants => DoctorIssueSeverity::Warning,
+            DoctorIssueCode::MultipleSelfParticipants
+            | DoctorIssueCode::SharedExpenseSingleBeneficiary
+            | DoctorIssueCode::PaidByNameParticipantMismatch
+            | DoctorIssueCode::DuplicateParticipantNames => DoctorIssueSeverity::Warning,
             _ => DoctorIssueSeverity::Warning,
         }
     }
@@ -351,7 +394,16 @@ impl DoctorIssue {
             },
             DoctorIssueCode::ParticipantsNotRecorded
             | DoctorIssueCode::SelfParticipantUnknown
-            | DoctorIssueCode::MultipleSelfParticipants => IssueDetails::default(),
+            | DoctorIssueCode::MultipleSelfParticipants
+            | DoctorIssueCode::DuplicateParticipantNames => IssueDetails::default(),
+            DoctorIssueCode::SharedExpenseSingleBeneficiary
+            | DoctorIssueCode::PaidByNameParticipantMismatch => IssueDetails {
+                expense_id: match self.target {
+                    DoctorIssueTarget::Expense(id) => Some(id),
+                    _ => None,
+                },
+                ..IssueDetails::default()
+            },
         }
     }
 
@@ -589,7 +641,10 @@ pub struct ParticipantCounts {
 }
 
 /// trip export 用 JSON の schema バージョン（現行 export）
-pub const TRIP_EXPORT_SCHEMA_VERSION: i32 = 4;
+pub const TRIP_EXPORT_SCHEMA_VERSION: i32 = 5;
+
+/// trip export schema v4（import 互換）
+pub const TRIP_EXPORT_SCHEMA_VERSION_V4: i32 = 4;
 
 /// trip export schema v3（import 互換）
 pub const TRIP_EXPORT_SCHEMA_VERSION_V3: i32 = 3;
@@ -642,6 +697,7 @@ pub fn is_supported_export_schema_version(schema_version: Option<i32>) -> bool {
         TRIP_EXPORT_SCHEMA_VERSION_V1
             | 2
             | TRIP_EXPORT_SCHEMA_VERSION_V3
+            | TRIP_EXPORT_SCHEMA_VERSION_V4
             | TRIP_EXPORT_SCHEMA_VERSION
     )
 }
@@ -671,7 +727,15 @@ pub struct ExportReservation {
     pub reservation: ExportReservationV3,
 }
 
-/// trip export schema v3 の Expense エントリ（DB id は含めない）
+/// trip export schema v5 の beneficiary エントリ
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExportExpenseBeneficiaryV5 {
+    pub participant_ref: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sort_order: Option<i32>,
+}
+
+/// trip export schema v3/v5 の Expense エントリ（DB id は含めない）
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ExportExpenseV3 {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -681,10 +745,22 @@ pub struct ExportExpenseV3 {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub paid_by_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub paid_by_participant_ref: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub beneficiaries: Vec<ExportExpenseBeneficiaryV5>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub expense_date: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
     pub sort_order: i64,
+}
+
+/// trip diff 用の Expense（Itinerary コンテキスト付き）
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExportExpense {
+    pub itinerary_key: ItineraryNoteKey,
+    #[serde(flatten)]
+    pub expense: ExportExpenseV3,
 }
 
 /// trip export schema v3 の Itinerary エントリ（DB id は含めない）
@@ -800,6 +876,9 @@ pub struct TripExport {
     /// schema v4+: Participant 一覧（diff 用。v3 以前 export では省略可）
     #[serde(default)]
     pub participants: Vec<ExportParticipantV4>,
+    /// schema v3+: Expense 一覧（diff 用。v1/v2 export では省略可）
+    #[serde(default)]
+    pub expenses: Vec<ExportExpense>,
 }
 
 impl TripExport {
@@ -813,6 +892,10 @@ impl TripExport {
 
     pub fn participants(&self) -> &[ExportParticipantV4] {
         &self.participants
+    }
+
+    pub fn expenses(&self) -> &[ExportExpense] {
+        &self.expenses
     }
 }
 

@@ -131,12 +131,16 @@ Itinerary 配下の **支出記録** です。
 ```bash
 cargo run -- expense add --itinerary 12 --amount 2200 --currency JPY
 cargo run -- expense add --itinerary 12 --amount 12.50 --currency USD --title "Coffee"
+cargo run -- expense add --itinerary 12 --amount 4000 --currency JPY \
+  --paid-by-participant Alice --beneficiary Alice --beneficiary Bob
+cargo run -- expense add --itinerary 12 --amount 4000 --currency JPY --shared-with all
 
 cargo run -- expense list --itinerary 12
 cargo run -- expense list --trip 1
 
 cargo run -- expense show 1
 cargo run -- expense update 1 --amount 2500 --note 後から追記
+cargo run -- expense update 1 --clear-paid-by --clear-beneficiaries
 cargo run -- expense delete 1
 ```
 
@@ -145,10 +149,12 @@ cargo run -- expense delete 1
 | 親 | **Itinerary のみ**（`add` は `--itinerary` 必須） |
 | `--amount` / `--currency` | **必須** |
 | `--title` / `--note` / `--paid-by-name` / `--expense-date` | 任意 |
+| `--paid-by-participant` / `--beneficiary` / `--shared-with all` | 任意（Participant 登録 Trip のみ。`add` では `--shared-with` と `--beneficiary` は排他） |
+| `update` の `--clear-paid-by` / `--clear-beneficiaries` | payer / beneficiary のクリア |
 | `expense list` | `--itinerary` または `--trip` のいずれか |
 | 金額の保存 | DB は最小通貨単位の **整数**（JPY=円、USD `12.50` → 1250 セント） |
 
-詳細仕様: [specifications/expense-model.md](specifications/expense-model.md)
+詳細仕様: [specifications/expense-model.md](specifications/expense-model.md) / [shared-expense-entity-design.md](specifications/shared-expense-entity-design.md)
 
 ## Participant
 

@@ -34,6 +34,16 @@ pub(crate) fn generate_advice(issue: &DoctorIssue) -> Vec<String> {
         DoctorIssueCode::MultipleSelfParticipants => {
             vec!["Only one participant should be marked as self per trip.".to_string()]
         }
+        DoctorIssueCode::SharedExpenseSingleBeneficiary => {
+            vec!["Consider adding more beneficiaries or treat as personal expense.".to_string()]
+        }
+        DoctorIssueCode::PaidByNameParticipantMismatch => vec![
+            "Sync paid_by_name with participant name via expense update --paid-by-participant."
+                .to_string(),
+        ],
+        DoctorIssueCode::DuplicateParticipantNames => {
+            vec!["Use unique participant names to avoid ambiguous export refs.".to_string()]
+        }
     }
 }
 
@@ -78,6 +88,30 @@ pub(crate) fn generate_command_hints(issue: &DoctorIssue, trip_id: i64) -> Vec<S
         ],
         DoctorIssueCode::MultipleSelfParticipants => {
             vec!["cargo run -- participant list --trip <trip_id>".to_string()]
+        }
+        DoctorIssueCode::SharedExpenseSingleBeneficiary => {
+            if let Some(expense_id) = issue.to_issue_details().expense_id {
+                vec![format!(
+                    "cargo run -- expense update {expense_id} --beneficiary <name>"
+                )]
+            } else {
+                vec!["cargo run -- expense list --trip <trip_id> --json".to_string()]
+            }
+        }
+        DoctorIssueCode::PaidByNameParticipantMismatch => {
+            if let Some(expense_id) = issue.to_issue_details().expense_id {
+                vec![format!(
+                    "cargo run -- expense update {expense_id} --paid-by-participant <name>"
+                )]
+            } else {
+                vec!["cargo run -- expense list --trip <trip_id> --json".to_string()]
+            }
+        }
+        DoctorIssueCode::DuplicateParticipantNames => {
+            vec![
+                "cargo run -- participant list --trip <trip_id>".to_string(),
+                "cargo run -- participant update <participant_id> --name <unique-name>".to_string(),
+            ]
         }
     }
 }

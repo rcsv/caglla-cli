@@ -4,8 +4,8 @@ use std::collections::HashMap;
 use anyhow::Result;
 
 use crate::models::{
-    ExportNote, ExportParticipantV4, ExportReservation, ItineraryCategory, ItineraryItem,
-    TripExport,
+    effective_export_schema_version, ExportExpense, ExportNote, ExportParticipantV4,
+    ExportReservation, ItineraryCategory, ItineraryItem, TripExport, TRIP_EXPORT_SCHEMA_VERSION,
 };
 
 /// export Note の比較キー
@@ -79,6 +79,27 @@ struct ParticipantFieldChange {
     new_value: String,
 }
 
+/// Expense の比較キー（Itinerary コンテキスト + expense 識別）
+#[derive(Clone, Eq, PartialEq, Hash, PartialOrd, Ord)]
+struct ExpenseKey {
+    day_number: i64,
+    sort_order: i64,
+    start_time: Option<String>,
+    itinerary_title: String,
+    expense_sort_order: i64,
+    expense_title: Option<String>,
+    amount: i64,
+    currency: String,
+}
+
+/// 1件の Expense におけるフィールド変更
+struct ExpenseFieldChange {
+    line: String,
+    field: String,
+    old_value: String,
+    new_value: String,
+}
+
 /// trip diff の結果
 pub(crate) struct TripDiff {
     trip_changes: Vec<(String, String, String)>,
@@ -95,6 +116,9 @@ pub(crate) struct TripDiff {
     participant_added: Vec<ExportParticipantV4>,
     participant_removed: Vec<ExportParticipantV4>,
     participant_changed: Vec<ParticipantFieldChange>,
+    expense_added: Vec<ExportExpense>,
+    expense_removed: Vec<ExportExpense>,
+    expense_modified: Vec<ExpenseFieldChange>,
 }
 
 fn itinerary_key(item: &ItineraryItem) -> ItineraryKey {
@@ -466,6 +490,143 @@ fn compute_participants_diff(
     (participant_added, participant_removed, participant_changed)
 }
 
+fn expense_key(expense: &ExportExpense) -> ExpenseKey {
+    ExpenseKey {
+        day_number: expense.itinerary_key.day_number,
+        sort_order: expense.itinerary_key.sort_order,
+        start_time: expense.itinerary_key.start_time.clone(),
+        itinerary_title: expense.itinerary_key.title.clone(),
+        expense_sort_order: expense.expense.sort_order,
+        expense_title: expense.expense.title.clone(),
+        amount: expense.expense.amount,
+        currency: expense.expense.currency.clone(),
+    }
+}
+
+fn compare_export_expenses(a: &ExportExpense, b: &ExportExpense) -> Ordering {
+    expense_key(a).cmp(&expense_key(b))
+}
+
+fn format_expense_line(expense: &ExportExpense) -> String {
+    let key = &expense.itinerary_key;
+    let time = key.start_time.as_deref().unwrap_or("-");
+    let title = expense.expense.title.as_deref().unwrap_or("-");
+    format!(
+        "Day{} {time} {} / {} / {} {}",
+        key.day_number, key.title, title, expense.expense.amount, expense.expense.currency
+    )
+}
+
+fn beneficiary_refs(expense: &ExportExpense) -> Vec<String> {
+    let mut refs: Vec<String> = expense
+        .expense
+        .beneficiaries
+        .iter()
+        .map(|b| b.participant_ref.clone())
+        .collect();
+    refs.sort_unstable();
+    refs
+}
+
+fn fmt_payer_ref(expense: &ExportExpense) -> String {
+    expense
+        .expense
+        .paid_by_participant_ref
+        .clone()
+        .or(expense.expense.paid_by_name.clone())
+        .unwrap_or_else(|| "-".to_string())
+}
+
+fn expense_shared_fields_changed(
+    old: &ExportExpense,
+    new: &ExportExpense,
+    compare_shared_fields: bool,
+) -> Vec<(String, String, String)> {
+    if !compare_shared_fields {
+        return Vec::new();
+    }
+    let mut changes = Vec::new();
+    let old_payer = fmt_payer_ref(old);
+    let new_payer = fmt_payer_ref(new);
+    if old_payer != new_payer {
+        changes.push(("payer".to_string(), old_payer, new_payer));
+    }
+    let old_beneficiaries = beneficiary_refs(old).join(", ");
+    let new_beneficiaries = beneficiary_refs(new).join(", ");
+    let old_display = if old_beneficiaries.is_empty() {
+        "-".to_string()
+    } else {
+        old_beneficiaries
+    };
+    let new_display = if new_beneficiaries.is_empty() {
+        "-".to_string()
+    } else {
+        new_beneficiaries
+    };
+    if old_display != new_display {
+        changes.push(("beneficiaries".to_string(), old_display, new_display));
+    }
+    changes
+}
+
+fn schema_supports_shared_expense_diff(schema_version: Option<i32>) -> bool {
+    effective_export_schema_version(schema_version) >= TRIP_EXPORT_SCHEMA_VERSION
+}
+
+fn compute_expenses_diff(
+    old_expenses: &[ExportExpense],
+    new_expenses: &[ExportExpense],
+    compare_shared_fields: bool,
+) -> (
+    Vec<ExportExpense>,
+    Vec<ExportExpense>,
+    Vec<ExpenseFieldChange>,
+) {
+    let old_map: HashMap<ExpenseKey, &ExportExpense> = old_expenses
+        .iter()
+        .map(|expense| (expense_key(expense), expense))
+        .collect();
+    let new_map: HashMap<ExpenseKey, &ExportExpense> = new_expenses
+        .iter()
+        .map(|expense| (expense_key(expense), expense))
+        .collect();
+
+    let mut expense_removed: Vec<ExportExpense> = old_expenses
+        .iter()
+        .filter(|expense| !new_map.contains_key(&expense_key(expense)))
+        .cloned()
+        .collect();
+    let mut expense_added: Vec<ExportExpense> = new_expenses
+        .iter()
+        .filter(|expense| !old_map.contains_key(&expense_key(expense)))
+        .cloned()
+        .collect();
+
+    let mut expense_modified = Vec::new();
+    for (key, old_expense) in &old_map {
+        let Some(new_expense) = new_map.get(key) else {
+            continue;
+        };
+        let line = format_expense_line(new_expense);
+        for (field, old_value, new_value) in
+            expense_shared_fields_changed(old_expense, new_expense, compare_shared_fields)
+        {
+            expense_modified.push(ExpenseFieldChange {
+                line: line.clone(),
+                field,
+                old_value,
+                new_value,
+            });
+        }
+    }
+
+    expense_removed.sort_by(compare_export_expenses);
+    expense_added.sort_by(compare_export_expenses);
+    expense_modified.sort_by(|a, b| a.line.cmp(&b.line).then_with(|| a.field.cmp(&b.field)));
+
+    (expense_added, expense_removed, expense_modified)
+}
+
 /// 2つの export JSON の差分を計算する（厳密比較）
 pub(crate) fn compute_trip_diff(old: &TripExport, new: &TripExport) -> TripDiff {
     let mut trip_changes = Vec::new();
@@ -641,6 +802,10 @@ pub(crate) fn compute_trip_diff(old: &TripExport, new: &TripExport) -> TripDiff 
         compute_reservations_diff(&old.reservations, &new.reservations);
     let (participant_added, participant_removed, participant_changed) =
         compute_participants_diff(old.participants(), new.participants());
+    let compare_shared_fields = schema_supports_shared_expense_diff(old.schema_version)
+        && schema_supports_shared_expense_diff(new.schema_version);
+    let (expense_added, expense_removed, expense_modified) =
+        compute_expenses_diff(old.expenses(), new.expenses(), compare_shared_fields);
 
     TripDiff {
         trip_changes,
@@ -657,6 +822,9 @@ pub(crate) fn compute_trip_diff(old: &TripExport, new: &TripExport) -> TripDiff 
         participant_added,
         participant_removed,
         participant_changed,
+        expense_added,
+        expense_removed,
+        expense_modified,
     }
 }
 
@@ -808,6 +976,33 @@ pub(crate) fn print_trip_diff(diff: &TripDiff) {
             );
         }
     }
+
+    println!();
+    println!("Expenses:");
+    if diff.expense_added.is_empty()
+        && diff.expense_removed.is_empty()
+        && diff.expense_modified.is_empty()
+    {
+        println!("  （変更なし）");
+    } else {
+        for expense in &diff.expense_removed {
+            println!("- Expense removed: {}", format_expense_line(expense));
+        }
+        for expense in &diff.expense_added {
+            println!("+ Expense added: {}", format_expense_line(expense));
+        }
+        let mut current_line: Option<String> = None;
+        for change in &diff.expense_modified {
+            if current_line.as_deref() != Some(change.line.as_str()) {
+                println!("~ Expense changed: {}", change.line);
+                current_line = Some(change.line.clone());
+            }
+            println!(
+                "  {}: {} -> {}",
+                change.field, change.old_value, change.new_value
+            );
+        }
+    }
 }
 
 /// 2つの JSON ファイルを比較して差分を表示する
@@ -871,6 +1066,7 @@ mod tests {
             day_summaries: vec![],
             reservations: vec![],
             participants: vec![],
+            expenses: vec![],
         };
         let new = TripExport {
             schema_version: None,
@@ -884,6 +1080,7 @@ mod tests {
             day_summaries: vec![],
             reservations: vec![],
             participants: vec![],
+            expenses: vec![],
         };
 
         let diff = compute_trip_diff(&old, &new);
@@ -918,6 +1115,7 @@ mod tests {
             day_summaries: vec![],
             reservations: vec![],
             participants: vec![],
+            expenses: vec![],
         };
         let new = TripExport {
             schema_version: None,
@@ -931,6 +1129,7 @@ mod tests {
             day_summaries: vec![],
             reservations: vec![],
             participants: vec![],
+            expenses: vec![],
         };
 
         let diff = compute_trip_diff(&old, &new);
@@ -971,6 +1170,7 @@ mod tests {
             day_summaries: vec![],
             reservations: vec![],
             participants: vec![],
+            expenses: vec![],
         };
         let new = TripExport {
             schema_version: None,
@@ -984,6 +1184,7 @@ mod tests {
             day_summaries: vec![],
             reservations: vec![],
             participants: vec![],
+            expenses: vec![],
         };
 
         let diff = compute_trip_diff(&old, &new);
@@ -1006,6 +1207,7 @@ mod tests {
             day_summaries: vec![],
             reservations: vec![],
             participants: vec![],
+            expenses: vec![],
         };
         let new = TripExport {
             schema_version: None,
@@ -1019,6 +1221,7 @@ mod tests {
             day_summaries: vec![],
             reservations: vec![],
             participants: vec![],
+            expenses: vec![],
         };
 
         let diff = compute_trip_diff(&old, &new);
@@ -1058,6 +1261,7 @@ mod tests {
             day_summaries: vec![],
             reservations: vec![],
             participants: vec![],
+            expenses: vec![],
         }
     }
 

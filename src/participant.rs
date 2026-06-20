@@ -249,9 +249,13 @@ pub(crate) fn update_participant(
 
 pub(crate) fn delete_participant(conn: &Connection, id: i64) -> Result<()> {
     get_participant(conn, id)?;
-    conn.execute("DELETE FROM participants WHERE id = ?1", params![id])
-        .context("Participant の削除に失敗しました")?;
-    Ok(())
+    crate::db::with_transaction(conn, "participant delete", |tx| {
+        crate::expense::clear_paid_by_for_participant(tx, id)?;
+        crate::expense::delete_beneficiaries_for_participant(tx, id)?;
+        tx.execute("DELETE FROM participants WHERE id = ?1", params![id])
+            .context("Participant の削除に失敗しました")?;
+        Ok(())
+    })
 }
 
 pub(crate) fn delete_participants_for_trip(conn: &Connection, trip_id: i64) -> Result<()> {
@@ -402,6 +406,41 @@ mod tests {
 
     fn add_sample_trip(conn: &rusqlite::Connection) -> i64 {
         crate::trip::add_trip(conn, "Test Trip", "2026-06-01", "2026-06-03", None).unwrap()
+    }
+
+    #[test]
+    fn test_delete_participant_clears_expense_refs() {
+        let conn = setup_conn();
+        let trip_id = add_sample_trip(&conn);
+        let payer = create_participant(&conn, trip_id, "Alice", None, false).unwrap();
+        let beneficiary = create_participant(&conn, trip_id, "Bob", None, false).unwrap();
+        let itinerary_id = crate::itinerary::add_itinerary_item(
+            &conn, trip_id, 1, "Lunch", None, None, None, None, None, None, None,
+        )
+        .unwrap();
+        let expense_id = crate::expense::add_expense(
+            &conn,
+            itinerary_id,
+            "1000",
+            "JPY",
+            None,
+            None,
+            None,
+            None,
+            &crate::expense::ExpenseSharedOptions {
+                paid_by_participant_id: Some(payer),
+                beneficiary_participant_ids: Some(vec![payer, beneficiary]),
+                ..crate::expense::ExpenseSharedOptions::default()
+            },
+        )
+        .unwrap();
+
+        delete_participant(&conn, payer).unwrap();
+        let expense = crate::expense::get_expense(&conn, expense_id).unwrap();
+        assert!(expense.paid_by_participant_id.is_none());
+        let remaining = crate::expense::list_beneficiaries_for_expense(&conn, expense_id).unwrap();
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].participant_id, beneficiary);
     }
 
     #[test]

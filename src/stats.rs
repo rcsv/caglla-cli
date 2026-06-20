@@ -477,10 +477,21 @@ mod tests {
             None,
             None,
             None,
+            &crate::expense::ExpenseSharedOptions::default(),
         )
         .unwrap();
-        crate::expense::add_expense(&conn, itinerary_id, "300", "JPY", None, None, None, None)
-            .unwrap();
+        crate::expense::add_expense(
+            &conn,
+            itinerary_id,
+            "300",
+            "JPY",
+            None,
+            None,
+            None,
+            None,
+            &crate::expense::ExpenseSharedOptions::default(),
+        )
+        .unwrap();
 
         let stats = compute_trip_stats(&conn, trip_id).unwrap();
         assert_eq!(stats.expense_count, 2);
@@ -504,6 +515,7 @@ mod tests {
             None,
             None,
             None,
+            &crate::expense::ExpenseSharedOptions::default(),
         )
         .unwrap();
         crate::expense::add_expense(
@@ -515,10 +527,21 @@ mod tests {
             None,
             None,
             None,
+            &crate::expense::ExpenseSharedOptions::default(),
         )
         .unwrap();
-        crate::expense::add_expense(&conn, itinerary_id, "5.00", "USD", None, None, None, None)
-            .unwrap();
+        crate::expense::add_expense(
+            &conn,
+            itinerary_id,
+            "5.00",
+            "USD",
+            None,
+            None,
+            None,
+            None,
+            &crate::expense::ExpenseSharedOptions::default(),
+        )
+        .unwrap();
 
         let stats = compute_trip_stats(&conn, trip_id).unwrap();
         assert_eq!(stats.expense_count, 3);

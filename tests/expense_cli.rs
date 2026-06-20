@@ -43,6 +43,172 @@ fn setup_trip_with_itinerary(dir: &std::path::Path) {
     );
 }
 
+fn setup_trip_with_itinerary_and_participants(dir: &std::path::Path) -> (i64, i64) {
+    setup_trip_with_itinerary(dir);
+    assert!(run_cli(
+        dir,
+        &[
+            "participant",
+            "add",
+            "--trip",
+            "1",
+            "--name",
+            "Alice",
+            "--self"
+        ],
+    )
+    .status
+    .success());
+    assert!(
+        run_cli(dir, &["participant", "add", "--trip", "1", "--name", "Bob"],)
+            .status
+            .success()
+    );
+    (1, 1) // trip_id, itinerary_id
+}
+
+#[test]
+fn cli_expense_add_with_paid_by_participant_and_beneficiaries() {
+    let dir = temp_workdir();
+    setup_trip_with_itinerary_and_participants(&dir);
+
+    let output = run_cli(
+        &dir,
+        &[
+            "expense",
+            "add",
+            "--itinerary",
+            "1",
+            "--amount",
+            "4000",
+            "--currency",
+            "JPY",
+            "--title",
+            "Dinner",
+            "--paid-by-participant",
+            "Alice",
+            "--beneficiary",
+            "Alice",
+            "--beneficiary",
+            "Bob",
+        ],
+    );
+    assert!(output.status.success());
+    let show: serde_json::Value =
+        serde_json::from_slice(&run_cli(&dir, &["expense", "show", "1", "--json"]).stdout).unwrap();
+    assert_eq!(show["paid_by_participant_name"], "Alice");
+    assert_eq!(show["shared"], true);
+    assert_eq!(show["beneficiaries"].as_array().unwrap().len(), 2);
+}
+
+#[test]
+fn cli_expense_add_shared_with_all() {
+    let dir = temp_workdir();
+    setup_trip_with_itinerary_and_participants(&dir);
+
+    let output = run_cli(
+        &dir,
+        &[
+            "expense",
+            "add",
+            "--itinerary",
+            "1",
+            "--amount",
+            "3000",
+            "--currency",
+            "JPY",
+            "--shared-with",
+            "all",
+        ],
+    );
+    assert!(output.status.success());
+    let show: serde_json::Value =
+        serde_json::from_slice(&run_cli(&dir, &["expense", "show", "1", "--json"]).stdout).unwrap();
+    assert_eq!(show["beneficiaries"].as_array().unwrap().len(), 2);
+}
+
+#[test]
+fn cli_expense_rejects_structured_without_participants() {
+    let dir = temp_workdir();
+    setup_trip_with_itinerary(&dir);
+
+    let output = run_cli(
+        &dir,
+        &[
+            "expense",
+            "add",
+            "--itinerary",
+            "1",
+            "--amount",
+            "1000",
+            "--currency",
+            "JPY",
+            "--paid-by-participant",
+            "Alice",
+        ],
+    );
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr)
+        .contains("no participants registered for this trip"));
+}
+
+#[test]
+fn cli_expense_rejects_shared_with_and_beneficiary_on_add() {
+    let dir = temp_workdir();
+    setup_trip_with_itinerary_and_participants(&dir);
+
+    let output = run_cli(
+        &dir,
+        &[
+            "expense",
+            "add",
+            "--itinerary",
+            "1",
+            "--amount",
+            "1000",
+            "--currency",
+            "JPY",
+            "--shared-with",
+            "all",
+            "--beneficiary",
+            "Alice",
+        ],
+    );
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr)
+        .contains("cannot combine --shared-with and --beneficiary"));
+}
+
+#[test]
+fn cli_expense_update_clear_beneficiaries() {
+    let dir = temp_workdir();
+    setup_trip_with_itinerary_and_participants(&dir);
+    assert!(run_cli(
+        &dir,
+        &[
+            "expense",
+            "add",
+            "--itinerary",
+            "1",
+            "--amount",
+            "1000",
+            "--currency",
+            "JPY",
+            "--beneficiary",
+            "Alice",
+        ],
+    )
+    .status
+    .success());
+
+    let update = run_cli(&dir, &["expense", "update", "1", "--clear-beneficiaries"]);
+    assert!(update.status.success());
+    let show: serde_json::Value =
+        serde_json::from_slice(&run_cli(&dir, &["expense", "show", "1", "--json"]).stdout).unwrap();
+    assert_eq!(show["shared"], false);
+    assert!(show["beneficiaries"].as_array().unwrap().is_empty());
+}
+
 #[test]
 fn cli_expense_add_and_show() {
     let dir = temp_workdir();
