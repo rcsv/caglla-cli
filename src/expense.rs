@@ -591,6 +591,9 @@ pub(crate) fn parse_expense_shared_options_for_update(
     if clear_beneficiaries && (!beneficiaries.is_empty() || shared_with.is_some()) {
         anyhow::bail!("cannot combine --clear-beneficiaries and --beneficiary/--shared-with");
     }
+    if shared_with.is_some() && !beneficiaries.is_empty() {
+        anyhow::bail!("cannot combine --shared-with and --beneficiary");
+    }
     if paid_by_participant.is_some() || !beneficiaries.is_empty() || shared_with.is_some() {
         require_participants_for_structured_options(conn, itinerary_id)?;
     }
