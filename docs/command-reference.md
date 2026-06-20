@@ -258,6 +258,30 @@ cargo run -- itinerary move 5 --before 7
 
 既存 Itinerary を、対象 Itinerary の直後 / 直前へ移動します。`--after` と `--before` は同時指定できず、自分自身を基準位置に指定することもできません。
 
+### Itinerary の複製
+
+```bash
+cargo run -- itinerary replicate --items 12,13,18,21 --to-days 3-5
+cargo run -- itinerary replicate --items 12 --to-days 3,4,5
+cargo run -- itinerary replicate --items 12,13 --to-days 2,4-6 --without-notes
+cargo run -- itinerary replicate --items 12,13 --to-days 3-5 --dry-run
+```
+
+| オプション | 説明 |
+|---|---|
+| `--items` | 複製元 Itinerary ID（カンマ区切り）。同一 Trip・同一 Day に属する必要がある |
+| `--to-days` | コピー先 Day（`3`, `3,4,5`, `3-5`, `2,4-6` など） |
+| `--without-notes` | Itinerary-level notes（Note エンティティ）をコピーしない。Itinerary 本体の `note` はコピーする |
+| `--dry-run` | DB を更新せず、作成予定のみ表示 |
+
+**挙動:**
+
+- Google Calendar の recurring event ではなく、複製後の各 Itinerary は **独立** して編集できる
+- コピー対象: `title`, `note`, `start_time`, `sort_order`, `duration_minutes`, `travel_minutes`, `location`, `category`, Itinerary-level notes（デフォルト）
+- コピーしない: Expense, Reservation, `id`, `created_at`, `updated_at`
+- `--to-days` に source Day を含めるとエラー
+- 複数 item × 複数 Day の複製は **1 トランザクション** で実行される
+
 ### カテゴリ
 
 ```bash

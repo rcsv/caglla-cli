@@ -372,3 +372,133 @@ fn cli_itinerary_move_rejects_self_reference() {
     assert!(!before_self.status.success());
     assert!(String::from_utf8_lossy(&before_self.stderr).contains("自分自身"));
 }
+
+fn setup_week_trip(dir: &std::path::Path) {
+    assert!(run_cli(dir, &["db", "reset"]).status.success());
+    assert!(run_cli(
+        dir,
+        &[
+            "trip",
+            "add",
+            "Week Trip",
+            "--start",
+            "2026-04-26",
+            "--end",
+            "2026-05-02",
+        ],
+    )
+    .status
+    .success());
+}
+
+#[test]
+fn cli_itinerary_replicate_copies_pattern_to_multiple_days() {
+    let dir = temp_workdir();
+    setup_week_trip(&dir);
+
+    for (title, order) in [
+        ("Hotel breakfast", "1000"),
+        ("Leave hotel", "2000"),
+        ("Return to hotel", "7000"),
+        ("Lounge dinner", "8000"),
+    ] {
+        assert!(run_cli(
+            &dir,
+            &[
+                "itinerary",
+                "add",
+                "1",
+                "--day",
+                "2",
+                "--order",
+                order,
+                title,
+            ],
+        )
+        .status
+        .success());
+    }
+
+    let output = run_cli(
+        &dir,
+        &[
+            "itinerary",
+            "replicate",
+            "--items",
+            "1,2,3,4",
+            "--to-days",
+            "3-5",
+        ],
+    );
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Itineraries replicated."));
+    assert!(stdout.contains("Source Day: 2"));
+    assert!(stdout.contains("Day 3: 4 items"));
+    assert!(stdout.contains("Total: 12 items"));
+    assert!(stdout.contains("Day 5:"));
+
+    let day3 = run_cli(&dir, &["itinerary", "list", "1"]);
+    assert!(day3.status.success());
+    let list_out = String::from_utf8_lossy(&day3.stdout);
+    assert_eq!(list_out.matches("Hotel breakfast").count(), 4);
+}
+
+#[test]
+fn cli_itinerary_replicate_rejects_source_day_in_targets() {
+    let dir = temp_workdir();
+    setup_week_trip(&dir);
+    assert!(
+        run_cli(&dir, &["itinerary", "add", "1", "--day", "2", "Breakfast"])
+            .status
+            .success()
+    );
+
+    let output = run_cli(
+        &dir,
+        &["itinerary", "replicate", "--items", "1", "--to-days", "2-4"],
+    );
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("source Day"));
+}
+
+#[test]
+fn cli_itinerary_replicate_dry_run_does_not_create_items() {
+    let dir = temp_workdir();
+    setup_week_trip(&dir);
+    assert!(
+        run_cli(&dir, &["itinerary", "add", "1", "--day", "2", "Breakfast"])
+            .status
+            .success()
+    );
+
+    let output = run_cli(
+        &dir,
+        &[
+            "itinerary",
+            "replicate",
+            "--items",
+            "1",
+            "--to-days",
+            "3",
+            "--dry-run",
+        ],
+    );
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Dry run"));
+    assert!(stdout.contains("Would create:"));
+
+    let list = run_cli(&dir, &["itinerary", "list", "1"]);
+    assert!(list.status.success());
+    assert_eq!(
+        String::from_utf8_lossy(&list.stdout)
+            .matches("Breakfast")
+            .count(),
+        1
+    );
+}
