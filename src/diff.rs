@@ -1528,4 +1528,83 @@ mod tests {
             .iter()
             .all(|c| c.field == "is_self"));
     }
+
+    #[test]
+    fn test_diff_expense_payer_and_beneficiaries_changed() {
+        use crate::models::{
+            ExportExpense, ExportExpenseBeneficiaryV5, ExportExpenseV3, TRIP_EXPORT_SCHEMA_VERSION,
+            TRIP_EXPORT_SCHEMA_VERSION_V4,
+        };
+
+        let itinerary_key = ItineraryNoteKey {
+            day_number: 1,
+            sort_order: 0,
+            start_time: Some("12:00".to_string()),
+            title: "Lunch".to_string(),
+        };
+        let base_expense = ExportExpense {
+            itinerary_key: itinerary_key.clone(),
+            expense: ExportExpenseV3 {
+                title: Some("Meal".to_string()),
+                amount: 4000,
+                currency: "JPY".to_string(),
+                paid_by_name: None,
+                paid_by_participant_ref: None,
+                beneficiaries: vec![],
+                expense_date: None,
+                note: None,
+                sort_order: 0,
+            },
+        };
+
+        let mut old = make_base_export(make_test_trip("Trip"));
+        old.schema_version = Some(TRIP_EXPORT_SCHEMA_VERSION);
+        old.expenses = vec![base_expense.clone()];
+
+        let mut new = make_base_export(make_test_trip("Trip"));
+        new.schema_version = Some(TRIP_EXPORT_SCHEMA_VERSION);
+        new.expenses = vec![ExportExpense {
+            expense: ExportExpenseV3 {
+                paid_by_participant_ref: Some("Alice".to_string()),
+                beneficiaries: vec![
+                    ExportExpenseBeneficiaryV5 {
+                        participant_ref: "Alice".to_string(),
+                        sort_order: Some(0),
+                    },
+                    ExportExpenseBeneficiaryV5 {
+                        participant_ref: "Bob".to_string(),
+                        sort_order: Some(1),
+                    },
+                ],
+                ..base_expense.expense.clone()
+            },
+            ..base_expense.clone()
+        }];
+
+        let diff = compute_trip_diff(&old, &new);
+        assert!(diff.expense_added.is_empty());
+        assert!(diff.expense_removed.is_empty());
+        let fields: Vec<&str> = diff
+            .expense_modified
+            .iter()
+            .map(|c| c.field.as_str())
+            .collect();
+        assert!(fields.contains(&"payer"));
+        assert!(fields.contains(&"beneficiaries"));
+
+        let mut old_v4 = make_base_export(make_test_trip("Trip"));
+        old_v4.schema_version = Some(TRIP_EXPORT_SCHEMA_VERSION_V4);
+        old_v4.expenses = vec![base_expense.clone()];
+        let mut new_v4 = make_base_export(make_test_trip("Trip"));
+        new_v4.schema_version = Some(TRIP_EXPORT_SCHEMA_VERSION_V4);
+        new_v4.expenses = vec![ExportExpense {
+            expense: ExportExpenseV3 {
+                paid_by_participant_ref: Some("Alice".to_string()),
+                ..base_expense.expense
+            },
+            itinerary_key,
+        }];
+        let diff_v4 = compute_trip_diff(&old_v4, &new_v4);
+        assert!(diff_v4.expense_modified.is_empty());
+    }
 }
