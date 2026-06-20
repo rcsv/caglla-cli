@@ -772,6 +772,50 @@ mod tests {
     }
 
     #[test]
+    fn test_export_md_includes_shared_expense_payer_and_beneficiaries() {
+        let conn = test_db();
+        let trip_id = add_test_trip(&conn, "Shared Expense MD Trip").unwrap();
+        let payer =
+            crate::participant::create_participant(&conn, trip_id, "Alice", None, true).unwrap();
+        let beneficiary =
+            crate::participant::create_participant(&conn, trip_id, "Bob", None, false).unwrap();
+        let itinerary_id = add_itinerary_item(
+            &conn,
+            trip_id,
+            1,
+            "Dinner",
+            None,
+            Some("18:00"),
+            Some(0),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        crate::expense::add_expense(
+            &conn,
+            itinerary_id,
+            "4000",
+            "JPY",
+            Some("Restaurant"),
+            None,
+            None,
+            None,
+            &crate::expense::ExpenseSharedOptions {
+                paid_by_participant_id: Some(payer),
+                beneficiary_participant_ids: Some(vec![payer, beneficiary]),
+                ..crate::expense::ExpenseSharedOptions::default()
+            },
+        )
+        .unwrap();
+
+        let md = generate_trip_markdown(&conn, trip_id).unwrap();
+        assert!(md.contains("Paid by: Alice"));
+        assert!(md.contains("Shared: Alice, Bob"));
+    }
+
+    #[test]
     fn test_export_md_omits_expenses_when_none() {
         let conn = test_db();
         let trip_id = add_test_trip(&conn, "No Expense Trip").unwrap();

@@ -149,7 +149,7 @@ cargo run -- expense delete 1
 | 親 | **Itinerary のみ**（`add` は `--itinerary` 必須） |
 | `--amount` / `--currency` | **必須** |
 | `--title` / `--note` / `--paid-by-name` / `--expense-date` | 任意 |
-| `--paid-by-participant` / `--beneficiary` / `--shared-with all` | 任意（Participant 登録 Trip のみ。`add` では `--shared-with` と `--beneficiary` は排他） |
+| `--paid-by-participant` / `--beneficiary` / `--shared-with all` | 任意（Participant 登録 Trip のみ。`add` / `update` とも `--shared-with` と `--beneficiary` は排他） |
 | `update` の `--clear-paid-by` / `--clear-beneficiaries` | payer / beneficiary のクリア |
 | `expense list` | `--itinerary` または `--trip` のいずれか |
 | 金額の保存 | DB は最小通貨単位の **整数**（JPY=円、USD `12.50` → 1250 セント） |
