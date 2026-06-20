@@ -74,10 +74,13 @@ Itinerary Note  owner_type = itinerary  owner_id = itinerary_items.id
 
 ### Day Swap との関係
 
-v1.2.0 の `day swap` は **Itinerary の `day_id` のみ** 入れ替えます。
+v1.2.0 以降の `day swap` は **Day shell（番号・日付・`days.id`）を固定** し、plan payload を交換します。
 
-- Day Note は `days.id` に紐づくため、**Day 番号に固定** され swap の影響を受けない。
-- 意図: 「2 日目の日記」は Day 2 に残り、「2 日目に実行した予定のメモ」は Itinerary について swap で移動する。
+| 対象 | 挙動 |
+|---|---|
+| Itinerary | `day_id` / `day` 列を入れ替え — Itinerary Note は行 ID ごと移動 |
+| Day title / summary | 2 Day 間で値を交換 |
+| Day Note | `owner_id` を 2 Day 間で交換（Trip Note は対象外） |
 
 ---
 
@@ -120,7 +123,7 @@ CREATE INDEX IF NOT EXISTS idx_notes_owner
 | `trip delete` | 当該 Trip 配下の **すべて** の Note を削除（Trip / Day / Itinerary 由来すべて） |
 | Day 行削除（`trip update` で期間短縮） | 当該 `days.id` の Day Note を削除 |
 | `itinerary delete` | 当該 `itinerary_items.id` の Itinerary Note を削除 |
-| `day swap` | Note は **変更しない** |
+| `day swap` | Day-level Note の owner 交換 + Itinerary 移動（Trip / Itinerary Note は個別ルールどおり） |
 
 実装は `delete_notes_for_trip` / `delete_notes_for_day` / `delete_notes_for_itinerary` 等の関数 + 既存 delete 処理からの呼び出し。
 

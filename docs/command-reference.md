@@ -89,7 +89,11 @@ cargo run -- day show 1 2 --json
 
 ### Day Swap
 
-2 つの Day 配下の Itinerary を **入れ替え** ます。`day_number` と Trip の開始日・終了日は変更しません。
+2 つの Day の **plan payload** を入れ替えます。Day 番号やカレンダー日付は変更しません。
+
+入れ替え対象: 配下の Itinerary、`days.title` / `days.summary`、Day-level Note。
+
+入れ替えないもの: `days.id`、`day_number`、Trip の開始日・終了日から導出される日付、`created_at`。
 
 ```bash
 cargo run -- day swap 1 2 3

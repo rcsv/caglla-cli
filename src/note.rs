@@ -219,6 +219,38 @@ pub(crate) fn delete_notes_for_day(conn: &Connection, day_id: i64) -> Result<()>
     Ok(())
 }
 
+/// 2 Day 間で Day-level Note の owner_id を入れ替える（`day swap` 用）
+pub(crate) fn swap_day_note_owners(
+    conn: &Connection,
+    day_a_id: i64,
+    day_b_id: i64,
+    now: &str,
+) -> Result<usize> {
+    let sentinel = -day_a_id;
+    let staged = conn
+        .execute(
+            "UPDATE notes SET owner_id = ?1, updated_at = ?2
+         WHERE owner_type = 'day' AND owner_id = ?3",
+            params![sentinel, now, day_a_id],
+        )
+        .context("Day Note owner の退避に失敗しました")?;
+    let moved_b_to_a = conn
+        .execute(
+            "UPDATE notes SET owner_id = ?1, updated_at = ?2
+             WHERE owner_type = 'day' AND owner_id = ?3",
+            params![day_a_id, now, day_b_id],
+        )
+        .context("Day B Note owner の移動に失敗しました")?;
+    let moved_a_to_b = conn
+        .execute(
+            "UPDATE notes SET owner_id = ?1, updated_at = ?2
+             WHERE owner_type = 'day' AND owner_id = ?3",
+            params![day_b_id, now, sentinel],
+        )
+        .context("Day A Note owner の移動に失敗しました")?;
+    Ok(staged + moved_b_to_a + moved_a_to_b)
+}
+
 pub(crate) fn delete_notes_for_itinerary(conn: &Connection, itinerary_id: i64) -> Result<()> {
     conn.execute(
         "DELETE FROM notes WHERE owner_type = 'itinerary' AND owner_id = ?1",
@@ -869,15 +901,15 @@ mod tests {
         assert_eq!(count_notes(&conn).unwrap(), 0);
     }
 
-    /// day swap では Note を更新しない。
-    /// Day Note は days.id に残り、Itinerary Note は itinerary_items.id に残る（予定だけが移動）。
+    /// day swap では Day-level Note の owner を入れ替え、Itinerary Note は Itinerary と一緒に移動する。
     #[test]
-    fn test_day_swap_leaves_day_notes_on_days_id_and_itinerary_notes_on_itinerary_id() {
+    fn test_day_swap_exchanges_day_notes_and_moves_itinerary_notes() {
         let conn = test_db();
         let trip_id = add_trip(&conn, "Trip", "2026-04-26", "2026-04-29", None).unwrap();
         let day2 = crate::day::find_day_by_trip_and_day_number(&conn, trip_id, 2).unwrap();
         let day3 = crate::day::find_day_by_trip_and_day_number(&conn, trip_id, 3).unwrap();
         add_note(&conn, ResolvedNoteOwner::Day(day2.id), None, "day2 note").unwrap();
+        add_note(&conn, ResolvedNoteOwner::Day(day3.id), None, "day3 note").unwrap();
         let itinerary_id = add_itinerary_item(
             &conn, trip_id, 2, "Plan", None, None, None, None, None, None, None,
         )
@@ -890,13 +922,14 @@ mod tests {
         )
         .unwrap();
 
-        crate::day::swap_day_itineraries(&conn, trip_id, 2, 3).unwrap();
+        crate::day::swap_day_plan_payload(&conn, trip_id, 2, 3).unwrap();
 
         let day2_notes = list_notes_for_owner(&conn, NoteOwnerType::Day, day2.id).unwrap();
         let day3_notes = list_notes_for_owner(&conn, NoteOwnerType::Day, day3.id).unwrap();
         assert_eq!(day2_notes.len(), 1);
-        assert_eq!(day2_notes[0].body, "day2 note");
-        assert_eq!(day3_notes.len(), 0);
+        assert_eq!(day2_notes[0].body, "day3 note");
+        assert_eq!(day3_notes.len(), 1);
+        assert_eq!(day3_notes[0].body, "day2 note");
 
         let item = crate::itinerary::get_itinerary_item(&conn, itinerary_id).unwrap();
         assert_eq!(item.day, 3);
@@ -904,6 +937,27 @@ mod tests {
             list_notes_for_owner(&conn, NoteOwnerType::Itinerary, itinerary_id).unwrap();
         assert_eq!(itinerary_notes.len(), 1);
         assert_eq!(itinerary_notes[0].body, "itinerary note");
+    }
+
+    #[test]
+    fn test_day_swap_leaves_trip_notes_unchanged() {
+        let conn = test_db();
+        let trip_id = add_trip(&conn, "Trip", "2026-04-26", "2026-04-29", None).unwrap();
+        add_note(&conn, ResolvedNoteOwner::Trip(trip_id), None, "trip note").unwrap();
+        add_itinerary_item(
+            &conn, trip_id, 2, "A", None, None, None, None, None, None, None,
+        )
+        .unwrap();
+        add_itinerary_item(
+            &conn, trip_id, 3, "B", None, None, None, None, None, None, None,
+        )
+        .unwrap();
+
+        crate::day::swap_day_plan_payload(&conn, trip_id, 2, 3).unwrap();
+
+        let trip_notes = list_notes_for_owner(&conn, NoteOwnerType::Trip, trip_id).unwrap();
+        assert_eq!(trip_notes.len(), 1);
+        assert_eq!(trip_notes[0].body, "trip note");
     }
 
     #[test]
