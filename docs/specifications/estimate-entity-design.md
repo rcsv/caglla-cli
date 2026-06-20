@@ -121,7 +121,7 @@ CREATE INDEX IF NOT EXISTS idx_estimates_itinerary
 | 列 | 必須 | 型 | 説明 |
 |---|---|---|---|
 | `id` | — | INTEGER | 主キー（AUTOINCREMENT） |
-| `itinerary_id` | ✓ | INTEGER | 親 Itinerary。存在・Trip 整合をアプリ側で検証 |
+| `itinerary_id` | ✓ | INTEGER | 親 Itinerary。存在をアプリ側で検証 |
 | `title` | — | TEXT NULL | 見積項目名（例: `ホテル朝食`）。**省略可**（§2） |
 | `amount` | ✓ | INTEGER | **最小通貨単位**の整数（§3） |
 | `currency` | ✓ | TEXT | ISO 4217 コード（例: `JPY`, `USD`）。大文字正規化（§3） |
@@ -254,7 +254,7 @@ delete_estimates_for_trip(trip_id)
 
 を `itinerary delete` / `trip delete` から **同一トランザクション内** で呼び出す（Expense / Reservation / Note cascade と同型）。
 
-create / update 時: `itinerary_id` が存在し、指定 Trip に属することを検証（Expense と同型）。
+create 時（`estimate add`）: `itinerary_id` が存在することを検証（Expense `add` と同型）。`update` は Estimate ID 指定の部分更新のため親 Itinerary は変更しない。
 
 ---
 
@@ -333,7 +333,7 @@ Trip / Day 直下への add は **不可**。
 
 | 項目 | ルール |
 |---|---|
-| `itinerary_id` | 存在する Itinerary を参照。Trip 外は拒否 |
+| `itinerary_id` | 存在する Itinerary を参照すること |
 | `amount` | **必須**。`parse_amount_for_currency` 経由。負数拒否 |
 | `currency` | **必須**。`validate_currency_code` 経由 |
 | `title` | 任意。空文字のみは **NULL として保存**（Expense と同型） |
