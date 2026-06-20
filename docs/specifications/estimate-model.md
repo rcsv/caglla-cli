@@ -8,7 +8,8 @@ Caglla.Travel CLI / 将来 Web 版に向けた **Estimate（事前見積 / Plann
 |---|---|
 | **本書** | Estimate / Planned Budget の責務・境界・スコープ |
 | [estimate-entity-design.md](estimate-entity-design.md) | テーブル・フィールド・CLI 案・validation（Entity Design — **未実装**） |
-| `estimate-implementation-plan.md`（将来） | 実装計画（Implementation Plan） |
+| [estimate-implementation-plan.md](estimate-implementation-plan.md) | 実装計画（Implementation Plan — Phase 分割・migration・テスト。**未実装**） |
+| `estimate-post-implementation-review.md`（将来） | 実装後レビュー |
 | [expense-model.md](expense-model.md) (v1.5.0) | Expense = Transaction Record Layer（設計履歴） |
 | [expense-post-implementation-review.md](expense-post-implementation-review.md) (v1.22.0) | Expense = Actual Money。Estimate 分離の既存結論 |
 | [itinerary-model.md](itinerary-model.md) (v1.8.0+) | Itinerary = 行動単位。子エンティティの親 |
@@ -22,9 +23,9 @@ Caglla.Travel CLI / 将来 Web 版に向けた **Estimate（事前見積 / Plann
 ```text
 Responsibilities Review   → estimate-model.md（本書）
 Entity Design             → estimate-entity-design.md
-Implementation Plan       → estimate-implementation-plan.md（未着手）
-Implementation            → DB + CLI + export（未着手）
-Post-Implementation Review → （未着手）
+Implementation Plan       → estimate-implementation-plan.md
+Implementation            → Phase 1–4（未着手）
+Post-Implementation Review → estimate-post-implementation-review.md（未着手）
 ```
 
 ---
@@ -375,7 +376,7 @@ replicate でコピーしない:
 - release 作業
 ```
 
-次ステップ: [Entity Design](estimate-entity-design.md) → **Implementation Plan** → 実装。
+次ステップ: [Implementation Plan](estimate-implementation-plan.md) → **Phase 1 実装**（migration + CRUD + CLI）。
 
 ---
 
