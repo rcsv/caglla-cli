@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use anyhow::{Context, Result};
 use rusqlite::Connection;
 
-use crate::models::{ChecklistItem, Day, Expense, ItineraryItem, Participant, Trip};
+use crate::models::{ChecklistItem, Day, Estimate, Expense, ItineraryItem, Participant, Trip};
 use crate::reservation::ReservationWithContext;
 use crate::stats::{format_minutes_duration, TripStats};
 
@@ -29,6 +29,7 @@ pub(crate) fn format_trip_date_range(trip: &Trip) -> Option<String> {
 pub(crate) fn format_itinerary_item_markdown(
     conn: &Connection,
     item: &ItineraryItem,
+    estimates: &[Estimate],
     expenses: &[Expense],
 ) -> Result<String> {
     let mut lines = Vec::new();
@@ -58,6 +59,10 @@ pub(crate) fn format_itinerary_item_markdown(
     if !detail_lines.is_empty() {
         lines.push(String::new());
         lines.extend(detail_lines);
+    }
+
+    if let Some(estimates_md) = crate::estimate::format_estimates_markdown_section(estimates) {
+        lines.push(estimates_md);
     }
 
     if !expenses.is_empty() {
@@ -189,6 +194,28 @@ fn append_overview_section(output: &mut String, stats: &TripStats) {
             ));
         }
     }
+    if stats.estimate_count > 0 {
+        output.push_str(&format!("- Estimates: {}\n", stats.estimate_count));
+        output.push_str("- Planned total:\n");
+        for (currency, total) in &stats.estimate_totals {
+            output.push_str(&format!(
+                "  - {} {}\n",
+                currency,
+                crate::money::format_amount_value(*total, currency)
+            ));
+        }
+    }
+    if stats.expense_count > 0 {
+        output.push_str(&format!("- Expenses: {}\n", stats.expense_count));
+        output.push_str("- Actual total:\n");
+        for (currency, total) in &stats.expense_totals {
+            output.push_str(&format!(
+                "  - {} {}\n",
+                currency,
+                crate::money::format_amount_value(*total, currency)
+            ));
+        }
+    }
 }
 
 /// 旅行と日程一覧から Markdown 文字列を組み立てる
@@ -201,6 +228,7 @@ pub(crate) fn format_trip_markdown(
     checklist: &[ChecklistItem],
     participants: &[Participant],
     stats: &TripStats,
+    estimates_by_itinerary: &HashMap<i64, Vec<Estimate>>,
     expenses_by_itinerary: &HashMap<i64, Vec<Expense>>,
     reservations: &[ReservationWithContext],
 ) -> Result<String> {
@@ -245,11 +273,17 @@ pub(crate) fn format_trip_markdown(
         } else {
             output.push_str("\n\n");
         }
+        let estimates = estimates_by_itinerary
+            .get(&item.id)
+            .map(|list| list.as_slice())
+            .unwrap_or(&[]);
         let expenses = expenses_by_itinerary
             .get(&item.id)
             .map(|list| list.as_slice())
             .unwrap_or(&[]);
-        output.push_str(&format_itinerary_item_markdown(conn, item, expenses)?);
+        output.push_str(&format_itinerary_item_markdown(
+            conn, item, estimates, expenses,
+        )?);
     }
 
     if let Some(checklist_md) = format_checklist_markdown(checklist) {
@@ -266,6 +300,13 @@ pub(crate) fn generate_trip_markdown(conn: &Connection, trip_id: i64) -> Result<
     let items = list_itinerary_items_for_markdown(conn, trip_id)?;
     let checklist = crate::checklist::list_checklist_items(conn, trip_id)?;
     let stats = crate::stats::compute_trip_stats(conn, trip_id)?;
+    let mut estimates_by_itinerary: HashMap<i64, Vec<Estimate>> = HashMap::new();
+    for estimate in crate::estimate::list_estimates_for_trip(conn, trip_id)? {
+        estimates_by_itinerary
+            .entry(estimate.itinerary_id)
+            .or_default()
+            .push(estimate);
+    }
     let mut expenses_by_itinerary: HashMap<i64, Vec<Expense>> = HashMap::new();
     for expense in crate::expense::list_expenses_for_trip(conn, trip_id)? {
         expenses_by_itinerary
@@ -283,6 +324,7 @@ pub(crate) fn generate_trip_markdown(conn: &Connection, trip_id: i64) -> Result<
         &checklist,
         &participants,
         &stats,
+        &estimates_by_itinerary,
         &expenses_by_itinerary,
         &reservations,
     )
@@ -766,9 +808,9 @@ mod tests {
         assert!(md.contains("Expenses:"));
         assert!(md.contains("- 入館料: 2,500 JPY"));
         assert!(md.contains("- 駐車場: 500 JPY"));
-        let expenses_pos = md.find("Expenses:").unwrap();
         let aquarium_pos = md.find("### 09:00 Aquarium").unwrap();
-        assert!(aquarium_pos < expenses_pos);
+        let expense_line_pos = md.find("- 入館料: 2,500 JPY").unwrap();
+        assert!(aquarium_pos < expense_line_pos);
     }
 
     #[test]

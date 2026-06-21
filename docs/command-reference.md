@@ -63,7 +63,9 @@ cargo run -- trip stats 1
 cargo run -- trip stats 1 --json
 ```
 
-集計内容: Days、Itineraries、Checklist 進捗、Category Breakdown、Time Summary（所要時間・移動時間・合計）、Expenses（件数と通貨別合計）。
+集計内容: Days、Itineraries、Checklist 進捗、Category Breakdown、Time Summary（所要時間・移動時間・合計）、Estimates（件数と通貨別 **Planned total**）、Expenses（件数と通貨別 **Actual total**）。
+
+`--json` 出力には `estimate_count` / `estimate_totals`（Planned）と `expense_count` / `expense_totals`（Actual）が含まれます。
 
 ## Day
 
@@ -193,8 +195,10 @@ cargo run -- estimate delete 3
 | 金額の保存 | DB は最小通貨単位の **整数**（JPY=円、USD `12.50` → 1250 セント） |
 | **export / import** | `trip export` / `trip import` の schema v6 で `days[].itineraries[].estimates[]` に含まれる（id / timestamps は出力しない） |
 | **trip diff** | schema v6+ 同士で added / removed / field changed を比較 |
+| **trip stats** | Trip 配下 Estimate の件数・通貨別 **Planned total**（`estimate_count` / `estimate_totals`） |
+| **export-md** | Itinerary セクション内に「予定費用」表。Overview に Planned / Actual 合計 |
 
-**未実装（Phase 3 以降）:** trip stats Planned total、export-md、itinerary replicate の Estimate コピー
+**未実装（Phase 4 以降）:** itinerary replicate の Estimate コピー
 
 責務整理: [specifications/estimate-model.md](specifications/estimate-model.md)  
 Entity Design: [specifications/estimate-entity-design.md](specifications/estimate-entity-design.md)  

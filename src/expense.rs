@@ -9,7 +9,7 @@ use crate::models::{
 };
 
 pub(crate) use crate::money::{
-    format_amount_display, format_amount_value, parse_amount_for_currency, validate_currency_code,
+    format_amount_display, parse_amount_for_currency, validate_currency_code,
 };
 
 const EXPENSE_SELECT_SQL: &str = "

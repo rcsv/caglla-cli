@@ -20,6 +20,8 @@ pub(crate) struct TripStats {
     pub total_minutes: i64,
     pub expense_count: usize,
     pub expense_totals: BTreeMap<String, i64>,
+    pub estimate_count: usize,
+    pub estimate_totals: BTreeMap<String, i64>,
     pub registered_participant_count: usize,
     pub participants_recorded: bool,
     pub self_known: bool,
@@ -97,6 +99,15 @@ pub(crate) fn compute_trip_stats(conn: &Connection, trip_id: i64) -> Result<Trip
         *expense_totals.entry(expense.currency.clone()).or_insert(0) += expense.amount;
     }
 
+    let estimates = crate::estimate::list_estimates_for_trip(conn, trip_id)?;
+    let estimate_count = estimates.len();
+    let mut estimate_totals: BTreeMap<String, i64> = BTreeMap::new();
+    for estimate in &estimates {
+        *estimate_totals
+            .entry(estimate.currency.clone())
+            .or_insert(0) += estimate.amount;
+    }
+
     let participant_counts =
         crate::participant::compute_participant_counts_for_trip(conn, trip_id)?;
 
@@ -112,6 +123,8 @@ pub(crate) fn compute_trip_stats(conn: &Connection, trip_id: i64) -> Result<Trip
         total_minutes: stay_minutes + travel_minutes,
         expense_count,
         expense_totals,
+        estimate_count,
+        estimate_totals,
         registered_participant_count: participant_counts.registered_count,
         participants_recorded: participant_counts.participants_recorded,
         self_known: participant_counts.self_known,
@@ -204,14 +217,26 @@ pub(crate) fn print_trip_stats(conn: &Connection, trip_id: i64) -> Result<()> {
         );
     }
     println!();
+    if stats.estimate_count > 0 {
+        println!("Estimates: {}", stats.estimate_count);
+        println!("Planned total:");
+        for (currency, total) in &stats.estimate_totals {
+            println!(
+                "  {} {}",
+                currency,
+                crate::money::format_amount_value(*total, currency)
+            );
+        }
+        println!();
+    }
     println!("Expenses: {}", stats.expense_count);
     if stats.expense_count > 0 {
-        println!("Expense total:");
+        println!("Actual total:");
         for (currency, total) in &stats.expense_totals {
             println!(
-                "  {}: {}",
+                "  {} {}",
                 currency,
-                crate::expense::format_amount_value(*total, currency)
+                crate::money::format_amount_value(*total, currency)
             );
         }
     }
@@ -456,6 +481,8 @@ mod tests {
         assert!(stats.category_counts.is_empty());
         assert_eq!(stats.expense_count, 0);
         assert!(stats.expense_totals.is_empty());
+        assert_eq!(stats.estimate_count, 0);
+        assert!(stats.estimate_totals.is_empty());
 
         print_trip_stats(&conn, trip_id).unwrap();
     }
@@ -549,5 +576,82 @@ mod tests {
         assert_eq!(stats.expense_totals.get("USD"), Some(&1750));
 
         print_trip_stats(&conn, trip_id).unwrap();
+    }
+
+    #[test]
+    fn test_stats_estimate_count_and_totals() {
+        let conn = test_db();
+        let trip_id = add_test_trip(&conn, "Estimate Stats Trip").unwrap();
+        let itinerary_id = crate::itinerary::add_itinerary_item(
+            &conn, trip_id, 1, "Aquarium", None, None, None, None, None, None, None,
+        )
+        .unwrap();
+        crate::estimate::add_estimate(
+            &conn,
+            itinerary_id,
+            "2180",
+            "JPY",
+            Some("入館料"),
+            Some("大人5名想定"),
+            None,
+        )
+        .unwrap();
+        crate::estimate::add_estimate(
+            &conn,
+            itinerary_id,
+            "5000",
+            "JPY",
+            Some("カフェ"),
+            None,
+            None,
+        )
+        .unwrap();
+
+        let stats = compute_trip_stats(&conn, trip_id).unwrap();
+        assert_eq!(stats.estimate_count, 2);
+        assert_eq!(stats.estimate_totals.get("JPY"), Some(&7180));
+    }
+
+    #[test]
+    fn test_stats_estimate_multi_currency() {
+        let conn = test_db();
+        let trip_id = add_test_trip(&conn, "Estimate Multi Currency Trip").unwrap();
+        let itinerary_id = crate::itinerary::add_itinerary_item(
+            &conn, trip_id, 1, "Shopping", None, None, None, None, None, None, None,
+        )
+        .unwrap();
+        crate::estimate::add_estimate(
+            &conn,
+            itinerary_id,
+            "10000",
+            "JPY",
+            Some("お土産"),
+            None,
+            None,
+        )
+        .unwrap();
+        crate::estimate::add_estimate(
+            &conn,
+            itinerary_id,
+            "12.50",
+            "USD",
+            Some("Coffee"),
+            None,
+            None,
+        )
+        .unwrap();
+        crate::estimate::add_estimate(&conn, itinerary_id, "5.00", "USD", None, None, None)
+            .unwrap();
+
+        let stats = compute_trip_stats(&conn, trip_id).unwrap();
+        assert_eq!(stats.estimate_count, 3);
+        assert_eq!(stats.estimate_totals.get("JPY"), Some(&10000));
+        assert_eq!(stats.estimate_totals.get("USD"), Some(&1750));
+
+        let json = serde_json::to_string_pretty(&stats).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed["estimate_count"], 3);
+        assert_eq!(parsed["estimate_totals"]["JPY"], 10000);
+        assert_eq!(parsed["estimate_totals"]["USD"], 1750);
     }
 }

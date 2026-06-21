@@ -242,3 +242,156 @@ fn cli_export_md_includes_participants_section() {
         "Participants section should follow Overview"
     );
 }
+
+#[test]
+fn cli_export_md_includes_estimates_under_itinerary() {
+    let dir = temp_workdir();
+    assert!(run_cli(
+        &dir,
+        &[
+            "trip",
+            "add",
+            "Estimate MD Trip",
+            "--start",
+            "2026-04-26",
+            "--end",
+            "2026-04-29",
+        ]
+    )
+    .status
+    .success());
+    assert!(run_cli(
+        &dir,
+        &[
+            "itinerary",
+            "add",
+            "1",
+            "--day",
+            "1",
+            "--time",
+            "09:00",
+            "Aquarium"
+        ]
+    )
+    .status
+    .success());
+    assert!(run_cli(
+        &dir,
+        &[
+            "estimate",
+            "add",
+            "--itinerary",
+            "1",
+            "--amount",
+            "2180",
+            "--currency",
+            "JPY",
+            "--title",
+            "入館料",
+            "--note",
+            "大人5名想定",
+        ]
+    )
+    .status
+    .success());
+    assert!(run_cli(
+        &dir,
+        &[
+            "estimate",
+            "add",
+            "--itinerary",
+            "1",
+            "--amount",
+            "5000",
+            "--currency",
+            "JPY",
+            "--title",
+            "カフェ",
+        ]
+    )
+    .status
+    .success());
+
+    let output = run_cli(&dir, &["trip", "export-md", "1"]);
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("予定費用:"));
+    assert!(stdout.contains("| 入館料 | JPY 2,180 | 大人5名想定 |"));
+    assert!(stdout.contains("| カフェ | JPY 5,000 |  |"));
+    assert!(stdout.contains("- Planned total:"));
+    assert!(stdout.contains("- JPY 7,180"));
+}
+
+#[test]
+fn cli_export_md_omits_estimate_section_when_none() {
+    let dir = temp_workdir();
+    assert!(run_cli(
+        &dir,
+        &[
+            "trip",
+            "add",
+            "No Estimate MD Trip",
+            "--start",
+            "2026-04-26",
+            "--end",
+            "2026-04-29",
+        ]
+    )
+    .status
+    .success());
+    assert!(
+        run_cli(&dir, &["itinerary", "add", "1", "--day", "1", "Museum"])
+            .status
+            .success()
+    );
+
+    let output = run_cli(&dir, &["trip", "export-md", "1"]);
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(!stdout.contains("予定費用:"));
+    assert!(!stdout.contains("- Planned total:"));
+}
+
+#[test]
+fn cli_export_md_handles_null_title_and_note_estimates() {
+    let dir = temp_workdir();
+    assert!(run_cli(
+        &dir,
+        &[
+            "trip",
+            "add",
+            "Null Estimate MD Trip",
+            "--start",
+            "2026-04-26",
+            "--end",
+            "2026-04-29",
+        ]
+    )
+    .status
+    .success());
+    assert!(
+        run_cli(&dir, &["itinerary", "add", "1", "--day", "1", "Lunch spot"])
+            .status
+            .success()
+    );
+    assert!(run_cli(
+        &dir,
+        &[
+            "estimate",
+            "add",
+            "--itinerary",
+            "1",
+            "--amount",
+            "1500",
+            "--currency",
+            "JPY",
+        ]
+    )
+    .status
+    .success());
+
+    let output = run_cli(&dir, &["trip", "export-md", "1"]);
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("| - | JPY 1,500 |  |"));
+}

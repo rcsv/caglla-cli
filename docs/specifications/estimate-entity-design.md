@@ -24,7 +24,8 @@ Entity Design             → estimate-entity-design.md（本書）
 Implementation Plan       → estimate-implementation-plan.md
 Implementation            → Phase 1（CRUD / migration）— 実装済み（PR #50）
                              Phase 2（export v6 / validate / diff）— 実装済み（PR #51）
-                             Phase 3–4（stats / export-md / replicate）— 未着手
+                             Phase 3（stats / export-md）— 実装済み
+                             Phase 4（replicate）— 未着手
 Post-Implementation Review → （未着手）
 ```
 
@@ -534,30 +535,30 @@ added / removed / amount / currency / title / note / sort_order changed
 | 機能 | 方針 | Phase |
 |---|---|---|
 | export / import / validate-export / trip diff | 本節どおり `estimates[]` ネスト | **2（実装済み）** |
-| trip stats Planned total | Estimate 明細の Trip 配下合計（通貨別） | 3 |
-| export-md | Itinerary セクションに Estimate 明細一覧 | 3 |
+| trip stats Planned total | Estimate 明細の Trip 配下合計（通貨別） | **3（実装済み）** |
+| export-md | Itinerary セクションに Estimate 明細一覧 | **3（実装済み）** |
 | itinerary replicate | source Itinerary 配下 Estimate を target にコピー | 4 |
 
-## 9. Markdown export / trip stats（Phase 3 — 未実装）
+## 9. Markdown export / trip stats（Phase 3 — 実装済み）
 
-**Phase 3 で実装予定。** 本節は影響範囲の整理のみ。
-
-### `trip stats` 拡張案
+### `trip stats` 拡張
 
 | 表示 | データ源 |
 |---|---|
 | **Planned total** | Trip 配下 Estimate 合計（通貨別） |
 | **Actual total** | 現行 Expense 合計 |
-| **Difference** | 表示レイヤーで導出（DB 列なし） |
+| **Difference** | **未実装**（将来表示レイヤーで導出） |
+
+JSON: `estimate_count` / `estimate_totals` を追加フィールドとして出力（既存 `expense_*` は維持）。
 
 Itinerary 単位の Planned subtotal も将来表示可能（Estimate 行の合算）。
 
-### `trip export-md` 拡張案
+### `trip export-md` 拡張
 
 | 表示 | 内容 |
 |---|---|
-| Itinerary セクション | 配下 Estimate 一覧（予定費用） |
-| Trip 末尾 | Planned 合計 / Actual 合計 / 差分（旅行前は Actual `-`） |
+| Itinerary セクション | 配下 Estimate 一覧（見出し「予定費用:」、0 件なら省略） |
+| Overview | Planned / Actual 合計（通貨別、該当データがある場合のみ） |
 
 [estimate-model.md §Aggregation vision](estimate-model.md#aggregation-vision将来) の GUI 想定と整合。
 
@@ -612,17 +613,15 @@ format_amount_display(amount, currency) -> String
 
 ## Deferred scope summary
 
-Phase 1（CRUD / migration）および Phase 2（export schema v6 / validate-export / trip diff）は **実装済み**。現時点で **未実装** の範囲:
+Phase 1（CRUD / migration）、Phase 2（export schema v6 / validate-export / trip diff）、Phase 3（`trip stats` Planned total / `export-md` 予定費用表示）は **実装済み**。現時点で **未実装** の範囲:
 
 ```text
-- trip stats Planned total（Phase 3）
-- export-md Estimate 表示（Phase 3）
 - itinerary replicate の Estimate コピー（Phase 4）
 - release 作業
 - Post-Implementation Review（Phase 5）
 ```
 
-次ステップ: **Phase 3**（`trip stats` / `export-md`）→ **Phase 4**（`itinerary replicate`）。
+次ステップ: **Phase 4**（`itinerary replicate`）。
 
 ---
 

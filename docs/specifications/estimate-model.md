@@ -24,8 +24,8 @@ Caglla.Travel CLI / 将来 Web 版に向けた **Estimate（事前見積 / Plann
 Responsibilities Review   → estimate-model.md（本書）
 Entity Design             → estimate-entity-design.md
 Implementation Plan       → estimate-implementation-plan.md
-Implementation            → Phase 1–2 実装済み（PR #50 / #51）
-                             Phase 3–4 未着手
+Implementation            → Phase 1–3 実装済み（PR #50 / #51 / Phase 3）
+                             Phase 4 未着手（itinerary replicate）
 Post-Implementation Review → estimate-post-implementation-review.md（未着手）
 ```
 
@@ -359,8 +359,8 @@ replicate でコピーしない:
 |---|---|---|
 | 1 | CLI 名 `estimate` vs `planned-budget` | **`estimate` 推奨** |
 | 2 | export schema バージョン | Entity Design 後。nested `estimates[]` under itinerary を想定 |
-| 3 | `trip stats` 拡張 | Planned total 行の追加 — Implementation Plan |
-| 4 | export-md | Itinerary 下に Planned / Actual 表示 — 将来 |
+| 3 | `trip stats` 拡張 | **Phase 3 実装済み** — Planned total（通貨別） |
+| 4 | export-md | **Phase 3 実装済み** — Itinerary 下に予定費用表、Overview に Planned / Actual |
 | 5 | Participant 人数との連動 | 初期は `note` に「5人分」等。自動按分は非対象 |
 | 6 | Trip 全体予算上限 | Estimate 合計とは別概念。将来 **Budget** エンティティ |
 
