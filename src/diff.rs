@@ -4,8 +4,9 @@ use std::collections::HashMap;
 use anyhow::Result;
 
 use crate::models::{
-    effective_export_schema_version, ExportExpense, ExportNote, ExportParticipantV4,
-    ExportReservation, ItineraryCategory, ItineraryItem, TripExport, TRIP_EXPORT_SCHEMA_VERSION,
+    effective_export_schema_version, ExportEstimate, ExportExpense, ExportNote,
+    ExportParticipantV4, ExportReservation, ItineraryCategory, ItineraryItem, TripExport,
+    TRIP_EXPORT_SCHEMA_VERSION, TRIP_EXPORT_SCHEMA_VERSION_V5,
 };
 
 /// export Note の比較キー
@@ -100,6 +101,25 @@ struct ExpenseFieldChange {
     new_value: String,
 }
 
+/// Estimate の比較キー（Itinerary コンテキスト + estimate 識別）
+#[derive(Clone, Eq, PartialEq, Hash, PartialOrd, Ord)]
+struct EstimateKey {
+    day_number: i64,
+    sort_order: i64,
+    start_time: Option<String>,
+    itinerary_title: String,
+    estimate_sort_order: i64,
+    estimate_title: Option<String>,
+}
+
+/// 1件の Estimate におけるフィールド変更
+struct EstimateFieldChange {
+    line: String,
+    field: String,
+    old_value: String,
+    new_value: String,
+}
+
 /// trip diff の結果
 pub(crate) struct TripDiff {
     trip_changes: Vec<(String, String, String)>,
@@ -119,6 +139,9 @@ pub(crate) struct TripDiff {
     expense_added: Vec<ExportExpense>,
     expense_removed: Vec<ExportExpense>,
     expense_modified: Vec<ExpenseFieldChange>,
+    estimate_added: Vec<ExportEstimate>,
+    estimate_removed: Vec<ExportEstimate>,
+    estimate_modified: Vec<EstimateFieldChange>,
 }
 
 fn itinerary_key(item: &ItineraryItem) -> ItineraryKey {
@@ -570,7 +593,130 @@ fn expense_shared_fields_changed(
 }
 
 fn schema_supports_shared_expense_diff(schema_version: Option<i32>) -> bool {
+    effective_export_schema_version(schema_version) >= TRIP_EXPORT_SCHEMA_VERSION_V5
+}
+
+fn schema_supports_estimate_diff(schema_version: Option<i32>) -> bool {
     effective_export_schema_version(schema_version) >= TRIP_EXPORT_SCHEMA_VERSION
+}
+
+fn estimate_key(estimate: &ExportEstimate) -> EstimateKey {
+    EstimateKey {
+        day_number: estimate.itinerary_key.day_number,
+        sort_order: estimate.itinerary_key.sort_order,
+        start_time: estimate.itinerary_key.start_time.clone(),
+        itinerary_title: estimate.itinerary_key.title.clone(),
+        estimate_sort_order: estimate.estimate.sort_order,
+        estimate_title: estimate.estimate.title.clone(),
+    }
+}
+
+fn compare_export_estimates(a: &ExportEstimate, b: &ExportEstimate) -> Ordering {
+    estimate_key(a).cmp(&estimate_key(b))
+}
+
+fn format_estimate_line(estimate: &ExportEstimate) -> String {
+    let key = &estimate.itinerary_key;
+    let time = key.start_time.as_deref().unwrap_or("-");
+    let title = estimate.estimate.title.as_deref().unwrap_or("-");
+    format!(
+        "Day{} {time} {} / {} / {} {}",
+        key.day_number, key.title, title, estimate.estimate.amount, estimate.estimate.currency
+    )
+}
+
+fn estimate_content_changed(
+    old: &ExportEstimate,
+    new: &ExportEstimate,
+) -> Vec<(String, String, String)> {
+    let fields = [
+        (
+            "title",
+            fmt_diff_option_str(&old.estimate.title),
+            fmt_diff_option_str(&new.estimate.title),
+        ),
+        (
+            "amount",
+            old.estimate.amount.to_string(),
+            new.estimate.amount.to_string(),
+        ),
+        (
+            "currency",
+            old.estimate.currency.clone(),
+            new.estimate.currency.clone(),
+        ),
+        (
+            "note",
+            fmt_diff_option_str(&old.estimate.note),
+            fmt_diff_option_str(&new.estimate.note),
+        ),
+        (
+            "sort_order",
+            old.estimate.sort_order.to_string(),
+            new.estimate.sort_order.to_string(),
+        ),
+    ];
+    fields
+        .into_iter()
+        .filter(|(_, old_value, new_value)| old_value != new_value)
+        .map(|(field, old_value, new_value)| (field.to_string(), old_value, new_value))
+        .collect()
+}
+
+fn compute_estimates_diff(
+    old_estimates: &[ExportEstimate],
+    new_estimates: &[ExportEstimate],
+    compare_estimates: bool,
+) -> (
+    Vec<ExportEstimate>,
+    Vec<ExportEstimate>,
+    Vec<EstimateFieldChange>,
+) {
+    if !compare_estimates {
+        return (Vec::new(), Vec::new(), Vec::new());
+    }
+
+    let old_map: HashMap<EstimateKey, &ExportEstimate> = old_estimates
+        .iter()
+        .map(|estimate| (estimate_key(estimate), estimate))
+        .collect();
+    let new_map: HashMap<EstimateKey, &ExportEstimate> = new_estimates
+        .iter()
+        .map(|estimate| (estimate_key(estimate), estimate))
+        .collect();
+
+    let mut estimate_removed: Vec<ExportEstimate> = old_estimates
+        .iter()
+        .filter(|estimate| !new_map.contains_key(&estimate_key(estimate)))
+        .cloned()
+        .collect();
+    let mut estimate_added: Vec<ExportEstimate> = new_estimates
+        .iter()
+        .filter(|estimate| !old_map.contains_key(&estimate_key(estimate)))
+        .cloned()
+        .collect();
+
+    let mut estimate_modified = Vec::new();
+    for old_estimate in old_map.values() {
+        let Some(new_estimate) = new_map.get(&estimate_key(old_estimate)) else {
+            continue;
+        };
+        let line = format_estimate_line(new_estimate);
+        for (field, old_value, new_value) in estimate_content_changed(old_estimate, new_estimate) {
+            estimate_modified.push(EstimateFieldChange {
+                line: line.clone(),
+                field,
+                old_value,
+                new_value,
+            });
+        }
+    }
+
+    estimate_removed.sort_by(compare_export_estimates);
+    estimate_added.sort_by(compare_export_estimates);
+    estimate_modified.sort_by(|a, b| a.line.cmp(&b.line).then_with(|| a.field.cmp(&b.field)));
+
+    (estimate_added, estimate_removed, estimate_modified)
 }
 
 fn compute_expenses_diff(
@@ -806,6 +952,10 @@ pub(crate) fn compute_trip_diff(old: &TripExport, new: &TripExport) -> TripDiff 
         && schema_supports_shared_expense_diff(new.schema_version);
     let (expense_added, expense_removed, expense_modified) =
         compute_expenses_diff(old.expenses(), new.expenses(), compare_shared_fields);
+    let compare_estimates = schema_supports_estimate_diff(old.schema_version)
+        && schema_supports_estimate_diff(new.schema_version);
+    let (estimate_added, estimate_removed, estimate_modified) =
+        compute_estimates_diff(old.estimates(), new.estimates(), compare_estimates);
 
     TripDiff {
         trip_changes,
@@ -825,6 +975,9 @@ pub(crate) fn compute_trip_diff(old: &TripExport, new: &TripExport) -> TripDiff 
         expense_added,
         expense_removed,
         expense_modified,
+        estimate_added,
+        estimate_removed,
+        estimate_modified,
     }
 }
 
@@ -1003,6 +1156,33 @@ pub(crate) fn print_trip_diff(diff: &TripDiff) {
             );
         }
     }
+
+    println!();
+    println!("Estimates:");
+    if diff.estimate_added.is_empty()
+        && diff.estimate_removed.is_empty()
+        && diff.estimate_modified.is_empty()
+    {
+        println!("  （変更なし）");
+    } else {
+        for estimate in &diff.estimate_removed {
+            println!("- Estimate removed: {}", format_estimate_line(estimate));
+        }
+        for estimate in &diff.estimate_added {
+            println!("+ Estimate added: {}", format_estimate_line(estimate));
+        }
+        let mut current_line: Option<String> = None;
+        for change in &diff.estimate_modified {
+            if current_line.as_deref() != Some(change.line.as_str()) {
+                println!("~ Estimate modified: {}", change.line);
+                current_line = Some(change.line.clone());
+            }
+            println!(
+                "  {}: {} -> {}",
+                change.field, change.old_value, change.new_value
+            );
+        }
+    }
 }
 
 /// 2つの JSON ファイルを比較して差分を表示する
@@ -1019,7 +1199,7 @@ mod tests {
     use super::*;
     use crate::models::{
         ExportNote, ExportReservation, ExportReservationV3, ItineraryItem, ItineraryNoteKey, Trip,
-        TripExport,
+        TripExport, TRIP_EXPORT_SCHEMA_VERSION_V5,
     };
 
     fn make_test_trip(name: &str) -> Trip {
@@ -1067,6 +1247,7 @@ mod tests {
             reservations: vec![],
             participants: vec![],
             expenses: vec![],
+            estimates: vec![],
         };
         let new = TripExport {
             schema_version: None,
@@ -1081,6 +1262,7 @@ mod tests {
             reservations: vec![],
             participants: vec![],
             expenses: vec![],
+            estimates: vec![],
         };
 
         let diff = compute_trip_diff(&old, &new);
@@ -1116,6 +1298,7 @@ mod tests {
             reservations: vec![],
             participants: vec![],
             expenses: vec![],
+            estimates: vec![],
         };
         let new = TripExport {
             schema_version: None,
@@ -1130,6 +1313,7 @@ mod tests {
             reservations: vec![],
             participants: vec![],
             expenses: vec![],
+            estimates: vec![],
         };
 
         let diff = compute_trip_diff(&old, &new);
@@ -1171,6 +1355,7 @@ mod tests {
             reservations: vec![],
             participants: vec![],
             expenses: vec![],
+            estimates: vec![],
         };
         let new = TripExport {
             schema_version: None,
@@ -1185,6 +1370,7 @@ mod tests {
             reservations: vec![],
             participants: vec![],
             expenses: vec![],
+            estimates: vec![],
         };
 
         let diff = compute_trip_diff(&old, &new);
@@ -1208,6 +1394,7 @@ mod tests {
             reservations: vec![],
             participants: vec![],
             expenses: vec![],
+            estimates: vec![],
         };
         let new = TripExport {
             schema_version: None,
@@ -1222,6 +1409,7 @@ mod tests {
             reservations: vec![],
             participants: vec![],
             expenses: vec![],
+            estimates: vec![],
         };
 
         let diff = compute_trip_diff(&old, &new);
@@ -1262,6 +1450,7 @@ mod tests {
             reservations: vec![],
             participants: vec![],
             expenses: vec![],
+            estimates: vec![],
         }
     }
 
@@ -1606,5 +1795,71 @@ mod tests {
         }];
         let diff_v4 = compute_trip_diff(&old_v4, &new_v4);
         assert!(diff_v4.expense_modified.is_empty());
+    }
+
+    #[test]
+    fn test_diff_estimate_added_and_amount_changed() {
+        use crate::models::{ExportEstimate, ExportEstimateV3, TRIP_EXPORT_SCHEMA_VERSION};
+
+        let itinerary_key = ItineraryNoteKey {
+            day_number: 1,
+            sort_order: 0,
+            start_time: Some("08:00".to_string()),
+            title: "Hotel".to_string(),
+        };
+        let base_estimate = ExportEstimate {
+            itinerary_key: itinerary_key.clone(),
+            estimate: ExportEstimateV3 {
+                title: Some("Breakfast".to_string()),
+                amount: 14000,
+                currency: "JPY".to_string(),
+                note: Some("5 people".to_string()),
+                sort_order: 0,
+            },
+        };
+
+        let mut old = make_base_export(make_test_trip("Trip"));
+        old.schema_version = Some(TRIP_EXPORT_SCHEMA_VERSION);
+        old.estimates = vec![base_estimate.clone()];
+
+        let mut new = make_base_export(make_test_trip("Trip"));
+        new.schema_version = Some(TRIP_EXPORT_SCHEMA_VERSION);
+        new.estimates = vec![
+            ExportEstimate {
+                estimate: ExportEstimateV3 {
+                    amount: 15000,
+                    ..base_estimate.estimate.clone()
+                },
+                ..base_estimate.clone()
+            },
+            ExportEstimate {
+                itinerary_key,
+                estimate: ExportEstimateV3 {
+                    title: Some("Parking".to_string()),
+                    amount: 5000,
+                    currency: "JPY".to_string(),
+                    note: None,
+                    sort_order: 1,
+                },
+            },
+        ];
+
+        let diff = compute_trip_diff(&old, &new);
+        assert_eq!(diff.estimate_added.len(), 1);
+        assert_eq!(
+            diff.estimate_added[0].estimate.title.as_deref(),
+            Some("Parking")
+        );
+        assert_eq!(diff.estimate_modified.len(), 1);
+        assert_eq!(diff.estimate_modified[0].field, "amount");
+        assert_eq!(diff.estimate_modified[0].old_value, "14000");
+        assert_eq!(diff.estimate_modified[0].new_value, "15000");
+
+        let mut old_v5 = make_base_export(make_test_trip("Trip"));
+        old_v5.schema_version = Some(TRIP_EXPORT_SCHEMA_VERSION_V5);
+        old_v5.estimates = vec![base_estimate];
+        let diff_v5 = compute_trip_diff(&old_v5, &new);
+        assert!(diff_v5.estimate_added.is_empty());
+        assert!(diff_v5.estimate_modified.is_empty());
     }
 }

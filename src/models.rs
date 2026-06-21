@@ -655,7 +655,10 @@ pub struct ParticipantCounts {
 }
 
 /// trip export 用 JSON の schema バージョン（現行 export）
-pub const TRIP_EXPORT_SCHEMA_VERSION: i32 = 5;
+pub const TRIP_EXPORT_SCHEMA_VERSION: i32 = 6;
+
+/// trip export schema v5（import 互換）
+pub const TRIP_EXPORT_SCHEMA_VERSION_V5: i32 = 5;
 
 /// trip export schema v4（import 互換）
 pub const TRIP_EXPORT_SCHEMA_VERSION_V4: i32 = 4;
@@ -712,6 +715,7 @@ pub fn is_supported_export_schema_version(schema_version: Option<i32>) -> bool {
             | 2
             | TRIP_EXPORT_SCHEMA_VERSION_V3
             | TRIP_EXPORT_SCHEMA_VERSION_V4
+            | TRIP_EXPORT_SCHEMA_VERSION_V5
             | TRIP_EXPORT_SCHEMA_VERSION
     )
 }
@@ -777,6 +781,26 @@ pub struct ExportExpense {
     pub expense: ExportExpenseV3,
 }
 
+/// trip export schema v6 の Estimate エントリ（DB id は含めない）
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExportEstimateV3 {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    pub amount: i64,
+    pub currency: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+    pub sort_order: i64,
+}
+
+/// trip diff 用の Estimate（Itinerary コンテキスト付き）
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExportEstimate {
+    pub itinerary_key: ItineraryNoteKey,
+    #[serde(flatten)]
+    pub estimate: ExportEstimateV3,
+}
+
 /// trip export schema v3 の Itinerary エントリ（DB id は含めない）
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ExportItineraryV3 {
@@ -796,6 +820,8 @@ pub struct ExportItineraryV3 {
     pub category: Option<ItineraryCategory>,
     #[serde(default)]
     pub expenses: Vec<ExportExpenseV3>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub estimates: Vec<ExportEstimateV3>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub reservations: Vec<ExportReservationV3>,
 }
@@ -893,6 +919,9 @@ pub struct TripExport {
     /// schema v3+: Expense 一覧（diff 用。v1/v2 export では省略可）
     #[serde(default)]
     pub expenses: Vec<ExportExpense>,
+    /// schema v6+: Estimate 一覧（diff 用。v5 以前 export では省略可）
+    #[serde(default)]
+    pub estimates: Vec<ExportEstimate>,
 }
 
 impl TripExport {
@@ -910,6 +939,10 @@ impl TripExport {
 
     pub fn expenses(&self) -> &[ExportExpense] {
         &self.expenses
+    }
+
+    pub fn estimates(&self) -> &[ExportEstimate] {
+        &self.estimates
     }
 }
 
@@ -999,6 +1032,7 @@ pub enum ExportValidationCheckId {
     ChecklistItems,
     Notes,
     Expenses,
+    Estimates,
     Reservations,
     Participants,
 }

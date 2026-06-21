@@ -492,3 +492,108 @@ fn cli_validate_export_v4_multiple_self_fails() {
         "expected multiple self validation error, got {errors:?}"
     );
 }
+
+#[test]
+fn cli_validate_export_v6_invalid_estimate_currency_fails() {
+    let dir = temp_workdir();
+    let export_path = dir.join("invalid-estimate.json");
+    fs::write(
+        &export_path,
+        r#"{
+  "schema_version": 6,
+  "trip": {
+    "id": 1,
+    "name": "Estimate Trip",
+    "start_date": "2026-01-01",
+    "end_date": "2026-01-03",
+    "created_at": "2026-01-01 00:00:00",
+    "updated_at": "2026-01-01 00:00:00"
+  },
+  "days": [
+    {
+      "day_number": 1,
+      "itineraries": [
+        {
+          "title": "Hotel",
+          "sort_order": 0,
+          "estimates": [
+            {
+              "amount": 1000,
+              "currency": "",
+              "sort_order": 0
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "checklist_items": [],
+  "notes": [],
+  "participants": []
+}"#,
+    )
+    .unwrap();
+
+    let output = run_cli(
+        &dir,
+        &["trip", "validate-export", export_path.to_str().unwrap()],
+    );
+    assert!(!output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("currency"));
+}
+
+#[test]
+fn cli_validate_export_v5_import_skips_estimate_checks() {
+    let dir = temp_workdir();
+    let export_path = dir.join("v5-no-estimates.json");
+    fs::write(
+        &export_path,
+        r#"{
+  "schema_version": 5,
+  "trip": {
+    "id": 1,
+    "name": "Legacy v5 Trip",
+    "start_date": "2026-01-01",
+    "end_date": "2026-01-03",
+    "created_at": "2026-01-01 00:00:00",
+    "updated_at": "2026-01-01 00:00:00"
+  },
+  "days": [
+    {
+      "day_number": 1,
+      "itineraries": [
+        {
+          "title": "Sightseeing",
+          "sort_order": 0
+        }
+      ]
+    }
+  ],
+  "checklist_items": [],
+  "notes": [],
+  "participants": []
+}"#,
+    )
+    .unwrap();
+
+    let output = run_cli(
+        &dir,
+        &[
+            "trip",
+            "validate-export",
+            export_path.to_str().unwrap(),
+            "--json",
+        ],
+    );
+    assert!(output.status.success());
+    let parsed: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(parsed["valid"], true);
+    let estimates_check = parsed["checks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|check| check["id"] == "estimates")
+        .expect("estimates check");
+    assert_eq!(estimates_check["passed"], true);
+}

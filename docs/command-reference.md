@@ -191,8 +191,10 @@ cargo run -- estimate delete 3
 | `update` の `--clear-title` / `--clear-note` | nullable フィールドのクリア |
 | `estimate list` | `--itinerary` または `--trip` のいずれか（排他） |
 | 金額の保存 | DB は最小通貨単位の **整数**（JPY=円、USD `12.50` → 1250 セント） |
+| **export / import** | `trip export` / `trip import` の schema v6 で `days[].itineraries[].estimates[]` に含まれる（id / timestamps は出力しない） |
+| **trip diff** | schema v6+ 同士で added / removed / field changed を比較 |
 
-**未実装（Phase 2 以降）:** export schema v6、trip stats Planned total、export-md、itinerary replicate の Estimate コピー
+**未実装（Phase 3 以降）:** trip stats Planned total、export-md、itinerary replicate の Estimate コピー
 
 責務整理: [specifications/estimate-model.md](specifications/estimate-model.md)  
 Entity Design: [specifications/estimate-entity-design.md](specifications/estimate-entity-design.md)  
