@@ -181,6 +181,39 @@ v3.0.0 の Shared Expense defer（Settlement 等）は **引き続き v3.x defer
 
 ---
 
+## v3.2 — Database Status（**v3.2.0 リリース済み**）
+
+### テーマ
+
+```text
+参照中の caglla.db を明示する
+サンプル DB・本番 DB・テスト DB の混同を防ぐ
+```
+
+### 実装内容（v3.2.0）
+
+```text
+db path（絶対パス表示、open なし）
+db status / db status --json（存在確認、table counts、trip export schema version）
+open 前 dispatch（未存在 DB を作成しない）
+db reset 既存挙動維持
+Post-Implementation Review（v3.2.0-db-status-post-implementation-review.md）
+```
+
+リリースノート: [v3.2.0-notes.md](releases/v3.2.0-notes.md)
+
+設計系列: [v3.2.0-db-status-implementation-plan.md](specifications/v3.2.0-db-status-implementation-plan.md) → PR #58 → Post-Implementation Review → Release v3.2.0。
+
+### v3.2.x defer
+
+```text
+--db <path> / CAGLLA_DB / db use（DB パス切替・永続設定）
+Planned vs Actual difference
+doctor / advisor Estimate 活用
+```
+
+---
+
 ## v4 — Reservation
 
 ### テーマ
@@ -311,6 +344,7 @@ CLI を中心とした **旅行プラットフォーム** へ発展させる。
 | **v2** | Participant Foundation | 同行者を Trip に登録 |
 | **v3** | Shared Expense | 誰が払い・誰の費用かを整理・精算 |
 | **v3.1** | Estimate / Planned Budget | Itinerary 配下の予定費用・Planned total |
+| **v3.2** | Database Status | 参照中 `caglla.db` の明示・状態確認 |
 | **v4** | Reservation | 予約情報の正式管理 |
 | **v5** | Travel Book | 共有用しおり（MD/PDF） |
 | **v6** | Travel Journal | 写真・添付付き旅行記 |

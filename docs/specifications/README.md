@@ -37,4 +37,5 @@ Caglla CLI の内部モデル・設計仕様（実装前の設計メモを含む
 | [checklist-design-memo.md](checklist-design-memo.md) | Checklist 設計メモ（自動生成・Provenance — 将来設計参考、v1.x 対象外） |
 | [travel-support-design-memo.md](travel-support-design-memo.md) | Travel Support 設計メモ（旅行支援情報・Destination・注意喚起 — 将来設計参考、v1.x 対象外） |
 | [export-schema.md](export-schema.md) | trip export / import JSON（schema v1–**v6**）。構造定義 — 意味論は itinerary-model 等を参照 |
-| [v3.2.0-db-status-implementation-plan.md](v3.2.0-db-status-implementation-plan.md) | v3.2.0 Database Status Implementation Plan（Phase 1 完了 — `db path` / `db status`） |
+| [v3.2.0-db-status-implementation-plan.md](v3.2.0-db-status-implementation-plan.md) | v3.2.0 Database Status Implementation Plan（Phase 1 完了 — PR #58） |
+| [v3.2.0-db-status-post-implementation-review.md](v3.2.0-db-status-post-implementation-review.md) | v3.2.0 Database Status Post-Implementation Review |
