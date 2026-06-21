@@ -7,8 +7,8 @@ Caglla.Travel CLI / 将来 Web 版に向けた **Estimate（事前見積 / Plann
 | ドキュメント | 役割 |
 |---|---|
 | **本書** | Estimate / Planned Budget の責務・境界・スコープ |
-| [estimate-entity-design.md](estimate-entity-design.md) | テーブル・フィールド・CLI 案・validation（Entity Design — **未実装**） |
-| [estimate-implementation-plan.md](estimate-implementation-plan.md) | 実装計画（Implementation Plan — Phase 分割・migration・テスト。**未実装**） |
+| [estimate-entity-design.md](estimate-entity-design.md) | テーブル・フィールド・CLI・export v6（Entity Design — Phase 1–2 実装済み） |
+| [estimate-implementation-plan.md](estimate-implementation-plan.md) | 実装計画（Phase 分割・進捗管理） |
 | `estimate-post-implementation-review.md`（将来） | 実装後レビュー |
 | [expense-model.md](expense-model.md) (v1.5.0) | Expense = Transaction Record Layer（設計履歴） |
 | [expense-post-implementation-review.md](expense-post-implementation-review.md) (v1.22.0) | Expense = Actual Money。Estimate 分離の既存結論 |
@@ -24,7 +24,8 @@ Caglla.Travel CLI / 将来 Web 版に向けた **Estimate（事前見積 / Plann
 Responsibilities Review   → estimate-model.md（本書）
 Entity Design             → estimate-entity-design.md
 Implementation Plan       → estimate-implementation-plan.md
-Implementation            → Phase 1–4（未着手）
+Implementation            → Phase 1–2 実装済み（PR #50 / #51）
+                             Phase 3–4 未着手
 Post-Implementation Review → estimate-post-implementation-review.md（未着手）
 ```
 
@@ -96,7 +97,7 @@ Expense 行を流用せず、**Estimate 専用モデル** とする方針は v1.
 | 用語 | 意味 | 本書での扱い |
 |---|---|---|
 | **Estimate** | Itinerary に紐づく **事前見積金額** | **推奨エンティティ名・CLI 接頭辞** |
-| **Planned Budget** | 計画段階の金銭全般（Trip 上限含む） | Estimate を含む **上位概念**。Trip 全体予算枠は将来別検討 |
+| **Planned Budget** | 計画段階の金銭全般（Trip 上限含む） | Estimate 明細の **集計結果** として扱う。**独立エンティティではない** — 詳細は [estimate-entity-design.md §Estimate line items](estimate-entity-design.md#estimate-line-items--itinerary-配下の-0n-明細) |
 | **Planned Expense** | — | **採用しない** — Expense（実績）と混同しやすい |
 | **Budget Item** | — | 会計・予算管理寄り。v1 系スコープ外 |
 
@@ -157,6 +158,8 @@ Trip
 Itinerary は「旅行中の行動」であり、**その行動に見込む費用** を Estimate として載せるのが自然（[itinerary-model.md](itinerary-model.md)）。
 
 **1 Itinerary : N Estimate** を許容する（例: 朝食代 + ドリンク代を分けて見積）。Expense と同様、複数行は日常的。
+
+1 行の Estimate は **1 つの見込み項目**（入館料、駐車場など）を表す。Itinerary 全体の予定合計（Planned subtotal）は **明細の集計** であり、Itinerary 上の単一 `planned_amount` フィールドにはしない。水族館・レンタカー・ホテルなど、1 行動に複数の予定費用が付く例は [estimate-entity-design.md §Estimate line items](estimate-entity-design.md#estimate-line-items--itinerary-配下の-0n-明細) を参照。
 
 ---
 
@@ -241,7 +244,7 @@ Expense と同じ方針を踏襲する（[expense-model.md §amount](expense-mod
 | JPY | 14,000 円 | `14000` |
 | USD | 12.50 ドル | `1250`（セント） |
 
-初期実装では **「この Itinerary で見込む合計金額」** を 1 行の `amount` として持つ。以下は **初期必須にしない**:
+初期実装では **1 Estimate 行 = 1 見込み項目の総額**（`amount` + `currency`）を持つ。Itinerary あたり **複数行** を許容し、Planned Budget（Trip / Itinerary 単位の予定合計）は **行の集計** として導出する。以下は **初期必須にしない**:
 
 ```text
 unit_amount, quantity, participant_id, payer, beneficiaries,
@@ -250,7 +253,7 @@ tax, service_charge, planned_vs_actual_delta
 
 ---
 
-## Future CLI sketch（未実装）
+## CLI（Phase 1 実装済み）
 
 ```bash
 caglla estimate add --itinerary 12 --amount 14000 --currency JPY --title "ホテル朝食"
