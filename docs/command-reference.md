@@ -434,4 +434,46 @@ cargo run -- trip advisor 1 --json
 
 検証用サンプル: [`samples/advisor/`](../samples/advisor/)
 
+## Database
+
+Caglla CLI は実行時の **作業ディレクトリ（CWD）** 直下の `caglla.db` を参照します。別ディレクトリで実行すると別ファイルを指すため、サンプル DB・本番 DB・テスト DB の混同に注意してください。
+
+### DB パス表示
+
+```bash
+cargo run -- db path
+```
+
+| 項目 | 説明 |
+|---|---|
+| 出力 | 解決済み DB パス（**絶対パス**、1 行） |
+| 副作用 | **なし** — DB を open しない。ファイル未存在でも **作成しない** |
+
+### DB 状態確認
+
+```bash
+cargo run -- db status
+cargo run -- db status --json
+```
+
+| 項目 | 説明 |
+|---|---|
+| Path | 解決済み DB パス（絶対パス） |
+| Exists | ファイルの有無 |
+| File size | **存在時のみ** — バイト数 |
+| Trip export schema version | 現行 CLI の trip export JSON schema（`TRIP_EXPORT_SCHEMA_VERSION`、現行 **6**）。**SQLite migration version ではない** |
+| Table counts | **存在時のみ** — 主要テーブル行数（migration 適用後） |
+
+DB ファイルが **存在しない** 場合: open せず、ファイルも作成しません。`file_size` / `table_counts` は表示しません。
+
+`--json` 出力は envelope `schema_version: 1`（CLI JSON フォーマット版）。`trip_export_schema_version` は trip export schema です。`exists: false` のとき `file_size_bytes` / `table_counts` は **省略** されます。
+
+### DB リセット（開発用）
+
+```bash
+cargo run -- db reset
+```
+
+全 Trip / Itinerary / Checklist 等を削除し、AUTOINCREMENT をリセットします。**本番運用では使わない** でください。
+
 JSON 出力の詳細は [export-import.md](export-import.md#json-出力について) を参照してください。
