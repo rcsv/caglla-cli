@@ -502,3 +502,115 @@ fn cli_itinerary_replicate_dry_run_does_not_create_items() {
         1
     );
 }
+
+#[test]
+fn cli_itinerary_replicate_copies_estimates() {
+    let dir = temp_workdir();
+    setup_week_trip(&dir);
+    assert!(
+        run_cli(&dir, &["itinerary", "add", "1", "--day", "2", "Breakfast"])
+            .status
+            .success()
+    );
+    assert!(run_cli(
+        &dir,
+        &[
+            "estimate",
+            "add",
+            "--itinerary",
+            "1",
+            "--amount",
+            "1400",
+            "--currency",
+            "JPY",
+            "--title",
+            "朝食代",
+            "--note",
+            "2名分",
+            "--sort-order",
+            "10",
+        ],
+    )
+    .status
+    .success());
+
+    let output = run_cli(
+        &dir,
+        &["itinerary", "replicate", "--items", "1", "--to-days", "3,4"],
+    );
+    assert!(output.status.success());
+
+    let list = run_cli(&dir, &["estimate", "list", "--trip", "1"]);
+    assert!(
+        list.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&list.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&list.stdout);
+    assert_eq!(stdout.matches("朝食代").count(), 3, "stdout: {stdout}");
+    assert_eq!(stdout.matches("1,400").count(), 3);
+    assert_eq!(
+        stdout.matches("2名分").count(),
+        0,
+        "note is not shown in list view"
+    );
+}
+
+#[test]
+fn cli_itinerary_replicate_dry_run_does_not_create_estimates() {
+    let dir = temp_workdir();
+    setup_week_trip(&dir);
+    assert!(
+        run_cli(&dir, &["itinerary", "add", "1", "--day", "2", "Breakfast"])
+            .status
+            .success()
+    );
+    assert!(run_cli(
+        &dir,
+        &[
+            "estimate",
+            "add",
+            "--itinerary",
+            "1",
+            "--amount",
+            "1400",
+            "--currency",
+            "JPY",
+        ],
+    )
+    .status
+    .success());
+
+    let before = run_cli(&dir, &["estimate", "list", "--trip", "1"]);
+    assert!(before.status.success());
+    let before_stdout = String::from_utf8_lossy(&before.stdout);
+    assert_eq!(
+        before_stdout.matches("1,400").count(),
+        1,
+        "before: {before_stdout}"
+    );
+
+    assert!(run_cli(
+        &dir,
+        &[
+            "itinerary",
+            "replicate",
+            "--items",
+            "1",
+            "--to-days",
+            "3",
+            "--dry-run",
+        ],
+    )
+    .status
+    .success());
+
+    let after = run_cli(&dir, &["estimate", "list", "--trip", "1"]);
+    assert!(after.status.success());
+    let after_stdout = String::from_utf8_lossy(&after.stdout);
+    assert_eq!(
+        after_stdout.matches("1,400").count(),
+        1,
+        "after: {after_stdout}"
+    );
+}

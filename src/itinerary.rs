@@ -612,6 +612,7 @@ fn replicate_itinerary_items_inner(
                 if copy_notes {
                     copy_itinerary_level_notes(conn, source.id, new_id)?;
                 }
+                crate::estimate::copy_estimates_for_itinerary(conn, source.id, new_id)?;
                 created_ids.push(new_id);
             }
         }
@@ -2641,6 +2642,138 @@ mod tests {
     }
 
     #[test]
+    fn test_replicate_copies_estimates() {
+        use crate::estimate::{add_estimate, list_estimates_for_itinerary};
+
+        let conn = test_db();
+        let trip_id = add_five_day_trip(&conn);
+        let source_id = add_itinerary_item(
+            &conn,
+            trip_id,
+            2,
+            "朝食",
+            None,
+            None,
+            Some(1000),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        add_estimate(
+            &conn,
+            source_id,
+            "1400",
+            "JPY",
+            Some("朝食代"),
+            Some("2名分"),
+            Some(10),
+        )
+        .unwrap();
+        add_estimate(
+            &conn,
+            source_id,
+            "500",
+            "JPY",
+            Some("ドリンク"),
+            None,
+            Some(20),
+        )
+        .unwrap();
+
+        let result = replicate_itinerary_items(&conn, &[source_id], &[3, 4], true, false).unwrap();
+        assert_eq!(result.by_day.len(), 2);
+
+        let source_estimates = list_estimates_for_itinerary(&conn, source_id).unwrap();
+        assert_eq!(source_estimates.len(), 2);
+
+        for day_result in &result.by_day {
+            let copied_id = day_result.created_ids[0];
+            let copied_estimates = list_estimates_for_itinerary(&conn, copied_id).unwrap();
+            assert_eq!(copied_estimates.len(), 2);
+            assert_eq!(
+                copied_estimates[0].title.as_deref(),
+                source_estimates[0].title.as_deref()
+            );
+            assert_eq!(copied_estimates[0].amount, source_estimates[0].amount);
+            assert_eq!(copied_estimates[0].currency, source_estimates[0].currency);
+            assert_eq!(
+                copied_estimates[0].note.as_deref(),
+                source_estimates[0].note.as_deref()
+            );
+            assert_eq!(
+                copied_estimates[0].sort_order,
+                source_estimates[0].sort_order
+            );
+            assert_ne!(copied_estimates[0].id, source_estimates[0].id);
+            assert_ne!(copied_estimates[1].id, source_estimates[1].id);
+            assert_eq!(copied_estimates[0].itinerary_id, copied_id);
+        }
+    }
+
+    #[test]
+    fn test_replicated_estimates_are_independent() {
+        use crate::estimate::{
+            add_estimate, get_estimate, list_estimates_for_itinerary, update_estimate,
+            UpdateEstimateParams,
+        };
+
+        let conn = test_db();
+        let trip_id = add_five_day_trip(&conn);
+        let source_id = add_itinerary_item(
+            &conn,
+            trip_id,
+            2,
+            "朝食",
+            None,
+            None,
+            Some(1000),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        let source_estimate_id =
+            add_estimate(&conn, source_id, "1400", "JPY", Some("朝食代"), None, None).unwrap();
+
+        let result = replicate_itinerary_items(&conn, &[source_id], &[3], true, false).unwrap();
+        let copied_id = result.by_day[0].created_ids[0];
+        let copied_estimate_id = list_estimates_for_itinerary(&conn, copied_id).unwrap()[0].id;
+
+        update_estimate(
+            &conn,
+            copied_estimate_id,
+            &UpdateEstimateParams {
+                amount_input: Some("1600"),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let source = get_estimate(&conn, source_estimate_id).unwrap();
+        let copied = get_estimate(&conn, copied_estimate_id).unwrap();
+        assert_eq!(source.amount, 1400);
+        assert_eq!(copied.amount, 1600);
+
+        update_estimate(
+            &conn,
+            source_estimate_id,
+            &UpdateEstimateParams {
+                title: Some("改定後"),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let source = get_estimate(&conn, source_estimate_id).unwrap();
+        let copied = get_estimate(&conn, copied_estimate_id).unwrap();
+        assert_eq!(source.title.as_deref(), Some("改定後"));
+        assert_eq!(copied.title.as_deref(), Some("朝食代"));
+    }
+
+    #[test]
     fn test_replicate_does_not_copy_expense_or_reservation() {
         use crate::expense::add_expense;
         use crate::reservation::add_reservation;
@@ -2812,9 +2945,25 @@ mod tests {
 
     #[test]
     fn test_replicate_dry_run_does_not_write() {
+        use crate::estimate::{add_estimate, list_estimates_for_itinerary};
+
         let conn = test_db();
         let trip_id = add_five_day_trip(&conn);
         let source_ids = add_hotel_pattern(&conn, trip_id, 2);
+        add_estimate(
+            &conn,
+            source_ids[0],
+            "1400",
+            "JPY",
+            Some("朝食代"),
+            None,
+            None,
+        )
+        .unwrap();
+
+        let estimate_count_before: i64 = conn
+            .query_row("SELECT COUNT(*) FROM estimates", [], |row| row.get(0))
+            .unwrap();
 
         let result = replicate_itinerary_items(&conn, &source_ids, &[3, 4], true, true).unwrap();
         assert_eq!(result.total_created(), 8);
@@ -2824,5 +2973,16 @@ mod tests {
         assert!(list_itinerary_items_for_day(&conn, trip_id, 4)
             .unwrap()
             .is_empty());
+
+        let estimate_count_after: i64 = conn
+            .query_row("SELECT COUNT(*) FROM estimates", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(estimate_count_before, estimate_count_after);
+        assert_eq!(
+            list_estimates_for_itinerary(&conn, source_ids[0])
+                .unwrap()
+                .len(),
+            1
+        );
     }
 }

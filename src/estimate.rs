@@ -144,6 +144,36 @@ pub(crate) fn add_estimate(
     Ok(conn.last_insert_rowid())
 }
 
+/// source Itinerary 配下の Estimate を target Itinerary へ複製する（新 ID / 新 timestamps）
+pub(crate) fn copy_estimates_for_itinerary(
+    conn: &Connection,
+    source_itinerary_id: i64,
+    target_itinerary_id: i64,
+) -> Result<()> {
+    crate::itinerary::get_itinerary_item(conn, target_itinerary_id)?;
+    let estimates = list_estimates_for_itinerary(conn, source_itinerary_id)?;
+    let now = crate::db::now_string();
+    for estimate in estimates {
+        conn.execute(
+            "INSERT INTO estimates
+             (itinerary_id, title, amount, currency, note, sort_order, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![
+                target_itinerary_id,
+                estimate.title,
+                estimate.amount,
+                estimate.currency,
+                estimate.note,
+                estimate.sort_order,
+                &now,
+                &now,
+            ],
+        )
+        .context("Estimate の複製に失敗しました")?;
+    }
+    Ok(())
+}
+
 pub(crate) fn list_estimates_for_itinerary(
     conn: &Connection,
     itinerary_id: i64,
@@ -724,5 +754,61 @@ mod tests {
         assert!(section.contains("| 入館料 | JPY 2,180 | 大人5名想定 |"));
         assert!(section.contains("| - | JPY 5,000 |  |"));
         assert!(format_estimates_markdown_section(&[]).is_none());
+    }
+
+    #[test]
+    fn test_copy_estimates_for_itinerary() {
+        let conn = test_db();
+        let trip_id = add_test_trip(&conn, "Copy Trip").unwrap();
+        let source_id = crate::itinerary::add_itinerary_item(
+            &conn,
+            trip_id,
+            1,
+            "Breakfast",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        let target_id = crate::itinerary::add_itinerary_item(
+            &conn,
+            trip_id,
+            2,
+            "Breakfast",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        add_estimate(
+            &conn,
+            source_id,
+            "1400",
+            "JPY",
+            Some("meal"),
+            Some("2 people"),
+            Some(5),
+        )
+        .unwrap();
+
+        copy_estimates_for_itinerary(&conn, source_id, target_id).unwrap();
+
+        let source = list_estimates_for_itinerary(&conn, source_id).unwrap();
+        let target = list_estimates_for_itinerary(&conn, target_id).unwrap();
+        assert_eq!(source.len(), 1);
+        assert_eq!(target.len(), 1);
+        assert_ne!(source[0].id, target[0].id);
+        assert_eq!(target[0].itinerary_id, target_id);
+        assert_eq!(target[0].title, source[0].title);
+        assert_eq!(target[0].amount, source[0].amount);
+        assert_eq!(target[0].sort_order, source[0].sort_order);
     }
 }

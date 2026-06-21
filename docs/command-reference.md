@@ -197,8 +197,9 @@ cargo run -- estimate delete 3
 | **trip diff** | schema v6+ 同士で added / removed / field changed を比較 |
 | **trip stats** | Trip 配下 Estimate の件数・通貨別 **Planned total**（`estimate_count` / `estimate_totals`） |
 | **export-md** | Itinerary セクション内に「予定費用」表。Overview に Planned / Actual 合計 |
+| **itinerary replicate** | source Itinerary 配下 Estimate を target にコピー（デフォルト） |
 
-**未実装（Phase 4 以降）:** itinerary replicate の Estimate コピー
+**未実装:** `--without-estimates`（将来需要が明確になった場合に検討）
 
 責務整理: [specifications/estimate-model.md](specifications/estimate-model.md)  
 Entity Design: [specifications/estimate-entity-design.md](specifications/estimate-entity-design.md)  
@@ -321,8 +322,8 @@ cargo run -- itinerary replicate --items 12,13 --to-days 3-5 --dry-run
 **挙動:**
 
 - Google Calendar の recurring event ではなく、複製後の各 Itinerary は **独立** して編集できる
-- コピー対象: `title`, `note`, `start_time`, `sort_order`, `duration_minutes`, `travel_minutes`, `location`, `category`, Itinerary-level notes（デフォルト）
-- コピーしない: Expense, Reservation, `id`, `created_at`, `updated_at`
+- コピー対象: `title`, `note`, `start_time`, `sort_order`, `duration_minutes`, `travel_minutes`, `location`, `category`, Itinerary-level notes（デフォルト）、**Estimate（予定費用）**
+- コピーしない: Expense（実績支出）, Reservation（予約実体）, `id`, `created_at`, `updated_at`
 - `--to-days` に source Day を含めるとエラー
 - 複数 item × 複数 Day の複製は **1 トランザクション** で実行される
 
