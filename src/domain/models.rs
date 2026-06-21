@@ -336,7 +336,9 @@ impl DoctorIssue {
             DoctorIssueCode::HighTravelTime => format!(
                 "Day {} has high travel time ({})",
                 self.target_day().unwrap_or(0),
-                crate::stats::format_minutes_duration(self.travel_minutes.unwrap_or(0))
+                crate::analysis::statistics::format_minutes_duration(
+                    self.travel_minutes.unwrap_or(0)
+                )
             ),
             DoctorIssueCode::MissingDuration => match self.target {
                 DoctorIssueTarget::Itinerary(id) => {
@@ -1115,7 +1117,7 @@ pub struct TripImportSummary {
 
 #[cfg(test)]
 mod tests {
-    use crate::models::{
+    use crate::domain::models::{
         parse_itinerary_category, CategoryDefinition, DoctorIssue, DoctorIssueCode,
         DoctorIssueSeverity, DoctorIssueTarget, IssueTargetType, ItineraryCategory,
         DOCTOR_REPORT_SCHEMA_VERSION,
@@ -1257,7 +1259,7 @@ mod tests {
         let details = missing.to_issue_details();
         assert_eq!(details.itinerary_id, Some(11));
 
-        let report = crate::models::DoctorReportJson::new(1, vec![]);
+        let report = crate::domain::models::DoctorReportJson::new(1, vec![]);
         assert_eq!(report.schema_version, DOCTOR_REPORT_SCHEMA_VERSION);
     }
 }

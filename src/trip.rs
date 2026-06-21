@@ -2,8 +2,7 @@ use anyhow::{Context, Result};
 use chrono::Utc;
 use rusqlite::{params, Connection};
 
-use crate::db::now_string;
-use crate::models::{
+use crate::domain::models::{
     effective_export_schema_version, is_supported_export_schema_version, ExportDayV3,
     ExportEstimate, ExportExpense, ExportItineraryV3, ExportReservation, ExportReservationV3,
     ExportValidationCheck, ExportValidationCheckId, ExportValidationReport, ItineraryNoteKey, Trip,
@@ -11,6 +10,7 @@ use crate::models::{
     TRIP_EXPORT_SCHEMA_VERSION, TRIP_EXPORT_SCHEMA_VERSION_V1, TRIP_EXPORT_SCHEMA_VERSION_V3,
     TRIP_EXPORT_SCHEMA_VERSION_V4, TRIP_EXPORT_SCHEMA_VERSION_V5,
 };
+use crate::storage::db::now_string;
 
 /// 新しい旅行を追加する
 pub(crate) fn add_trip(
@@ -65,7 +65,7 @@ pub(crate) fn list_trips(conn: &Connection) -> Result<Vec<Trip>> {
 
 /// ID を指定して1件の旅行を取得する
 pub(crate) fn get_trip(conn: &Connection, id: i64) -> Result<Trip> {
-    crate::db::map_query_row(
+    crate::storage::db::map_query_row(
         conn.query_row(
             "SELECT id, name, start_date, end_date, summary, created_at, updated_at
          FROM trips
@@ -122,7 +122,7 @@ pub(crate) fn update_trip(
     let day_count = crate::day::validate_trip_date_range(start_date, end_date)?;
 
     let now = now_string();
-    crate::db::with_transaction(conn, "trip update", |tx| {
+    crate::storage::db::with_transaction(conn, "trip update", |tx| {
         tx.execute(
             "UPDATE trips
              SET name = ?1, start_date = ?2, end_date = ?3, summary = ?4, updated_at = ?5
@@ -152,7 +152,7 @@ pub(crate) fn build_trip_export(conn: &Connection, trip_id: i64) -> Result<TripE
     let day_summaries = crate::day::list_days(conn, trip_id)?
         .into_iter()
         .filter(|day| day.summary.is_some())
-        .map(|day| crate::models::ExportDaySummary {
+        .map(|day| crate::domain::models::ExportDaySummary {
             day_number: day.day_number,
             summary: day.summary.clone(),
         })
@@ -440,13 +440,13 @@ fn validate_trip_export_v3(export: &TripExportV3) -> Result<()> {
     }
 
     // notes 検証のため itinerary_items 互換の配列を生成
-    let itinerary_items: Vec<crate::models::ItineraryItem> = export
+    let itinerary_items: Vec<crate::domain::models::ItineraryItem> = export
         .days
         .iter()
         .flat_map(|day| {
             day.itineraries
                 .iter()
-                .map(move |it| crate::models::ItineraryItem {
+                .map(move |it| crate::domain::models::ItineraryItem {
                     id: 0,
                     trip_id: 0,
                     day: day.day_number,
@@ -468,7 +468,7 @@ fn validate_trip_export_v3(export: &TripExportV3) -> Result<()> {
         .days
         .iter()
         .filter(|day| day.summary.is_some())
-        .map(|day| crate::models::ExportDaySummary {
+        .map(|day| crate::domain::models::ExportDaySummary {
             day_number: day.day_number,
             summary: day.summary.clone(),
         })
@@ -633,7 +633,7 @@ pub(crate) fn analyze_trip_export_json(file: &str, json: &str) -> ExportValidati
             }
         };
 
-        let metadata = crate::models::TripExportMetadata {
+        let metadata = crate::domain::models::TripExportMetadata {
             generator_present: root.get("generator").is_some(),
             generator: export.generator.clone(),
             generator_version_present: root.get("generator_version").is_some(),
@@ -1048,7 +1048,7 @@ pub(crate) fn print_export_validation_report(report: &ExportValidationReport) {
 pub(crate) fn run_trip_validate_export(path: &str, json: bool) -> Result<()> {
     let report = analyze_trip_export(path)?;
     if json {
-        print_json(&report)?;
+        crate::output::json::print_json(&report)?;
     } else {
         print_export_validation_report(&report);
     }
@@ -1393,7 +1393,7 @@ pub(crate) fn load_trip_export_from_file(path: &str) -> Result<TripExport> {
             .flat_map(|day| {
                 day.itineraries
                     .iter()
-                    .map(move |it| crate::models::ItineraryItem {
+                    .map(move |it| crate::domain::models::ItineraryItem {
                         id: 0,
                         trip_id: 0,
                         day: day.day_number,
@@ -1414,7 +1414,7 @@ pub(crate) fn load_trip_export_from_file(path: &str) -> Result<TripExport> {
             .days
             .iter()
             .filter(|day| day.summary.is_some())
-            .map(|day| crate::models::ExportDaySummary {
+            .map(|day| crate::domain::models::ExportDaySummary {
                 day_number: day.day_number,
                 summary: day.summary.clone(),
             })
@@ -1446,7 +1446,7 @@ pub(crate) fn load_trip_export_from_file(path: &str) -> Result<TripExport> {
 /// 旅行を削除する
 pub(crate) fn delete_trip(conn: &Connection, id: i64) -> Result<()> {
     get_trip(conn, id)?;
-    crate::db::with_transaction(conn, "trip delete", |tx| {
+    crate::storage::db::with_transaction(conn, "trip delete", |tx| {
         crate::participant::delete_participants_for_trip(tx, id)?;
         crate::note::delete_notes_for_trip(tx, id)?;
         crate::reservation::delete_reservations_for_trip(tx, id)?;
@@ -1500,13 +1500,6 @@ pub(crate) fn print_trip_list(trips: &[Trip]) {
     println!("合計: {} 件", trips.len());
 }
 
-/// 値を pretty JSON で標準出力する
-pub(crate) fn print_json<T: serde::Serialize>(value: &T) -> Result<()> {
-    let json = serde_json::to_string_pretty(value).context("JSON の生成に失敗しました")?;
-    println!("{json}");
-    Ok(())
-}
-
 /// 旅行の詳細を表示する
 pub(crate) fn print_trip_detail(trip: &Trip) {
     println!("ID        : {}", trip.id);
@@ -1526,8 +1519,8 @@ pub(crate) fn print_trip_detail(trip: &Trip) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::open_db_at;
     use crate::itinerary::add_itinerary_item;
+    use crate::storage::db::open_db_at;
     use rusqlite::Connection;
 
     fn test_db() -> Connection {
@@ -1877,7 +1870,7 @@ mod tests {
             .collect();
         assert_eq!(v3_titles, expected);
 
-        let md = crate::markdown::generate_trip_markdown(&conn, trip_id).unwrap();
+        let md = crate::io::markdown::generate_trip_markdown(&conn, trip_id).unwrap();
         let pos_late = md.find("### 18:00 Late time early order").unwrap();
         let pos_middle = md.find("### Middle no time").unwrap();
         let pos_early = md.find("### 08:00 Early time late order").unwrap();
@@ -2023,8 +2016,8 @@ mod tests {
     }
 
     use crate::checklist::{add_checklist_item, set_checklist_done};
-    use crate::db::reset_db;
-    use crate::models::{ChecklistItem, ItineraryItem};
+    use crate::domain::models::{ChecklistItem, ItineraryItem};
+    use crate::storage::db::reset_db;
 
     fn checklist_sem(items: &[ChecklistItem]) -> Vec<(String, bool, i64)> {
         items
@@ -2047,7 +2040,7 @@ mod tests {
         trip_end_date: Option<String>,
         itinerary_items: Vec<ComparableItineraryItem>,
         checklist_items: Vec<ComparableChecklistItem>,
-        notes: Vec<crate::models::ExportNote>,
+        notes: Vec<crate::domain::models::ExportNote>,
     }
 
     #[derive(Debug, Clone, PartialEq, Eq)]
@@ -2060,7 +2053,7 @@ mod tests {
         duration_minutes: Option<i64>,
         travel_minutes: Option<i64>,
         location: Option<String>,
-        category: Option<crate::models::ItineraryCategory>,
+        category: Option<crate::domain::models::ItineraryCategory>,
     }
 
     #[derive(Debug, Clone, PartialEq, Eq)]
@@ -2640,7 +2633,7 @@ mod tests {
             Some(120),
             Some(15),
             Some("Downtown"),
-            Some(crate::models::ItineraryCategory::Museum),
+            Some(crate::domain::models::ItineraryCategory::Museum),
         )
         .unwrap();
         add_checklist_item(&conn, trip_id, "Passport").unwrap();
@@ -2701,7 +2694,7 @@ mod tests {
         assert!(report.valid);
         assert_eq!(
             report.schema_version,
-            crate::models::EXPORT_VALIDATION_REPORT_SCHEMA_VERSION
+            crate::domain::models::EXPORT_VALIDATION_REPORT_SCHEMA_VERSION
         );
         assert_eq!(
             report.export_schema_version,

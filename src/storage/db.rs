@@ -66,7 +66,7 @@ pub(crate) fn collect_table_counts(conn: &Connection) -> Result<DbTableCounts> {
 pub(crate) fn collect_db_status() -> Result<DbStatusJson> {
     let path_buf = resolve_db_path()?;
     let path = path_buf.to_string_lossy().into_owned();
-    let trip_export_schema_version = crate::models::TRIP_EXPORT_SCHEMA_VERSION;
+    let trip_export_schema_version = crate::domain::models::TRIP_EXPORT_SCHEMA_VERSION;
 
     if !path_buf.exists() {
         return Ok(DbStatusJson {
@@ -136,7 +136,7 @@ pub(crate) fn print_db_status_human(status: &DbStatusJson) -> Result<()> {
 pub(crate) fn run_db_status(json: bool) -> Result<()> {
     let status = collect_db_status()?;
     if json {
-        crate::trip::print_json(&status)?;
+        crate::output::json::print_json(&status)?;
     } else {
         print_db_status_human(&status)?;
     }
@@ -517,8 +517,8 @@ pub(crate) fn now_string() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::{init_db, migrate_itinerary_items, open_db_at, reset_db};
     use crate::itinerary::add_itinerary_item;
+    use crate::storage::db::{init_db, migrate_itinerary_items, open_db_at, reset_db};
     use crate::trip::{add_test_trip, list_trips};
     use rusqlite::{params, Connection};
     fn test_db() -> Connection {
@@ -673,7 +673,7 @@ mod tests {
     fn test_migrate_itinerary_day_id_from_legacy_schema() {
         let conn = Connection::open(":memory:").unwrap();
         conn.execute_batch("PRAGMA foreign_keys = ON").unwrap();
-        let now = crate::db::now_string();
+        let now = crate::storage::db::now_string();
         conn.execute(
             "CREATE TABLE trips (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -885,7 +885,7 @@ mod tests {
             path: "/tmp/caglla.db".to_string(),
             exists: false,
             file_size_bytes: None,
-            trip_export_schema_version: crate::models::TRIP_EXPORT_SCHEMA_VERSION,
+            trip_export_schema_version: crate::domain::models::TRIP_EXPORT_SCHEMA_VERSION,
             table_counts: None,
         };
         let json = serde_json::to_value(&status).unwrap();
@@ -893,7 +893,7 @@ mod tests {
         assert_eq!(json["exists"], false);
         assert_eq!(
             json["trip_export_schema_version"],
-            crate::models::TRIP_EXPORT_SCHEMA_VERSION
+            crate::domain::models::TRIP_EXPORT_SCHEMA_VERSION
         );
         assert!(json.get("file_size_bytes").is_none());
         assert!(json.get("table_counts").is_none());
@@ -911,7 +911,7 @@ mod tests {
             path: "/tmp/caglla.db".to_string(),
             exists: true,
             file_size_bytes: Some(123),
-            trip_export_schema_version: crate::models::TRIP_EXPORT_SCHEMA_VERSION,
+            trip_export_schema_version: crate::domain::models::TRIP_EXPORT_SCHEMA_VERSION,
             table_counts: Some(counts),
         };
         let json = serde_json::to_value(&status).unwrap();

@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use rusqlite::{params, Connection};
 use serde::Serialize;
 
-use crate::models::{ExportParticipantV4, Participant, ParticipantCounts};
+use crate::domain::models::{ExportParticipantV4, Participant, ParticipantCounts};
 
 pub(crate) const MAX_PARTICIPANT_NAME_LEN: usize = 200;
 
@@ -153,7 +153,7 @@ pub(crate) fn create_participant(
         anyhow::bail!("trip already has a self participant");
     }
 
-    let now = crate::db::now_string();
+    let now = crate::storage::db::now_string();
     conn.execute(
         "INSERT INTO participants
          (trip_id, name, sort_order, is_self, created_at, updated_at)
@@ -186,7 +186,7 @@ pub(crate) fn list_participants_by_trip(
 }
 
 pub(crate) fn get_participant(conn: &Connection, id: i64) -> Result<Participant> {
-    crate::db::map_query_row(
+    crate::storage::db::map_query_row(
         conn.query_row(
             &format!("{PARTICIPANT_SELECT_SQL} WHERE id = ?1"),
             params![id],
@@ -216,12 +216,12 @@ pub(crate) fn update_participant(
         participant.sort_order = value;
     }
 
-    crate::db::with_transaction(conn, "participant update", |tx| {
+    crate::storage::db::with_transaction(conn, "participant update", |tx| {
         if set_self == Some(true) {
             tx.execute(
                 "UPDATE participants SET is_self = 0, updated_at = ?1
                  WHERE trip_id = ?2 AND id != ?3",
-                params![crate::db::now_string(), participant.trip_id, id],
+                params![crate::storage::db::now_string(), participant.trip_id, id],
             )
             .context("self participant の付け替えに失敗しました")?;
             participant.is_self = true;
@@ -229,7 +229,7 @@ pub(crate) fn update_participant(
             participant.is_self = false;
         }
 
-        let now = crate::db::now_string();
+        let now = crate::storage::db::now_string();
         tx.execute(
             "UPDATE participants
              SET name = ?1, sort_order = ?2, is_self = ?3, updated_at = ?4
@@ -249,7 +249,7 @@ pub(crate) fn update_participant(
 
 pub(crate) fn delete_participant(conn: &Connection, id: i64) -> Result<()> {
     get_participant(conn, id)?;
-    crate::db::with_transaction(conn, "participant delete", |tx| {
+    crate::storage::db::with_transaction(conn, "participant delete", |tx| {
         crate::expense::clear_paid_by_for_participant(tx, id)?;
         crate::expense::delete_beneficiaries_for_participant(tx, id)?;
         tx.execute("DELETE FROM participants WHERE id = ?1", params![id])
@@ -397,7 +397,7 @@ pub(crate) fn print_participant_detail(participant: &Participant) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::{open_db_at, reset_db};
+    use crate::storage::db::{open_db_at, reset_db};
 
     fn setup_conn() -> rusqlite::Connection {
         let conn = open_db_at(":memory:").unwrap();

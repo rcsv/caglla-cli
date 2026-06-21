@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 
-use crate::models::{Estimate, ExportDayV3, ExportEstimateV3, TRIP_EXPORT_SCHEMA_VERSION};
+use crate::domain::models::{Estimate, ExportDayV3, ExportEstimateV3, TRIP_EXPORT_SCHEMA_VERSION};
 use crate::money::{format_amount_display, parse_amount_for_currency, validate_currency_code};
 
 const ESTIMATE_SELECT_SQL: &str = "
@@ -123,7 +123,7 @@ pub(crate) fn add_estimate(
     let title = normalize_optional_text(title);
     let note = normalize_optional_text(note);
     let sort_order = sort_order.unwrap_or(0);
-    let now = crate::db::now_string();
+    let now = crate::storage::db::now_string();
 
     conn.execute(
         "INSERT INTO estimates
@@ -152,7 +152,7 @@ pub(crate) fn copy_estimates_for_itinerary(
 ) -> Result<()> {
     crate::itinerary::get_itinerary_item(conn, target_itinerary_id)?;
     let estimates = list_estimates_for_itinerary(conn, source_itinerary_id)?;
-    let now = crate::db::now_string();
+    let now = crate::storage::db::now_string();
     for estimate in estimates {
         conn.execute(
             "INSERT INTO estimates
@@ -224,7 +224,7 @@ fn list_estimates_where<P: rusqlite::Params>(
 }
 
 pub(crate) fn get_estimate(conn: &Connection, id: i64) -> Result<Estimate> {
-    crate::db::map_query_row(
+    crate::storage::db::map_query_row(
         conn.query_row(
             &format!("{ESTIMATE_SELECT_SQL} WHERE id = ?1"),
             params![id],
@@ -305,7 +305,7 @@ pub(crate) fn update_estimate(
         estimate.currency = currency;
     }
 
-    let now = crate::db::now_string();
+    let now = crate::storage::db::now_string();
     conn.execute(
         "UPDATE estimates
          SET title = ?1, amount = ?2, currency = ?3, note = ?4, sort_order = ?5, updated_at = ?6
@@ -464,7 +464,7 @@ pub(crate) fn import_estimate_v3(
         anyhow::bail!("estimate amount must be non-negative");
     }
 
-    let now = crate::db::now_string();
+    let now = crate::storage::db::now_string();
     conn.execute(
         "INSERT INTO estimates
          (itinerary_id, title, amount, currency, note, sort_order, created_at, updated_at)
@@ -520,8 +520,8 @@ pub(crate) fn collect_export_estimate_validation_errors(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::open_db_at;
     use crate::itinerary::add_itinerary_item;
+    use crate::storage::db::open_db_at;
     use crate::trip::add_test_trip;
 
     fn test_db() -> Connection {

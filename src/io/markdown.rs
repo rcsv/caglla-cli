@@ -3,9 +3,11 @@ use std::collections::HashMap;
 use anyhow::{Context, Result};
 use rusqlite::Connection;
 
-use crate::models::{ChecklistItem, Day, Estimate, Expense, ItineraryItem, Participant, Trip};
+use crate::analysis::statistics::{format_minutes_duration, TripStats};
+use crate::domain::models::{
+    ChecklistItem, Day, Estimate, Expense, ItineraryItem, Participant, Trip,
+};
 use crate::reservation::ReservationWithContext;
-use crate::stats::{format_minutes_duration, TripStats};
 
 /// Markdown 出力用に日程一覧を取得する（`list_itinerary_items` と同一順序）
 pub(crate) fn list_itinerary_items_for_markdown(
@@ -299,7 +301,7 @@ pub(crate) fn generate_trip_markdown(conn: &Connection, trip_id: i64) -> Result<
     let days = crate::day::list_days(conn, trip_id)?;
     let items = list_itinerary_items_for_markdown(conn, trip_id)?;
     let checklist = crate::checklist::list_checklist_items(conn, trip_id)?;
-    let stats = crate::stats::compute_trip_stats(conn, trip_id)?;
+    let stats = crate::analysis::statistics::compute_trip_stats(conn, trip_id)?;
     let mut estimates_by_itinerary: HashMap<i64, Vec<Estimate>> = HashMap::new();
     for estimate in crate::estimate::list_estimates_for_trip(conn, trip_id)? {
         estimates_by_itinerary
@@ -363,9 +365,9 @@ pub(crate) fn write_trip_markdown(
 mod tests {
     use super::*;
     use crate::checklist::{add_checklist_item, set_checklist_done};
-    use crate::db::open_db_at;
+    use crate::domain::models::ItineraryCategory;
     use crate::itinerary::add_itinerary_item;
-    use crate::models::ItineraryCategory;
+    use crate::storage::db::open_db_at;
     use crate::trip::{add_test_trip, add_trip};
     use rusqlite::Connection;
 

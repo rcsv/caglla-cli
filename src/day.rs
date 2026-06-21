@@ -3,8 +3,8 @@ use chrono::NaiveDate;
 use rusqlite::{params, Connection};
 use serde::Serialize;
 
-use crate::db::now_string;
-use crate::models::{Day, ItineraryItem, Trip};
+use crate::domain::models::{Day, ItineraryItem, Trip};
+use crate::storage::db::now_string;
 
 /// YYYY-MM-DD 形式の日付文字列をパースする
 pub(crate) fn parse_trip_date(date: &str) -> Result<NaiveDate> {
@@ -98,7 +98,7 @@ pub(crate) fn find_day_by_trip_and_day_number(
     trip_id: i64,
     day_number: i64,
 ) -> Result<Day> {
-    crate::db::map_query_row(
+    crate::storage::db::map_query_row(
         conn.query_row(
             "SELECT id, trip_id, day_number, title, summary, created_at, updated_at
              FROM days WHERE trip_id = ?1 AND day_number = ?2",
@@ -174,7 +174,7 @@ pub(crate) fn run_day_list(conn: &Connection, trip_id: i64, json: bool) -> Resul
                 })
             })
             .collect::<Result<Vec<_>>>()?;
-        crate::trip::print_json(&DayListJson {
+        crate::output::json::print_json(&DayListJson {
             trip_id,
             trip_name: trip.name,
             days: entries,
@@ -197,7 +197,7 @@ pub(crate) fn run_day_show(
     let date = day_date_for_trip(&trip, day_number)?;
     let items = crate::itinerary::list_itinerary_items_for_day(conn, trip_id, day_number)?;
     if json {
-        crate::trip::print_json(&DayShowJson {
+        crate::output::json::print_json(&DayShowJson {
             trip_id,
             trip_name: trip.name,
             day_number,
@@ -457,8 +457,8 @@ fn backfill_days_for_trip(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::open_db_at;
     use crate::itinerary::add_itinerary_item;
+    use crate::storage::db::open_db_at;
     use crate::trip::add_trip;
 
     fn test_db() -> Connection {
@@ -574,7 +574,7 @@ mod tests {
 
     #[test]
     fn test_swap_day_plan_payload_exchanges_plan_metadata() {
-        use crate::models::NoteOwnerType;
+        use crate::domain::models::NoteOwnerType;
         use crate::note::{add_note, list_notes_for_owner, ResolvedNoteOwner};
 
         let conn = test_db();

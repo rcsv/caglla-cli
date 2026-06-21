@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use anyhow::{Context, Result};
 use rusqlite::{params, Connection};
 
-use crate::models::{ChecklistItem, ItineraryCategory};
+use crate::domain::models::{ChecklistItem, ItineraryCategory};
 
 /// チェックリスト自動生成の結果
 pub(crate) struct ChecklistGenerateResult {
@@ -24,7 +24,7 @@ pub(crate) fn add_checklist_item_with_sort_order(
     sort_order: i64,
 ) -> Result<i64> {
     crate::trip::get_trip(conn, trip_id)?;
-    let now = crate::db::now_string();
+    let now = crate::storage::db::now_string();
     conn.execute(
         "INSERT INTO checklist_items
          (trip_id, title, is_done, sort_order, created_at, updated_at)
@@ -67,7 +67,7 @@ pub(crate) fn plan_checklist_generation(
         .filter_map(|item| item.category)
         .collect();
 
-    for rule in crate::models::checklist_combination_rules() {
+    for rule in crate::domain::models::checklist_combination_rules() {
         if checklist_rule_matches(&trip_categories, rule) {
             for &title in rule.checklist {
                 try_plan_generated_checklist_item(
@@ -116,7 +116,7 @@ fn apply_planned_checklist_items(conn: &Connection, trip_id: i64, added: &[Strin
 
 fn checklist_rule_matches(
     trip_categories: &HashSet<ItineraryCategory>,
-    rule: &crate::models::ChecklistRule,
+    rule: &crate::domain::models::ChecklistRule,
 ) -> bool {
     rule.required_categories
         .iter()
@@ -189,7 +189,7 @@ pub(crate) fn import_checklist_item(
     is_done: bool,
     sort_order: i64,
 ) -> Result<i64> {
-    let now = crate::db::now_string();
+    let now = crate::storage::db::now_string();
     conn.execute(
         "INSERT INTO checklist_items
          (trip_id, title, is_done, sort_order, created_at, updated_at)
@@ -223,7 +223,7 @@ pub(crate) fn list_checklist_items(conn: &Connection, trip_id: i64) -> Result<Ve
 
 /// ID を指定して1件のチェックリスト項目を取得する
 pub(crate) fn get_checklist_item(conn: &Connection, id: i64) -> Result<ChecklistItem> {
-    crate::db::map_query_row(
+    crate::storage::db::map_query_row(
         conn.query_row(
             "SELECT id, trip_id, title, is_done, sort_order, created_at, updated_at
          FROM checklist_items
@@ -254,7 +254,7 @@ pub(crate) fn update_checklist_item(
         item.sort_order = order;
     }
 
-    let now = crate::db::now_string();
+    let now = crate::storage::db::now_string();
     conn.execute(
         "UPDATE checklist_items
          SET title = ?1, sort_order = ?2, updated_at = ?3
@@ -268,7 +268,7 @@ pub(crate) fn update_checklist_item(
 /// チェックリスト項目の完了状態を変更する
 pub(crate) fn set_checklist_done(conn: &Connection, id: i64, is_done: bool) -> Result<()> {
     get_checklist_item(conn, id)?;
-    let now = crate::db::now_string();
+    let now = crate::storage::db::now_string();
     let done_value = i64::from(is_done);
     conn.execute(
         "UPDATE checklist_items SET is_done = ?1, updated_at = ?2 WHERE id = ?3",
@@ -336,7 +336,7 @@ pub(crate) fn print_checklist_detail(item: &ChecklistItem) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::open_db_at;
+    use crate::storage::db::open_db_at;
     use crate::trip::add_test_trip;
     use rusqlite::Connection;
 
@@ -451,7 +451,7 @@ mod tests {
             None,
             None,
             None,
-            Some(crate::models::ItineraryCategory::Hotel),
+            Some(crate::domain::models::ItineraryCategory::Hotel),
         )
         .unwrap();
 
@@ -481,7 +481,7 @@ mod tests {
             None,
             None,
             None,
-            Some(crate::models::ItineraryCategory::Hotel),
+            Some(crate::domain::models::ItineraryCategory::Hotel),
         )
         .unwrap();
         crate::itinerary::add_itinerary_item(
@@ -495,7 +495,7 @@ mod tests {
             None,
             None,
             None,
-            Some(crate::models::ItineraryCategory::Beach),
+            Some(crate::domain::models::ItineraryCategory::Beach),
         )
         .unwrap();
 
@@ -522,7 +522,7 @@ mod tests {
             None,
             None,
             None,
-            Some(crate::models::ItineraryCategory::Beach),
+            Some(crate::domain::models::ItineraryCategory::Beach),
         )
         .unwrap();
 
@@ -551,7 +551,7 @@ mod tests {
             None,
             None,
             None,
-            Some(crate::models::ItineraryCategory::Hotel),
+            Some(crate::domain::models::ItineraryCategory::Hotel),
         )
         .unwrap();
 
@@ -594,7 +594,7 @@ mod tests {
             None,
             None,
             None,
-            Some(crate::models::ItineraryCategory::Beach),
+            Some(crate::domain::models::ItineraryCategory::Beach),
         )
         .unwrap();
 
@@ -644,7 +644,7 @@ mod tests {
             None,
             None,
             None,
-            Some(crate::models::ItineraryCategory::Flight),
+            Some(crate::domain::models::ItineraryCategory::Flight),
         )
         .unwrap();
         crate::itinerary::add_itinerary_item(
@@ -658,7 +658,7 @@ mod tests {
             None,
             None,
             None,
-            Some(crate::models::ItineraryCategory::Hotel),
+            Some(crate::domain::models::ItineraryCategory::Hotel),
         )
         .unwrap();
 
@@ -684,7 +684,7 @@ mod tests {
             None,
             None,
             None,
-            Some(crate::models::ItineraryCategory::Beach),
+            Some(crate::domain::models::ItineraryCategory::Beach),
         )
         .unwrap();
         crate::itinerary::add_itinerary_item(
@@ -698,7 +698,7 @@ mod tests {
             None,
             None,
             None,
-            Some(crate::models::ItineraryCategory::Activity),
+            Some(crate::domain::models::ItineraryCategory::Activity),
         )
         .unwrap();
 
@@ -725,7 +725,7 @@ mod tests {
             None,
             None,
             None,
-            Some(crate::models::ItineraryCategory::Flight),
+            Some(crate::domain::models::ItineraryCategory::Flight),
         )
         .unwrap();
         crate::itinerary::add_itinerary_item(
@@ -739,7 +739,7 @@ mod tests {
             None,
             None,
             None,
-            Some(crate::models::ItineraryCategory::Hotel),
+            Some(crate::domain::models::ItineraryCategory::Hotel),
         )
         .unwrap();
 
@@ -764,7 +764,7 @@ mod tests {
                 None,
                 None,
                 None,
-                Some(crate::models::ItineraryCategory::Shopping),
+                Some(crate::domain::models::ItineraryCategory::Shopping),
             )
             .unwrap();
         }
@@ -853,7 +853,7 @@ mod tests {
             None,
             None,
             None,
-            Some(crate::models::ItineraryCategory::Hotel),
+            Some(crate::domain::models::ItineraryCategory::Hotel),
         )
         .unwrap();
 
@@ -885,7 +885,7 @@ mod tests {
             None,
             None,
             None,
-            Some(crate::models::ItineraryCategory::Beach),
+            Some(crate::domain::models::ItineraryCategory::Beach),
         )
         .unwrap();
 
@@ -910,7 +910,7 @@ mod tests {
             None,
             None,
             None,
-            Some(crate::models::ItineraryCategory::Hotel),
+            Some(crate::domain::models::ItineraryCategory::Hotel),
         )
         .unwrap();
 
