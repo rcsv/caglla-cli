@@ -2,7 +2,7 @@
 
 Caglla.Travel CLI に **Estimate（事前見積 / Planned Budget）** を実装するための計画です。
 
-**Implementation Plan。** Phase 1（CRUD / migration）、Phase 2（export schema v6）、Phase 3（`trip stats` / `export-md`）は **実装済み**（PR #50 / #51 / Phase 3）。Phase 4 以降の工事手順を本書で管理する。
+**Implementation Plan。** Phase 1–4 は **実装済み**。Phase 5（Post-Implementation Review）以降を本書で管理する。
 
 | ドキュメント | 役割 |
 |---|---|
@@ -22,7 +22,8 @@ Implementation Plan       → estimate-implementation-plan.md（本書）
 Phase 1 Implementation    → CRUD / migration — 実装済み（PR #50）
 Phase 2 Implementation    → export v6 / validate / diff — 実装済み（PR #51）
 Phase 3 Implementation    → trip stats / export-md — 実装済み
-Phase 4–5                 → replicate / review — 未着手
+Phase 4 Implementation    → itinerary replicate Estimate コピー — 実装済み
+Phase 5                     → post-implementation review — 未着手
 ```
 
 ---
@@ -61,7 +62,7 @@ export v6 / trip stats / export-md / replicate は Phase 2 以降に段階分割
 | **Phase 1** | DB migration + `src/money.rs` + estimate CRUD + CLI + cascade + tests + command-reference | **実装済み**（PR #50） |
 | **Phase 2** | export / import **schema v6**、`validate-export`、`trip diff`、Estimate 配列保持設計メモ | **実装済み**（PR #51） |
 | **Phase 3** | `trip stats` Planned total、`export-md` 予定費用表示 | **実装済み** |
-| **Phase 4** | `itinerary replicate` の Estimate コピー | 4 本目 |
+| **Phase 4** | `itinerary replicate` の Estimate コピー | **実装済み** |
 | **Phase 5** | Post-Implementation Review ドキュメント | 5 本目 |
 
 ### Phase 1 に含める（推奨 — 最初の実装 PR）
@@ -521,9 +522,9 @@ JSON: `estimate_count` / `estimate_totals` を追加。
 
 ---
 
-## Phase 4 — itinerary replicate
+## Phase 4 — itinerary replicate（実装済み）
 
-[estimate-entity-design.md §10](estimate-entity-design.md#10-itinerary-replicate将来) どおり:
+[estimate-entity-design.md §10](estimate-entity-design.md#10-itinerary-replicatephase-4--実装済み) どおり:
 
 | コピーする | コピーしない |
 |---|---|
@@ -533,13 +534,14 @@ JSON: `estimate_count` / `estimate_totals` を追加。
 
 | 項目 | 方針 |
 |---|---|
-| 関数 | `replicate_itinerary_items` 内で source Estimate を読み、target Itinerary に **INSERT** |
+| 関数 | `copy_estimates_for_itinerary` — target Itinerary 作成後に呼び出し |
 | ID | 新規採番 |
 | `sort_order` | **維持** |
-| dry-run | Estimate 件数をサマリに含める |
+| dry-run | Estimate を作成しない（DB 件数不変をテストで保証） |
 | tx | 既存 replicate と **同一トランザクション** |
+| CLI | `--without-estimates` は **追加しない**（デフォルトコピー） |
 
-触るファイル: `src/itinerary.rs`、`tests/itinerary_cli.rs`、`docs/specifications/itinerary-model.md`
+触ったファイル: `src/estimate.rs`、`src/itinerary.rs`、`tests/itinerary_cli.rs`、関連 docs
 
 ---
 
@@ -592,7 +594,6 @@ Phase 1 PR 内の **推奨 commit / 作業順**:
 ```text
 - Phase 1 実装そのもの（本書は計画のみ）
 - export schema v6（Phase 2）
-- replicate Estimate コピー（Phase 4）
 - post-implementation review（Phase 5）
 - release 作業
 ```

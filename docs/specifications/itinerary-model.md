@@ -408,11 +408,12 @@ itinerary replicate --items 12,13,18,21 --to-days 3-5
 | 観点 | 方針 |
 |---|---|
 | **recurring との違い** | Google Calendar 的な繰り返し予定ではない。複製後は各 Itinerary を個別に編集できる |
-| **コピーする** | `title`, `note`, `start_time`, `sort_order`, `duration_minutes`, `travel_minutes`, `location`, `category`, Itinerary-level notes（デフォルト） |
-| **コピーしない** | Expense, Reservation, `id`, タイムスタンプ |
-| **将来コピー候補** | Estimate / Planned Budget（[estimate-model.md](estimate-model.md) — 未実装） |
+| **コピーする** | `title`, `note`, `start_time`, `sort_order`, `duration_minutes`, `travel_minutes`, `location`, `category`, Itinerary-level notes（デフォルト）, **Estimate（予定費用）** |
+| **コピーしない** | Expense（実績支出）, Reservation（予約実体）, `id`, タイムスタンプ |
 | **sort_order** | 元 Itinerary の値をそのまま維持（各 Day のリズムを揃える） |
 | **制約** | source items は同一 Trip・同一 Day。`--to-days` に source Day を含めない |
+
+Estimate は予定費用なのでコピーする。Expense は実績支出なのでコピーしない。Reservation は予約実体なのでコピーしない。
 
 `--without-notes` 指定時は Itinerary-level notes（Note エンティティ）のみ抑止し、Itinerary 本体の `note` はコピーする。
 
