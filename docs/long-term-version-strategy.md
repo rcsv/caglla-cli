@@ -63,7 +63,7 @@ Travel Journal（実装）
 Budget / Settlement
 ```
 
-v1 完了後、製品の次テーマは **v2 Participant Foundation**（§v2、**v2.0.0 リリース済み**）であった。v2 完了後の次テーマは **v3 Shared Expense**（§v3、**v3.0.0 リリース済み**）。
+v1 完了後、製品の次テーマは **v2 Participant Foundation**（§v2、**v2.0.0 リリース済み**）であった。v2 完了後の次テーマは **v3 Shared Expense**（§v3、**v3.0.0 リリース済み**）。v3.0.0 後の v3 系機能追加として **Estimate / Planned Budget** は **v3.1.0 リリース済み**（§v3.1）。
 
 ---
 
@@ -132,6 +132,52 @@ trip expense-summary
 share_ratio / weighted split
 --paid-by alias
 ```
+
+---
+
+## v3.1 — Estimate / Planned Budget（**v3.1.0 リリース済み**）
+
+### テーマ
+
+```text
+予定費用（Planned Money）の構造化
+Itinerary 配下の事前見積
+Trip 全体の Planned total（Estimate 集計）
+```
+
+### 実装内容（v3.1.0）
+
+```text
+Estimate CRUD（Itinerary 配下）
+src/money.rs（amount / currency 共通化）
+Export schema v6（days[].itineraries[].estimates[]）
+validate-export / trip diff（v6+）
+trip stats Planned total
+trip export-md 予定費用表示
+itinerary replicate Estimate コピー
+Post-Implementation Review（PR #57）
+```
+
+リリースノート: [v3.1.0-notes.md](releases/v3.1.0-notes.md)
+
+**Planned Budget** は独立エンティティ **ではない**。Trip / Itinerary 単位の予定合計は **Estimate 行の derived 集計**。Actual Money は従来どおり Expense が正本。
+
+設計系列: [estimate-model.md](specifications/estimate-model.md) → [estimate-entity-design.md](specifications/estimate-entity-design.md) → [estimate-implementation-plan.md](specifications/estimate-implementation-plan.md) → Phase 1–4（PR #50–#53）→ [estimate-post-implementation-review.md](specifications/estimate-post-implementation-review.md)（PR #57）→ Release v3.1.0。
+
+### v3.1.x defer（Estimate 関連）
+
+```text
+Difference calculation（Planned vs Actual）
+Budget 独立エンティティ（Trip 全体予算上限）
+Estimate payer / beneficiary / participant 連動
+unit_amount × quantity
+FX conversion
+--without-estimates（replicate）
+doctor / advisor での Estimate 活用
+GUI / Web 版 Planned vs Actual 表示
+```
+
+v3.0.0 の Shared Expense defer（Settlement 等）は **引き続き v3.x defer**。
 
 ---
 
@@ -264,6 +310,7 @@ CLI を中心とした **旅行プラットフォーム** へ発展させる。
 | **v1** | Planning Foundation | 計画・実績の記録、しおりの土台 |
 | **v2** | Participant Foundation | 同行者を Trip に登録 |
 | **v3** | Shared Expense | 誰が払い・誰の費用かを整理・精算 |
+| **v3.1** | Estimate / Planned Budget | Itinerary 配下の予定費用・Planned total |
 | **v4** | Reservation | 予約情報の正式管理 |
 | **v5** | Travel Book | 共有用しおり（MD/PDF） |
 | **v6** | Travel Journal | 写真・添付付き旅行記 |

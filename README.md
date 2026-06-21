@@ -9,9 +9,9 @@ Caglla.Travel のコマンドライン版です。旅行の計画を、ターミ
 - **Trip（旅行）** の登録・一覧・詳細・更新・削除・複製
 - **Day（日）** の一覧・詳細・Itinerary 入れ替え（`day swap`）
 - **Itinerary（行動・予定）** の登録・一覧・詳細・更新・削除・タイムライン表示
-- **Note（メモ）** / **Expense（支出）** / **Participant（参加者）** の CRUD
+- **Note（メモ）** / **Expense（支出）** / **Estimate（予定費用 / Planned Budget）** / **Participant（参加者）** の CRUD
 - **Checklist（持ち物・準備リスト）** の管理と自動生成（`checklist-generate`）
-- **JSON エクスポート / インポート**（`trip export` / `trip import`）と `trip diff`
+- **JSON エクスポート / インポート**（`trip export` / `trip import`、現行 **schema v6**）と `trip diff`
 - **Markdown エクスポート**（`trip export-md`）による旅行しおり出力
 - **trip stats** による旅行統計
 - **trip doctor / advisor** による旅行計画の点検と改善提案
@@ -23,7 +23,8 @@ Caglla.Travel のコマンドライン版です。旅行の計画を、ターミ
 Trip（旅行全体）
  └─ Day（日付コンテナ：何日目か）
       └─ Itinerary（行動：旅行中の予定／実績）
-           ├─ Expense（支出）
+           ├─ Expense（支出 — Actual Money）
+           ├─ Estimate（予定費用 — Planned Money）
            └─ Note（メモ）
 ```
 
@@ -62,7 +63,7 @@ cargo run -- itinerary timeline 1
 | Trip | `trip add`, `trip list`, `trip show`, `trip update`, `trip delete`, `trip duplicate`, `trip stats` |
 | Day | `day list`, `day show`, `day update`, `day swap` |
 | Itinerary | `itinerary add`, `itinerary list`, `itinerary show`, `itinerary update`, `itinerary delete`, `itinerary timeline` |
-| Note / Expense / Reservation | `note add/list/...`, `expense add/list/...`, `reservation add/list/...` |
+| Note / Expense / Estimate / Reservation | `note add/list/...`, `expense add/list/...`, `estimate add/list/...`, `reservation add/list/...` |
 | Checklist | `checklist add/list/check/...`, `trip checklist-generate` |
 | Export | `trip export`, `trip import`, `trip validate-export`, `trip diff`, `trip export-md` |
 | Diagnostics | `trip doctor`, `trip advisor` |
@@ -92,12 +93,12 @@ cargo run -- itinerary timeline 1
 |---|---|
 | データ保存 | ローカル SQLite（`caglla.db`）のみ。Web 版・クラウド同期は未対応 |
 | JSON 出力（`--json`） | ツール連携向け。**内部仕様扱い**（構造は将来変更の可能性あり） |
-| 費用管理・通貨換算 | Expense CRUD は対応。精算（Settlement）は未対応 |
+| 費用管理・通貨換算 | Expense（実績）・Estimate（予定）CRUD は対応。Planned vs Actual 差分表示・精算（Settlement）は未対応 |
 | 類似旅行検索（Similarity） | 将来候補（現 CLI には未実装） |
 
 ## Releases
 
-GitHub Release 用ノートは [docs/releases/](docs/releases/) にあります。最新: [v3.0.0](docs/releases/v3.0.0-notes.md)
+GitHub Release 用ノートは [docs/releases/](docs/releases/) にあります。最新: [v3.1.0](docs/releases/v3.1.0-notes.md)
 
 ## Security
 
