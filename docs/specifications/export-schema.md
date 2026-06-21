@@ -26,7 +26,8 @@ Caglla CLI の trip export / import JSON 形式。
 | `2` | v2 | Note を含む（`itinerary_items` フラット） |
 | `3` | v3 | Note + **nested Expense**（`days[]`） |
 | `4` | v4 | v3 + top-level **`participants[]`**（`is_self` 含む） |
-| `5` | v5（**現行 export**） | v4 + Expense **`paid_by_participant_ref`** / **`beneficiaries[]`** — [shared-expense-entity-design.md](shared-expense-entity-design.md) |
+| `5` | v5 | v4 + Expense **`paid_by_participant_ref`** / **`beneficiaries[]`** — [shared-expense-entity-design.md](shared-expense-entity-design.md) |
+| `6` | v6（**現行 export**） | v5 + nested **`estimates[]`**（Planned Budget）— [estimate-entity-design.md](estimate-entity-design.md) |
 
 Import 時の解釈:
 
@@ -36,8 +37,29 @@ Import 時の解釈:
 - `schema_version: 3` → v3（`participants` 省略時は空配列扱い）
 - `schema_version: 4` → v4
 - `schema_version: 5` → v5
+- `schema_version: 6` → v6
 
-v1 / v2 / v3 / v4 export は引き続き import 可能です。現行 CLI の `trip export` は `schema_version: 5` を出力します。
+v1 / v2 / v3 / v4 / v5 export は引き続き import 可能です。現行 CLI の `trip export` は `schema_version: 6` を出力します。
+
+## Top-level structure (v6)
+
+v5 と同一の top-level 構造。Itinerary オブジェクトに optional な `estimates[]` が追加されます（下記）。
+
+### Estimate オブジェクト（v6）
+
+`days[].itineraries[].estimates[]` にネストします。
+
+| フィールド | 必須 | 説明 |
+|---|---|---|
+| `title` | 任意 | 見積ラベル |
+| `amount` | はい | 最小通貨単位の整数（Expense export と同型） |
+| `currency` | はい | ISO 4217 通貨コード |
+| `note` | 任意 | 補足 |
+| `sort_order` | はい | Itinerary 内の並び順 |
+
+export 時 **`id` / `created_at` / `updated_at` は出力しません**（再 import で新 ID 採番）。
+
+v5 import 互換: `estimates` 省略 = 空配列。
 
 ## Top-level structure (v5)
 
@@ -263,7 +285,7 @@ v4 は v3 の検証に加え:
 
 Participant の export 検証は import 前チェックと **同一ロジック**（`collect_export_participant_validation_errors`）です。
 
-### v5 追加検証（現行 export）
+### v5 追加検証
 
 v5 は v4 の検証に加え、nested `expenses[]` の Shared Expense ref を検証します。
 
@@ -275,6 +297,16 @@ v5 は v4 の検証に加え、nested `expenses[]` の Shared Expense ref を検
 | v4 ファイル | v5 専用 ref 検査は **スキップ**（v4 Participant ルールは継続） |
 
 省略時の意味: `paid_by_participant_ref` / `beneficiaries` なし → **personal expense**（v4 import 互換）。
+
+### v6 追加検証（現行 export）
+
+v6 は v5 の検証に加え、nested `estimates[]` を検証します。
+
+| ルール | 内容 |
+|---|---|
+| `amount` | 必須、非負整数 |
+| `currency` | 必須、非空（ISO 4217 形式） |
+| v5 以前 | Estimate 専用検査は **スキップ**（`estimates` 省略 = 空） |
 
 ## trip diff
 
@@ -289,14 +321,17 @@ v5 は v4 の検証に加え、nested `expenses[]` の Shared Expense ref を検
 | Reservation | added / removed / modified |
 | **Participant (v4+)** | added / removed / `is_self` changed（キー: `sort_order` + `name`）。rename / reorder は **removed + added** として保守的に検出 |
 | **Expense (v5+)** | added / removed / `payer` or `beneficiaries` modified — **両 export が schema v5+ の場合のみ** shared フィールドを比較 |
+| **Estimate (v6+)** | added / removed / `amount` / `currency` / `title` / `note` / `sort_order` modified — **両 export が schema v6+ の場合のみ** 比較 |
 
 **v4 同士の比較:** Expense の payer / beneficiaries は比較しません（shared フィールドは export に無いため）。
+
+**v5 vs v6 の比較:** Estimate は比較しません（v5 export に `estimates` が無いため）。
 
 v1 export（`notes` なし）と v2 export（`notes: []`）を比較しても異常終了しません。v3 同士で `participants` が無い場合は空配列として比較します。
 
 ## 将来バージョン（現 schema に含めないもの）
 
-以下は **v5 時点では export JSON に含めません**（Participant 参加行・Shared Expense **recording** は v4 / v5 で **含む**）:
+以下は **v6 時点では export JSON に含めません**（Participant 参加行・Shared Expense **recording** は v4 / v5 で **含む**、Planned Budget **Estimate** は v6 で **含む**）:
 
 | 項目 | 備考 |
 |---|---|

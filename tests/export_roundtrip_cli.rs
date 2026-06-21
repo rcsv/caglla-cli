@@ -204,7 +204,7 @@ fn cli_export_import_reexport_roundtrip_with_notes() {
 
     let exported: serde_json::Value =
         serde_json::from_str(&fs::read_to_string(&export_path).unwrap()).unwrap();
-    assert_eq!(exported["schema_version"], 5);
+    assert_eq!(exported["schema_version"], 6);
     assert_eq!(exported["notes"].as_array().unwrap().len(), 3);
 
     assert!(run_cli(&dir, &["db", "reset"]).status.success());
@@ -328,7 +328,7 @@ fn cli_export_import_reexport_roundtrip_with_expenses() {
 
     let exported: serde_json::Value =
         serde_json::from_str(&fs::read_to_string(&export_path).unwrap()).unwrap();
-    assert_eq!(exported["schema_version"], 5);
+    assert_eq!(exported["schema_version"], 6);
     assert_eq!(
         exported["days"][1]["itineraries"][0]["expenses"]
             .as_array()
@@ -369,6 +369,151 @@ fn cli_export_import_reexport_roundtrip_with_expenses() {
     );
 }
 
+#[test]
+fn cli_export_import_reexport_roundtrip_with_estimates() {
+    let dir = temp_workdir();
+    assert!(run_cli(&dir, &["db", "reset"]).status.success());
+
+    assert!(run_cli(
+        &dir,
+        &[
+            "trip",
+            "add",
+            "Estimate Roundtrip Trip",
+            "--start",
+            "2026-05-01",
+            "--end",
+            "2026-05-03",
+        ]
+    )
+    .status
+    .success());
+
+    assert!(run_cli(
+        &dir,
+        &[
+            "itinerary",
+            "add",
+            "1",
+            "--day",
+            "1",
+            "--time",
+            "08:00",
+            "--order",
+            "0",
+            "Hotel",
+        ]
+    )
+    .status
+    .success());
+
+    assert!(run_cli(
+        &dir,
+        &[
+            "estimate",
+            "add",
+            "--itinerary",
+            "1",
+            "--amount",
+            "14000",
+            "--currency",
+            "JPY",
+            "--title",
+            "ホテル朝食",
+            "--note",
+            "5人分",
+        ]
+    )
+    .status
+    .success());
+    assert!(run_cli(
+        &dir,
+        &[
+            "estimate",
+            "add",
+            "--itinerary",
+            "1",
+            "--amount",
+            "5000",
+            "--currency",
+            "JPY",
+            "--title",
+            "駐車場",
+        ]
+    )
+    .status
+    .success());
+
+    let export_path = dir.join("trip-export-estimates.json");
+    assert!(run_cli(
+        &dir,
+        &[
+            "trip",
+            "export",
+            "1",
+            "--output",
+            export_path.to_str().unwrap(),
+        ]
+    )
+    .status
+    .success());
+
+    let exported: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&export_path).unwrap()).unwrap();
+    assert_eq!(exported["schema_version"], 6);
+    assert_eq!(
+        exported["days"][0]["itineraries"][0]["estimates"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+
+    assert!(run_cli(&dir, &["db", "reset"]).status.success());
+
+    let import_output = run_cli(&dir, &["trip", "import", export_path.to_str().unwrap()]);
+    assert!(import_output.status.success(), "{:?}", import_output.stderr);
+
+    let list = run_cli(&dir, &["estimate", "list", "--trip", "1", "--json"]);
+    assert!(list.status.success());
+    let list_json: serde_json::Value = serde_json::from_slice(&list.stdout).unwrap();
+    assert_eq!(list_json["estimates"].as_array().unwrap().len(), 2);
+
+    let reexport_path = dir.join("trip-reexport-estimates.json");
+    assert!(run_cli(
+        &dir,
+        &[
+            "trip",
+            "export",
+            "1",
+            "--output",
+            reexport_path.to_str().unwrap(),
+        ]
+    )
+    .status
+    .success());
+
+    let before: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&export_path).unwrap()).unwrap();
+    let after: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&reexport_path).unwrap()).unwrap();
+
+    assert_eq!(
+        comparable_export_json(&before),
+        comparable_export_json(&after)
+    );
+}
+
+fn comparable_estimate_json(est: &serde_json::Value) -> serde_json::Value {
+    serde_json::json!({
+        "title": est["title"],
+        "amount": est["amount"],
+        "currency": est["currency"],
+        "note": est["note"],
+        "sort_order": est["sort_order"],
+    })
+}
+
 fn comparable_expense_json(exp: &serde_json::Value) -> serde_json::Value {
     serde_json::json!({
         "title": exp["title"],
@@ -392,6 +537,13 @@ fn comparable_itinerary_json(
         .into_iter()
         .map(|exp| comparable_expense_json(&exp))
         .collect::<Vec<_>>();
+    let estimates = item["estimates"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|est| comparable_estimate_json(&est))
+        .collect::<Vec<_>>();
 
     serde_json::json!({
         "day": day["day_number"],
@@ -404,6 +556,7 @@ fn comparable_itinerary_json(
         "location": item["location"],
         "category": item["category"],
         "expenses": expenses,
+        "estimates": estimates,
     })
 }
 
@@ -411,7 +564,7 @@ fn comparable_export_json(value: &serde_json::Value) -> serde_json::Value {
     let trip = &value["trip"];
     let schema_version = value.get("schema_version").and_then(|v| v.as_i64());
 
-    let itinerary = if matches!(schema_version, Some(3) | Some(4) | Some(5)) {
+    let itinerary = if matches!(schema_version, Some(3) | Some(4) | Some(5) | Some(6)) {
         value["days"]
             .as_array()
             .cloned()

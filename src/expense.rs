@@ -693,9 +693,9 @@ pub(crate) fn collect_export_expense_validation_errors(
     export: &TripExportV3ForValidation<'_>,
     effective_schema: i32,
 ) -> (Vec<String>, Vec<String>) {
-    use crate::models::{TRIP_EXPORT_SCHEMA_VERSION, TRIP_EXPORT_SCHEMA_VERSION_V4};
+    use crate::models::{TRIP_EXPORT_SCHEMA_VERSION_V4, TRIP_EXPORT_SCHEMA_VERSION_V5};
 
-    if effective_schema < TRIP_EXPORT_SCHEMA_VERSION {
+    if effective_schema < TRIP_EXPORT_SCHEMA_VERSION_V5 {
         return (Vec::new(), Vec::new());
     }
 

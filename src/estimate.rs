@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 
-use crate::models::Estimate;
+use crate::models::{Estimate, ExportDayV3, ExportEstimateV3, TRIP_EXPORT_SCHEMA_VERSION};
 use crate::money::{format_amount_display, parse_amount_for_currency, validate_currency_code};
 
 const ESTIMATE_SELECT_SQL: &str = "
@@ -378,6 +378,81 @@ pub(crate) fn print_estimate_detail(estimate: &Estimate) -> Result<()> {
     Ok(())
 }
 
+pub(crate) fn build_export_estimate_v3(estimate: &Estimate) -> ExportEstimateV3 {
+    ExportEstimateV3 {
+        title: estimate.title.clone(),
+        amount: estimate.amount,
+        currency: estimate.currency.clone(),
+        note: estimate.note.clone(),
+        sort_order: estimate.sort_order,
+    }
+}
+
+/// export schema v6 の Estimate を import する（amount は最小通貨単位整数）
+pub(crate) fn import_estimate_v3(
+    conn: &Connection,
+    itinerary_id: i64,
+    export: &ExportEstimateV3,
+) -> Result<i64> {
+    crate::itinerary::get_itinerary_item(conn, itinerary_id)?;
+    let currency = validate_currency_code(&export.currency)?;
+    if export.amount < 0 {
+        anyhow::bail!("estimate amount must be non-negative");
+    }
+
+    let now = crate::db::now_string();
+    conn.execute(
+        "INSERT INTO estimates
+         (itinerary_id, title, amount, currency, note, sort_order, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        params![
+            itinerary_id,
+            export.title,
+            export.amount,
+            currency,
+            export.note,
+            export.sort_order,
+            &now,
+            &now,
+        ],
+    )
+    .context("Estimate の import に失敗しました")?;
+    Ok(conn.last_insert_rowid())
+}
+
+pub(crate) struct TripExportV3ForValidation<'a> {
+    pub days: &'a [ExportDayV3],
+}
+
+pub(crate) fn collect_export_estimate_validation_errors(
+    export: &TripExportV3ForValidation<'_>,
+    effective_schema: i32,
+) -> (Vec<String>, Vec<String>) {
+    if effective_schema < TRIP_EXPORT_SCHEMA_VERSION {
+        return (Vec::new(), Vec::new());
+    }
+
+    let mut errors = Vec::new();
+    for (d_index, day) in export.days.iter().enumerate() {
+        for (i_index, it) in day.itineraries.iter().enumerate() {
+            for (e_index, est) in it.estimates.iter().enumerate() {
+                let prefix = format!("days[{d_index}].itineraries[{i_index}].estimates[{e_index}]");
+                if est.currency.trim().is_empty() {
+                    errors.push(format!("{prefix}.currency is required"));
+                    continue;
+                }
+                if let Err(error) = validate_currency_code(&est.currency) {
+                    errors.push(format!("{prefix}.currency: {error}"));
+                }
+                if est.amount < 0 {
+                    errors.push(format!("{prefix}.amount must be non-negative"));
+                }
+            }
+        }
+    }
+    (errors, Vec::new())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -562,5 +637,30 @@ mod tests {
         let itinerary_id = setup_itinerary(&conn);
         let id = add_estimate(&conn, itinerary_id, "12.50", "USD", None, None, None).unwrap();
         assert_eq!(get_estimate(&conn, id).unwrap().amount, 1250);
+    }
+
+    #[test]
+    fn test_import_export_estimate_v3_roundtrip() {
+        let conn = test_db();
+        let itinerary_id = setup_itinerary(&conn);
+        let id = add_estimate(
+            &conn,
+            itinerary_id,
+            "14000",
+            "JPY",
+            Some("Hotel breakfast"),
+            Some("5 people"),
+            Some(10),
+        )
+        .unwrap();
+        let estimate = get_estimate(&conn, id).unwrap();
+        let export = build_export_estimate_v3(&estimate);
+        let imported_id = import_estimate_v3(&conn, itinerary_id, &export).unwrap();
+        let imported = get_estimate(&conn, imported_id).unwrap();
+        assert_eq!(imported.title, estimate.title);
+        assert_eq!(imported.amount, estimate.amount);
+        assert_eq!(imported.currency, estimate.currency);
+        assert_eq!(imported.note, estimate.note);
+        assert_eq!(imported.sort_order, estimate.sort_order);
     }
 }
