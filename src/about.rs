@@ -49,6 +49,7 @@ Documentation: https://github.com/rcsv/caglla-cli
 License: MIT
 "#;
 
+/// Print the English overview to stdout.
 pub fn print() {
     print!("{ABOUT}");
 }
