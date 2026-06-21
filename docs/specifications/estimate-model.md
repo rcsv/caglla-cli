@@ -9,7 +9,7 @@ Caglla.Travel CLI / 将来 Web 版に向けた **Estimate（事前見積 / Plann
 | **本書** | Estimate / Planned Budget の責務・境界・スコープ |
 | [estimate-entity-design.md](estimate-entity-design.md) | テーブル・フィールド・CLI・export v6（Entity Design — Phase 1–4 実装済み） |
 | [estimate-implementation-plan.md](estimate-implementation-plan.md) | 実装計画（Phase 分割・進捗管理） |
-| `estimate-post-implementation-review.md`（将来） | 実装後レビュー |
+| [estimate-post-implementation-review.md](estimate-post-implementation-review.md) | 実装後レビュー（Phase 5 — 実装済み） |
 | [expense-model.md](expense-model.md) (v1.5.0) | Expense = Transaction Record Layer（設計履歴） |
 | [expense-post-implementation-review.md](expense-post-implementation-review.md) (v1.22.0) | Expense = Actual Money。Estimate 分離の既存結論 |
 | [itinerary-model.md](itinerary-model.md) (v1.8.0+) | Itinerary = 行動単位。子エンティティの親 |
@@ -25,8 +25,8 @@ Responsibilities Review   → estimate-model.md（本書）
 Entity Design             → estimate-entity-design.md
 Implementation Plan       → estimate-implementation-plan.md
 Implementation            → Phase 1–4 実装済み
-                             Phase 5 未着手（post-implementation review）
-Post-Implementation Review → estimate-post-implementation-review.md（未着手）
+                             Phase 5 完了（Post-Implementation Review）
+Post-Implementation Review → estimate-post-implementation-review.md
 ```
 
 ---
@@ -358,7 +358,7 @@ Estimate は予定費用なのでコピーする。Expense は実績支出なの
 
 ## Deferred scope summary
 
-Phase 1–4 は **実装済み**。現時点で **未実装** の範囲:
+Phase 1–5 は **完了**。現時点で **未実装** の範囲（詳細は [estimate-post-implementation-review.md §9](estimate-post-implementation-review.md#9-deferred-scope)）:
 
 ```text
 - Difference 計算（Planned vs Actual の差分表示）
@@ -367,11 +367,12 @@ Phase 1–4 は **実装済み**。現時点で **未実装** の範囲:
 - unit_amount × quantity
 - 為替換算
 - --without-estimates（replicate 時に Estimate をコピーしないオプション）
+- doctor / advisor での Estimate 活用
+- GUI / Web 版での Planned vs Actual 表示
 - release 作業
-- Post-Implementation Review（Phase 5）
 ```
 
-次ステップ: **Phase 5**（Post-Implementation Review）。
+次ステップ: **Release**（別 PR）。
 
 ---
 
