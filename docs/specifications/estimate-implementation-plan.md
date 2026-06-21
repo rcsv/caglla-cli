@@ -2,7 +2,7 @@
 
 Caglla.Travel CLI に **Estimate（事前見積 / Planned Budget）** を実装するための計画です。
 
-**Implementation Plan。** Phase 1–4 は **実装済み**。Phase 5（Post-Implementation Review）以降を本書で管理する。
+**Implementation Plan。** Phase 1–5（Post-Implementation Review）まで **完了**。Release は別作業。
 
 | ドキュメント | 役割 |
 |---|---|
@@ -22,8 +22,8 @@ Implementation Plan       → estimate-implementation-plan.md（本書）
 Phase 1 Implementation    → CRUD / migration — 実装済み（PR #50）
 Phase 2 Implementation    → export v6 / validate / diff — 実装済み（PR #51）
 Phase 3 Implementation    → trip stats / export-md — 実装済み
-Phase 4 Implementation    → itinerary replicate Estimate コピー — 実装済み
-Phase 5                     → post-implementation review — 未着手
+Phase 4 Implementation    → itinerary replicate Estimate コピー — 実装済み（PR #53）
+Phase 5                     → post-implementation review — **実装済み**（本書 §Phase 5）
 ```
 
 ---
@@ -63,7 +63,7 @@ export v6 / trip stats / export-md / replicate は Phase 2 以降に段階分割
 | **Phase 2** | export / import **schema v6**、`validate-export`、`trip diff`、Estimate 配列保持設計メモ | **実装済み**（PR #51） |
 | **Phase 3** | `trip stats` Planned total、`export-md` 予定費用表示 | **実装済み** |
 | **Phase 4** | `itinerary replicate` の Estimate コピー | **実装済み** |
-| **Phase 5** | Post-Implementation Review ドキュメント | 5 本目 |
+| **Phase 5** | Post-Implementation Review ドキュメント | **実装済み** |
 
 ### Phase 1 に含める（推奨 — 最初の実装 PR）
 
@@ -545,17 +545,19 @@ JSON: `estimate_count` / `estimate_totals` を追加。
 
 ---
 
-## Phase 5 — Post-Implementation Review
+## Phase 5 — Post-Implementation Review（実装済み）
 
-Phase 1–4 完了後に `estimate-post-implementation-review.md` を作成。
+[estimate-post-implementation-review.md](estimate-post-implementation-review.md) を作成（documentation-only）。
 
 | 観点 | 内容 |
 |---|---|
-| 責務維持 | Planned vs Actual 境界が崩れていないか |
-| Expense 回帰 | money 共通化後の Expense 挙動 |
-| export roundtrip | v5 / v6 互換 |
-| replicate | 定型パターン + 見積の実用性 |
-| 残課題 | Budget エンティティ、doctor、GUI |
+| 責務維持 | Planned vs Actual 境界 — ✅ |
+| Expense 回帰 | money 共通化後の Expense 挙動 — ✅ |
+| export roundtrip | v5 / v6 互換 — ✅ |
+| replicate | 定型パターン + 見積 — ✅ |
+| 残課題 | §9 Deferred Scope に整理 |
+
+触ったファイル: `docs/specifications/estimate-post-implementation-review.md`、関連 docs リンク更新
 
 ---
 
@@ -594,7 +596,6 @@ Phase 1 PR 内の **推奨 commit / 作業順**:
 ```text
 - Phase 1 実装そのもの（本書は計画のみ）
 - export schema v6（Phase 2）
-- post-implementation review（Phase 5）
 - release 作業
 ```
 
@@ -606,6 +607,7 @@ Phase 1 PR 内の **推奨 commit / 作業順**:
 |---|---|
 | 責務整理 | [estimate-model.md](estimate-model.md) |
 | Entity Design | [estimate-entity-design.md](estimate-entity-design.md) |
+| **Post-Implementation Review** | [estimate-post-implementation-review.md](estimate-post-implementation-review.md) |
 | Expense 実装先例 | [expense-model.md](expense-model.md) / `src/expense.rs` |
 | Shared Expense 計画体裁 | [shared-expense-implementation-plan.md](shared-expense-implementation-plan.md) |
 | Export 現行 v5 | [export-schema.md](export-schema.md) |

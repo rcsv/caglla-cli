@@ -19,9 +19,10 @@ Caglla CLI の内部モデル・設計仕様（実装前の設計メモを含む
 | [note-post-implementation-review.md](note-post-implementation-review.md) | Note Post-Implementation Review（v1.21.0 実装後責務再定義 — v1 Hardening） |
 | [expense-model.md](expense-model.md) | Expense モデル（v1.5.0 CRUD） |
 | [expense-post-implementation-review.md](expense-post-implementation-review.md) | Expense Post-Implementation Review（v1.22.0 実装後責務定義 — v1 Hardening） |
-| [estimate-model.md](estimate-model.md) | Estimate / Planned Budget Responsibilities Review（設計フェーズ 1/N — **未実装**） |
-| [estimate-entity-design.md](estimate-entity-design.md) | Estimate Entity Design（設計フェーズ 2/N — テーブル・CLI 案・validation。**未実装**） |
-| [estimate-implementation-plan.md](estimate-implementation-plan.md) | Estimate Implementation Plan（設計フェーズ 3/N — Phase 分割・migration・テスト計画。**未実装**） |
+| [estimate-model.md](estimate-model.md) | Estimate / Planned Budget Responsibilities Review（Phase 1–4 実装済み） |
+| [estimate-entity-design.md](estimate-entity-design.md) | Estimate Entity Design（DDL・CLI・export v6 — 実装済み） |
+| [estimate-implementation-plan.md](estimate-implementation-plan.md) | Estimate Implementation Plan（Phase 1–5 完了） |
+| [estimate-post-implementation-review.md](estimate-post-implementation-review.md) | Estimate Post-Implementation Review（Phase 5 — 実装後責務・テスト整理） |
 | [planning-foundation-completion-review.md](planning-foundation-completion-review.md) | Planning Foundation Completion Review（v1 総括 — Hardening 完結、**tag なし**） |
 | [participant-model.md](participant-model.md) | Participant Model Responsibilities Review（v2.0.0 設計フェーズ 1/6）。参加行 vs 将来 Person / Traveler Profile、**count 意味論・`is_self`** |
 | [participant-entity-design.md](participant-entity-design.md) | Participant Entity Design（v2.0.0 設計フェーズ 2/6）。`participants` = Trip-scoped participation record + `is_self` |
@@ -35,4 +36,4 @@ Caglla CLI の内部モデル・設計仕様（実装前の設計メモを含む
 | [foundation-hardening-review.md](foundation-hardening-review.md) | Foundation Hardening Review（v2.0.0 後・v3 前の基盤点検 — documentation-only） |
 | [checklist-design-memo.md](checklist-design-memo.md) | Checklist 設計メモ（自動生成・Provenance — 将来設計参考、v1.x 対象外） |
 | [travel-support-design-memo.md](travel-support-design-memo.md) | Travel Support 設計メモ（旅行支援情報・Destination・注意喚起 — 将来設計参考、v1.x 対象外） |
-| [export-schema.md](export-schema.md) | trip export / import JSON（schema v1–**v5**）。構造定義 — 意味論は itinerary-model 等を参照 |
+| [export-schema.md](export-schema.md) | trip export / import JSON（schema v1–**v6**）。構造定義 — 意味論は itinerary-model 等を参照 |

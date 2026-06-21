@@ -9,6 +9,7 @@ Caglla.Travel CLI / 将来 Web 版に向けた **Estimate（事前見積 / Plann
 | [estimate-model.md](estimate-model.md) | 責務・境界（What it is / is not） |
 | **本書** | テーブル・フィールド・CLI・export schema v6・検証（How we model it） |
 | [estimate-implementation-plan.md](estimate-implementation-plan.md) | 実装計画・Phase 分割（How to build） |
+| [estimate-post-implementation-review.md](estimate-post-implementation-review.md) | 実装後レビュー（Phase 5 — 実装済み） |
 | [expense-model.md](expense-model.md) (v1.5.0) | Expense = Actual Money（amount / currency の参照実装） |
 | [expense-post-implementation-review.md](expense-post-implementation-review.md) (v1.22.0) | Expense ≠ Estimate の既存結論 |
 | [itinerary-model.md](itinerary-model.md) (v1.8.0+) | Itinerary = 行動単位。Estimate の親 |
@@ -26,8 +27,8 @@ Implementation            → Phase 1（CRUD / migration）— 実装済み（PR
                              Phase 2（export v6 / validate / diff）— 実装済み（PR #51）
                              Phase 3（stats / export-md）— 実装済み
                              Phase 4（replicate）— 実装済み
-                             Phase 5（review）— 未着手
-Post-Implementation Review → （未着手）
+                             Phase 5（review）— 実装済み
+Post-Implementation Review → estimate-post-implementation-review.md
 ```
 
 ---
@@ -606,14 +607,13 @@ format_amount_display(amount, currency) -> String
 
 ## Deferred scope summary
 
-Phase 1（CRUD / migration）、Phase 2（export schema v6 / validate-export / trip diff）、Phase 3（`trip stats` Planned total / `export-md` 予定費用表示）、Phase 4（`itinerary replicate` Estimate コピー）は **実装済み**。現時点で **未実装** の範囲:
+Phase 1（CRUD / migration）、Phase 2（export schema v6 / validate-export / trip diff）、Phase 3（`trip stats` Planned total / `export-md` 予定費用表示）、Phase 4（`itinerary replicate` Estimate コピー）、Phase 5（Post-Implementation Review）は **完了**。現時点で **未実装** の範囲:
 
 ```text
 - release 作業
-- Post-Implementation Review（Phase 5）
 ```
 
-次ステップ: **Phase 5**（Post-Implementation Review）。
+次ステップ: **Release**（version bump / release notes — 別 PR）。
 
 ---
 
