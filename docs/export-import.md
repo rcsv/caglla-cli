@@ -210,6 +210,7 @@ v1 export（`notes` なし）と v2 export（`notes: []`）を比較しても異
 | `checklist show` | `cargo run -- checklist show 1 --json` |
 | `expense list` | `cargo run -- expense list --trip 1 --json` |
 | `expense show` | `cargo run -- expense show 1 --json` |
+| `db status` | `cargo run -- db status --json` |
 
 ### trip doctor / advisor JSON（v1.0.6+）
 

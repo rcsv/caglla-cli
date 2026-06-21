@@ -67,7 +67,7 @@ cargo run -- itinerary timeline 1
 | Checklist | `checklist add/list/check/...`, `trip checklist-generate` |
 | Export | `trip export`, `trip import`, `trip validate-export`, `trip diff`, `trip export-md` |
 | Diagnostics | `trip doctor`, `trip advisor` |
-| Dev | `db reset` |
+| Dev | `db path`, `db status`, `db reset` |
 
 コマンド詳細: [docs/command-reference.md](docs/command-reference.md)
 

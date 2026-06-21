@@ -60,7 +60,7 @@ enum Command {
         #[command(subcommand)]
         action: ChecklistAction,
     },
-    /// データベース操作（開発用）
+    /// データベース操作
     Db {
         #[command(subcommand)]
         action: DbAction,
@@ -99,6 +99,14 @@ enum Command {
 
 #[derive(Subcommand)]
 enum DbAction {
+    /// 使用中の DB ファイルパスを表示（ファイルは作成しない）
+    Path,
+    /// DB ファイルの存在と概要を表示
+    Status {
+        /// JSON 形式で出力
+        #[arg(long)]
+        json: bool,
+    },
     /// 【開発用】全データを削除して DB を初期状態に戻す（本番運用では使わない）
     Reset,
 }
@@ -875,10 +883,27 @@ fn main() -> Result<()> {
         bail!("a subcommand is required");
     };
 
+    match &command {
+        Command::Db {
+            action: DbAction::Path,
+        } => {
+            crate::db::run_db_path()?;
+            return Ok(());
+        }
+        Command::Db {
+            action: DbAction::Status { json },
+        } => {
+            crate::db::run_db_status(*json)?;
+            return Ok(());
+        }
+        _ => {}
+    }
+
     let conn = crate::db::open_db()?;
 
     match command {
         Command::Db { action } => match action {
+            DbAction::Path | DbAction::Status { .. } => unreachable!(),
             DbAction::Reset => {
                 crate::db::reset_db(&conn)?;
                 println!("【開発用】データベースを初期化しました");

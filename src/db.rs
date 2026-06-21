@@ -1,8 +1,147 @@
 use anyhow::{Context, Result};
 use chrono::Local;
 use rusqlite::Connection;
+use serde::Serialize;
+use std::fs;
+use std::path::PathBuf;
 
 pub(crate) const DB_FILE: &str = "caglla.db";
+
+const DB_STATUS_JSON_SCHEMA_VERSION: i32 = 1;
+
+/// 現行ルール（CWD + `DB_FILE`）で解決した DB パス（絶対パス）。open しない。
+pub(crate) fn resolve_db_path() -> Result<PathBuf> {
+    let cwd = std::env::current_dir().context("作業ディレクトリの取得に失敗しました")?;
+    Ok(cwd.join(DB_FILE))
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub(crate) struct DbTableCounts {
+    pub trips: i64,
+    pub days: i64,
+    pub itinerary_items: i64,
+    pub notes: i64,
+    pub expenses: i64,
+    pub expense_beneficiaries: i64,
+    pub estimates: i64,
+    pub participants: i64,
+    pub reservations: i64,
+    pub checklist_items: i64,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub(crate) struct DbStatusJson {
+    pub schema_version: i32,
+    pub path: String,
+    pub exists: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub file_size_bytes: Option<u64>,
+    pub trip_export_schema_version: i32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub table_counts: Option<DbTableCounts>,
+}
+
+fn table_count(conn: &Connection, table: &str) -> Result<i64> {
+    let sql = format!("SELECT COUNT(*) FROM {table}");
+    conn.query_row(&sql, [], |row| row.get(0))
+        .with_context(|| format!("{table} の件数取得に失敗しました"))
+}
+
+pub(crate) fn collect_table_counts(conn: &Connection) -> Result<DbTableCounts> {
+    Ok(DbTableCounts {
+        trips: table_count(conn, "trips")?,
+        days: table_count(conn, "days")?,
+        itinerary_items: table_count(conn, "itinerary_items")?,
+        notes: table_count(conn, "notes")?,
+        expenses: table_count(conn, "expenses")?,
+        expense_beneficiaries: table_count(conn, "expense_beneficiaries")?,
+        estimates: table_count(conn, "estimates")?,
+        participants: table_count(conn, "participants")?,
+        reservations: table_count(conn, "reservations")?,
+        checklist_items: table_count(conn, "checklist_items")?,
+    })
+}
+
+/// DB ファイル未存在時は open せず、存在時のみ `open_db_at` + migration 後の状態を返す。
+pub(crate) fn collect_db_status() -> Result<DbStatusJson> {
+    let path_buf = resolve_db_path()?;
+    let path = path_buf.to_string_lossy().into_owned();
+    let trip_export_schema_version = crate::models::TRIP_EXPORT_SCHEMA_VERSION;
+
+    if !path_buf.exists() {
+        return Ok(DbStatusJson {
+            schema_version: DB_STATUS_JSON_SCHEMA_VERSION,
+            path,
+            exists: false,
+            file_size_bytes: None,
+            trip_export_schema_version,
+            table_counts: None,
+        });
+    }
+
+    let file_size_bytes = fs::metadata(&path_buf)
+        .with_context(|| format!("DB ファイル '{path}' の情報取得に失敗しました"))?
+        .len();
+    let conn = open_db_at(&path)?;
+    let table_counts = collect_table_counts(&conn)?;
+
+    Ok(DbStatusJson {
+        schema_version: DB_STATUS_JSON_SCHEMA_VERSION,
+        path,
+        exists: true,
+        file_size_bytes: Some(file_size_bytes),
+        trip_export_schema_version,
+        table_counts: Some(table_counts),
+    })
+}
+
+pub(crate) fn run_db_path() -> Result<()> {
+    let path = resolve_db_path()?;
+    println!("{}", path.display());
+    Ok(())
+}
+
+pub(crate) fn print_db_status_human(status: &DbStatusJson) -> Result<()> {
+    println!("Path                      : {}", status.path);
+    println!(
+        "Exists                    : {}",
+        if status.exists { "yes" } else { "no" }
+    );
+    if let Some(size) = status.file_size_bytes {
+        println!("File size (bytes)         : {size}");
+    }
+    println!(
+        "Trip export schema version: {} (trip export JSON; not SQLite migration version)",
+        status.trip_export_schema_version
+    );
+    if let Some(counts) = &status.table_counts {
+        println!("Table counts:");
+        println!("  trips                   : {}", counts.trips);
+        println!("  days                    : {}", counts.days);
+        println!("  itinerary_items         : {}", counts.itinerary_items);
+        println!("  notes                   : {}", counts.notes);
+        println!("  expenses                : {}", counts.expenses);
+        println!(
+            "  expense_beneficiaries   : {}",
+            counts.expense_beneficiaries
+        );
+        println!("  estimates               : {}", counts.estimates);
+        println!("  participants            : {}", counts.participants);
+        println!("  reservations            : {}", counts.reservations);
+        println!("  checklist_items         : {}", counts.checklist_items);
+    }
+    Ok(())
+}
+
+pub(crate) fn run_db_status(json: bool) -> Result<()> {
+    let status = collect_db_status()?;
+    if json {
+        crate::trip::print_json(&status)?;
+    } else {
+        print_db_status_human(&status)?;
+    }
+    Ok(())
+}
 
 /// `query_row` の結果を変換する。行が無い場合は rusqlite の cause を残さずドメインエラーにする。
 pub(crate) fn map_query_row<T, F>(result: rusqlite::Result<T>, not_found: F) -> Result<T>
@@ -728,5 +867,55 @@ mod tests {
         assert!(format!("{err:#}").contains("simulated failure"));
         let after = crate::trip::get_trip(&conn, trip_id).unwrap();
         assert_eq!(after.name, before.name);
+    }
+
+    #[test]
+    fn test_collect_table_counts_empty_db() {
+        let conn = test_db();
+        let counts = collect_table_counts(&conn).unwrap();
+        assert_eq!(counts.trips, 0);
+        assert_eq!(counts.estimates, 0);
+        assert_eq!(counts.checklist_items, 0);
+    }
+
+    #[test]
+    fn test_db_status_json_omits_optional_fields_when_missing() {
+        let status = DbStatusJson {
+            schema_version: 1,
+            path: "/tmp/caglla.db".to_string(),
+            exists: false,
+            file_size_bytes: None,
+            trip_export_schema_version: crate::models::TRIP_EXPORT_SCHEMA_VERSION,
+            table_counts: None,
+        };
+        let json = serde_json::to_value(&status).unwrap();
+        assert_eq!(json["schema_version"], 1);
+        assert_eq!(json["exists"], false);
+        assert_eq!(
+            json["trip_export_schema_version"],
+            crate::models::TRIP_EXPORT_SCHEMA_VERSION
+        );
+        assert!(json.get("file_size_bytes").is_none());
+        assert!(json.get("table_counts").is_none());
+    }
+
+    #[test]
+    fn test_db_status_json_includes_counts_when_present() {
+        let conn = test_db();
+        add_test_trip(&conn, "Status Trip").unwrap();
+        let counts = collect_table_counts(&conn).unwrap();
+        assert_eq!(counts.trips, 1);
+
+        let status = DbStatusJson {
+            schema_version: 1,
+            path: "/tmp/caglla.db".to_string(),
+            exists: true,
+            file_size_bytes: Some(123),
+            trip_export_schema_version: crate::models::TRIP_EXPORT_SCHEMA_VERSION,
+            table_counts: Some(counts),
+        };
+        let json = serde_json::to_value(&status).unwrap();
+        assert_eq!(json["table_counts"]["trips"], 1);
+        assert_eq!(json["file_size_bytes"], 123);
     }
 }
