@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 
-use crate::models::{
+use crate::domain::models::{
     Expense, ExpenseBeneficiary, ExportExpenseBeneficiaryV5, ExportExpenseV3, Participant,
 };
 
@@ -22,7 +22,7 @@ const BENEFICIARY_SELECT_SQL: &str = "
     FROM expense_beneficiaries";
 
 pub(crate) fn migrate_expenses_shared_expense(conn: &Connection) -> Result<()> {
-    crate::db::add_column_if_not_exists(
+    crate::storage::db::add_column_if_not_exists(
         conn,
         "expenses",
         "paid_by_participant_id",
@@ -226,7 +226,7 @@ pub(crate) fn set_expense_beneficiaries(
         participant_ids,
     )?;
     delete_beneficiaries_for_expense(conn, expense_id)?;
-    let now = crate::db::now_string();
+    let now = crate::storage::db::now_string();
     for (index, participant_id) in participant_ids.iter().enumerate() {
         conn.execute(
             "INSERT INTO expense_beneficiaries
@@ -557,7 +557,7 @@ pub(crate) fn add_expense(
         synced_paid_by_name = Some(participant.name);
     }
 
-    let now = crate::db::now_string();
+    let now = crate::storage::db::now_string();
     let tx = conn
         .unchecked_transaction()
         .context("expense add: トランザクション開始に失敗しました")?;
@@ -656,7 +656,7 @@ pub(crate) fn import_expense_v3(
         })
         .collect::<Result<Vec<_>>>()?;
 
-    let now = crate::db::now_string();
+    let now = crate::storage::db::now_string();
     let tx = conn
         .unchecked_transaction()
         .context("expense import: トランザクション開始に失敗しました")?;
@@ -693,7 +693,7 @@ pub(crate) fn collect_export_expense_validation_errors(
     export: &TripExportV3ForValidation<'_>,
     effective_schema: i32,
 ) -> (Vec<String>, Vec<String>) {
-    use crate::models::{TRIP_EXPORT_SCHEMA_VERSION_V4, TRIP_EXPORT_SCHEMA_VERSION_V5};
+    use crate::domain::models::{TRIP_EXPORT_SCHEMA_VERSION_V4, TRIP_EXPORT_SCHEMA_VERSION_V5};
 
     if effective_schema < TRIP_EXPORT_SCHEMA_VERSION_V5 {
         return (Vec::new(), Vec::new());
@@ -754,8 +754,8 @@ pub(crate) fn collect_export_expense_validation_errors(
 }
 
 pub(crate) struct TripExportV3ForValidation<'a> {
-    pub participants: &'a [crate::models::ExportParticipantV4],
-    pub days: &'a [crate::models::ExportDayV3],
+    pub participants: &'a [crate::domain::models::ExportParticipantV4],
+    pub days: &'a [crate::domain::models::ExportDayV3],
 }
 
 pub(crate) fn list_expenses_for_itinerary(
@@ -797,7 +797,7 @@ fn list_expenses_where<P: rusqlite::Params>(
 }
 
 pub(crate) fn get_expense(conn: &Connection, id: i64) -> Result<Expense> {
-    crate::db::map_query_row(
+    crate::storage::db::map_query_row(
         conn.query_row(
             &format!("{EXPENSE_SELECT_SQL} WHERE id = ?1"),
             params![id],
@@ -881,8 +881,8 @@ pub(crate) fn update_expense(
         expense.currency = currency;
     }
 
-    crate::db::with_transaction(conn, "expense update", |tx| {
-        let now = crate::db::now_string();
+    crate::storage::db::with_transaction(conn, "expense update", |tx| {
+        let now = crate::storage::db::now_string();
         tx.execute(
             "UPDATE expenses
              SET title = ?1, amount = ?2, currency = ?3, paid_by_name = ?4,
@@ -913,7 +913,7 @@ pub(crate) fn update_expense(
 
 pub(crate) fn delete_expense(conn: &Connection, id: i64) -> Result<()> {
     get_expense(conn, id)?;
-    crate::db::with_transaction(conn, "expense delete", |tx| {
+    crate::storage::db::with_transaction(conn, "expense delete", |tx| {
         delete_beneficiaries_for_expense(tx, id)?;
         tx.execute("DELETE FROM expenses WHERE id = ?1", params![id])
             .context("Expense の削除に失敗しました")?;
@@ -1038,14 +1038,14 @@ pub(crate) fn print_expense_detail(conn: &Connection, expense: &Expense) -> Resu
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::reset_db;
     use crate::itinerary::add_itinerary_item;
     use crate::participant::create_participant;
+    use crate::storage::db::reset_db;
     use crate::trip::add_test_trip;
     use rusqlite::Connection;
 
     fn test_db() -> Connection {
-        crate::db::open_db_at(":memory:").expect("インメモリ DB")
+        crate::storage::db::open_db_at(":memory:").expect("インメモリ DB")
     }
 
     fn setup_itinerary(conn: &Connection) -> i64 {

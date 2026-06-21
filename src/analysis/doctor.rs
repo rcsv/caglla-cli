@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use anyhow::Result;
 use rusqlite::Connection;
 
-use crate::models::{
+use crate::domain::models::{
     DoctorIssue, DoctorIssueCode, DoctorIssueTarget, DoctorReportJson, ItineraryCategory,
     ItineraryItem,
 };
@@ -271,7 +271,7 @@ pub(crate) fn trip_doctor_report_json(conn: &Connection, trip_id: i64) -> Result
 pub(crate) fn run_trip_doctor(conn: &Connection, trip_id: i64, json: bool) -> Result<()> {
     if json {
         let report = trip_doctor_report_json(conn, trip_id)?;
-        crate::trip::print_json(&report)?;
+        crate::output::json::print_json(&report)?;
         return Ok(());
     }
 
@@ -323,9 +323,9 @@ pub(crate) fn run_trip_doctor(conn: &Connection, trip_id: i64, json: bool) -> Re
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::open_db_at;
+    use crate::domain::models::ItineraryCategory;
     use crate::itinerary::add_itinerary_item;
-    use crate::models::ItineraryCategory;
+    use crate::storage::db::open_db_at;
     use crate::trip::{add_test_self_participant, add_test_trip, add_trip};
     use rusqlite::Connection;
 
@@ -695,11 +695,11 @@ mod tests {
             .expect("missing duration json issue");
         assert_eq!(
             missing.severity,
-            crate::models::DoctorIssueSeverity::Warning
+            crate::domain::models::DoctorIssueSeverity::Warning
         );
         assert_eq!(
             missing.target.target_type,
-            crate::models::IssueTargetType::Itinerary
+            crate::domain::models::IssueTargetType::Itinerary
         );
         assert_eq!(missing.details.itinerary_id, Some(missing.target.id));
 

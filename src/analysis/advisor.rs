@@ -1,7 +1,7 @@
 use anyhow::Result;
 use rusqlite::Connection;
 
-use crate::models::{AdvisorIssueJson, AdvisorReportJson, DoctorIssue, DoctorIssueCode};
+use crate::domain::models::{AdvisorIssueJson, AdvisorReportJson, DoctorIssue, DoctorIssueCode};
 
 /// 1件の issue に対する改善提案を生成する
 pub(crate) fn generate_advice(issue: &DoctorIssue) -> Vec<String> {
@@ -137,7 +137,7 @@ pub(crate) fn trip_advisor_report_json(
     with_commands: bool,
 ) -> Result<AdvisorReportJson> {
     crate::trip::get_trip(conn, trip_id)?;
-    let issues = crate::doctor::analyze_trip_issues(conn, trip_id)?;
+    let issues = crate::analysis::doctor::analyze_trip_issues(conn, trip_id)?;
     let advisor_issues = issues
         .iter()
         .map(|issue| {
@@ -169,12 +169,12 @@ pub(crate) fn run_trip_advisor(
 ) -> Result<()> {
     if json {
         let report = trip_advisor_report_json(conn, trip_id, with_commands)?;
-        crate::trip::print_json(&report)?;
+        crate::output::json::print_json(&report)?;
         return Ok(());
     }
 
     let trip = crate::trip::get_trip(conn, trip_id)?;
-    let issues = crate::doctor::analyze_trip_issues(conn, trip_id)?;
+    let issues = crate::analysis::doctor::analyze_trip_issues(conn, trip_id)?;
 
     println!("Trip Advisor");
     println!("============");
@@ -234,9 +234,9 @@ fn print_issue_followup(issue: &DoctorIssue, trip_id: i64, with_commands: bool) 
 #[cfg(test)]
 mod advisor_tests {
     use super::*;
-    use crate::db::open_db_at;
+    use crate::domain::models::{DoctorIssueTarget, ItineraryCategory};
     use crate::itinerary::add_itinerary_item;
-    use crate::models::{DoctorIssueTarget, ItineraryCategory};
+    use crate::storage::db::open_db_at;
     use crate::trip::{add_test_self_participant, add_test_trip};
     use rusqlite::Connection;
 
@@ -478,7 +478,7 @@ mod advisor_tests {
         )
         .unwrap();
 
-        let issues = crate::doctor::analyze_trip_issues(&conn, trip_id).unwrap();
+        let issues = crate::analysis::doctor::analyze_trip_issues(&conn, trip_id).unwrap();
         assert!(issues.is_empty());
     }
 
@@ -502,7 +502,7 @@ mod advisor_tests {
         )
         .unwrap();
 
-        let issues = crate::doctor::analyze_trip_issues(&conn, trip_id).unwrap();
+        let issues = crate::analysis::doctor::analyze_trip_issues(&conn, trip_id).unwrap();
         assert!(issues.is_empty());
     }
 
@@ -511,7 +511,7 @@ mod advisor_tests {
         let conn = test_db();
         let trip_id = add_test_trip(&conn, "空の旅行").unwrap();
 
-        let issues = crate::doctor::analyze_trip_issues(&conn, trip_id).unwrap();
+        let issues = crate::analysis::doctor::analyze_trip_issues(&conn, trip_id).unwrap();
         assert_eq!(issues.len(), 2);
         assert_eq!(issues[0].code, DoctorIssueCode::EmptyItinerary);
         assert_eq!(generate_advice(&issues[0]).len(), 1);
@@ -551,7 +551,7 @@ mod advisor_tests {
         )
         .unwrap();
 
-        let issues = crate::doctor::analyze_trip_issues(&conn, trip_id).unwrap();
+        let issues = crate::analysis::doctor::analyze_trip_issues(&conn, trip_id).unwrap();
         let restaurant_issue = issues
             .iter()
             .find(|issue| issue.code == DoctorIssueCode::NoRestaurant)
@@ -579,7 +579,7 @@ mod advisor_tests {
         )
         .unwrap();
 
-        let report = crate::doctor::analyze_trip(&conn, trip_id).unwrap();
+        let report = crate::analysis::doctor::analyze_trip(&conn, trip_id).unwrap();
         assert!(report
             .warnings
             .iter()
@@ -613,7 +613,7 @@ mod advisor_tests {
         let report = trip_advisor_report_json(&conn, trip_id, false).unwrap();
         assert_eq!(
             report.schema_version,
-            crate::models::ADVISOR_REPORT_SCHEMA_VERSION
+            crate::domain::models::ADVISOR_REPORT_SCHEMA_VERSION
         );
         assert_eq!(report.trip_id, trip_id);
         assert!(report.issues.is_empty());

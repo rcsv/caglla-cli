@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 
-use crate::models::{ItineraryCategory, ItineraryItem};
+use crate::domain::models::{ItineraryCategory, ItineraryItem};
 use rusqlite::{params, Connection};
 
 pub(crate) const ITINERARY_ITEM_SELECT_SQL: &str = "
@@ -72,7 +72,7 @@ pub(crate) fn add_itinerary_item_extended(
     let day_id = crate::day::find_day_id_by_trip_and_day_number(conn, trip_id, day)?;
     let resolved_sort_order =
         resolve_sort_order_for_add(conn, trip_id, day, sort_order, after, before)?;
-    let now = crate::db::now_string();
+    let now = crate::storage::db::now_string();
     let category = category.map(|c| c.as_str().to_string());
     conn.execute(
         "INSERT INTO itinerary_items
@@ -169,9 +169,9 @@ pub(crate) fn normalize_day_sort_order(
 ) -> Result<()> {
     crate::trip::get_trip(conn, trip_id)?;
     let _day = crate::day::find_day_by_trip_and_day_number(conn, trip_id, day_number)?;
-    crate::db::with_transaction(conn, "itinerary normalize sort order", |tx| {
+    crate::storage::db::with_transaction(conn, "itinerary normalize sort order", |tx| {
         let items = list_itinerary_items_for_day(tx, trip_id, day_number)?;
-        let now = crate::db::now_string();
+        let now = crate::storage::db::now_string();
         for (idx, item) in items.iter().enumerate() {
             let new_order = SORT_ORDER_STEP * (idx as i64 + 1);
             if item.sort_order != new_order {
@@ -535,7 +535,7 @@ fn insert_itinerary_item_copy(
     target_day: i64,
 ) -> Result<i64> {
     let day_id = crate::day::find_day_id_by_trip_and_day_number(conn, source.trip_id, target_day)?;
-    let now = crate::db::now_string();
+    let now = crate::storage::db::now_string();
     let category = source.category.map(|c| c.as_str().to_string());
     conn.execute(
         "INSERT INTO itinerary_items
@@ -567,11 +567,11 @@ fn copy_itinerary_level_notes(
     source_itinerary_id: i64,
     new_itinerary_id: i64,
 ) -> Result<()> {
-    use crate::models::NoteOwnerType;
+    use crate::domain::models::NoteOwnerType;
 
     let notes =
         crate::note::list_notes_for_owner(conn, NoteOwnerType::Itinerary, source_itinerary_id)?;
-    let now = crate::db::now_string();
+    let now = crate::storage::db::now_string();
     for note in notes {
         conn.execute(
             "INSERT INTO notes
@@ -652,7 +652,7 @@ pub(crate) fn replicate_itinerary_items(
     }
 
     let mut result = None;
-    crate::db::with_transaction(conn, "itinerary replicate", |tx| {
+    crate::storage::db::with_transaction(conn, "itinerary replicate", |tx| {
         result = Some(replicate_itinerary_items_inner(
             tx,
             &source_items,
@@ -767,7 +767,7 @@ pub(crate) fn list_itinerary_items_for_day(
 
 /// ID を指定して1件の日程を取得する
 pub(crate) fn get_itinerary_item(conn: &Connection, id: i64) -> Result<ItineraryItem> {
-    crate::db::map_query_row(
+    crate::storage::db::map_query_row(
         conn.query_row(
             &format!("{ITINERARY_ITEM_SELECT_SQL} WHERE i.id = ?1"),
             params![id],
@@ -842,7 +842,7 @@ pub(crate) fn update_itinerary_item(
         item.category = c;
     }
 
-    let now = crate::db::now_string();
+    let now = crate::storage::db::now_string();
     let category_db = item.category.map(|c| c.as_str().to_string());
     conn.execute(
         "UPDATE itinerary_items
@@ -872,7 +872,7 @@ pub(crate) fn update_itinerary_item(
 /// 日程を削除する
 pub(crate) fn delete_itinerary_item(conn: &Connection, id: i64) -> Result<()> {
     get_itinerary_item(conn, id)?;
-    crate::db::with_transaction(conn, "itinerary delete", |tx| {
+    crate::storage::db::with_transaction(conn, "itinerary delete", |tx| {
         crate::note::delete_notes_for_itinerary(tx, id)?;
         crate::estimate::delete_estimates_for_itinerary(tx, id)?;
         crate::expense::delete_expenses_for_itinerary(tx, id)?;
@@ -888,9 +888,11 @@ pub(crate) fn row_to_itinerary_item(row: &rusqlite::Row) -> rusqlite::Result<Iti
     let category_raw: Option<String> = row.get(10)?;
     let category = match &category_raw {
         None => None,
-        Some(value) => Some(crate::models::parse_itinerary_category(value).map_err(|_| {
-            rusqlite::Error::InvalidColumnType(10, value.clone(), rusqlite::types::Type::Text)
-        })?),
+        Some(value) => Some(
+            crate::domain::models::parse_itinerary_category(value).map_err(|_| {
+                rusqlite::Error::InvalidColumnType(10, value.clone(), rusqlite::types::Type::Text)
+            })?,
+        ),
     };
     Ok(ItineraryItem {
         id: row.get(0)?,
@@ -1067,8 +1069,8 @@ pub(crate) fn print_itinerary_timeline(items: &[ItineraryItem]) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::open_db_at;
-    use crate::models::ItineraryCategory;
+    use crate::domain::models::ItineraryCategory;
+    use crate::storage::db::open_db_at;
     use crate::trip::add_test_trip;
     use rusqlite::Connection;
 
@@ -1076,7 +1078,7 @@ mod tests {
         open_db_at(":memory:").expect("インメモリ DB の作成に失敗")
     }
 
-    fn itinerary_category_line(item: &crate::models::ItineraryItem) -> Option<String> {
+    fn itinerary_category_line(item: &crate::domain::models::ItineraryItem) -> Option<String> {
         item.category.map(|c| format!("Category: {}", c.as_str()))
     }
 
@@ -2569,7 +2571,7 @@ mod tests {
 
     #[test]
     fn test_replicate_copies_itinerary_level_notes_by_default() {
-        use crate::models::NoteOwnerType;
+        use crate::domain::models::NoteOwnerType;
         use crate::note::{add_note, list_notes_for_owner, ResolvedNoteOwner};
 
         let conn = test_db();
@@ -2606,7 +2608,7 @@ mod tests {
 
     #[test]
     fn test_replicate_without_notes_skips_itinerary_level_notes() {
-        use crate::models::NoteOwnerType;
+        use crate::domain::models::NoteOwnerType;
         use crate::note::{add_note, list_notes_for_owner, ResolvedNoteOwner};
 
         let conn = test_db();

@@ -3,7 +3,7 @@ use rusqlite::{params, Connection};
 use serde::Serialize;
 use std::collections::HashMap;
 
-use crate::models::{
+use crate::domain::models::{
     parse_note_owner_type, ExportNote, ItineraryItem, ItineraryNoteKey, Note, NoteOwnerType,
 };
 
@@ -111,7 +111,7 @@ pub(crate) fn add_note(
 
     let owner_type = owner.owner_type();
     let owner_id = owner.owner_id();
-    let now = crate::db::now_string();
+    let now = crate::storage::db::now_string();
     conn.execute(
         "INSERT INTO notes
          (owner_type, owner_id, title, body, sort_order, created_at, updated_at)
@@ -145,7 +145,7 @@ pub(crate) fn list_notes_for_owner(
 }
 
 pub(crate) fn get_note(conn: &Connection, id: i64) -> Result<Note> {
-    crate::db::map_query_row(
+    crate::storage::db::map_query_row(
         conn.query_row(
             &format!("{NOTE_SELECT_SQL} WHERE id = ?1"),
             params![id],
@@ -174,7 +174,7 @@ pub(crate) fn update_note(
         note.body = value.to_string();
     }
 
-    let now = crate::db::now_string();
+    let now = crate::storage::db::now_string();
     conn.execute(
         "UPDATE notes SET title = ?1, body = ?2, updated_at = ?3 WHERE id = ?4",
         params![note.title, note.body, &now, id],
@@ -491,7 +491,7 @@ pub(crate) fn import_export_notes(
 
 /// export JSON の Note を検証する（エラー文言の一覧）
 pub(crate) fn collect_export_note_validation_errors(
-    export: &crate::models::TripExport,
+    export: &crate::domain::models::TripExport,
 ) -> Vec<String> {
     let day_count = match (
         export.trip.start_date.as_deref(),
@@ -553,8 +553,8 @@ fn count_notes(conn: &Connection) -> Result<i64> {
     Ok(conn.query_row("SELECT COUNT(*) FROM notes", [], |row| row.get(0))?)
 }
 
-fn find_day_by_id(conn: &Connection, day_id: i64) -> Result<crate::models::Day> {
-    crate::db::map_query_row(
+fn find_day_by_id(conn: &Connection, day_id: i64) -> Result<crate::domain::models::Day> {
+    crate::storage::db::map_query_row(
         conn.query_row(
             "SELECT id, trip_id, day_number, title, summary, created_at, updated_at
              FROM days WHERE id = ?1",
@@ -621,8 +621,8 @@ pub(crate) fn print_note_detail(note: &Note) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::open_db_at;
     use crate::itinerary::add_itinerary_item;
+    use crate::storage::db::open_db_at;
     use crate::trip::{add_trip, delete_trip, update_trip};
 
     fn test_db() -> Connection {

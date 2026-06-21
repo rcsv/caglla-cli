@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 
-use crate::models::{
+use crate::domain::models::{
     effective_export_schema_version, ExportEstimate, ExportExpense, ExportNote,
     ExportParticipantV4, ExportReservation, ItineraryCategory, ItineraryItem, TripExport,
     TRIP_EXPORT_SCHEMA_VERSION, TRIP_EXPORT_SCHEMA_VERSION_V5,
@@ -1197,7 +1197,7 @@ pub(crate) fn run_trip_diff(old_path: &str, new_path: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{
+    use crate::domain::models::{
         ExportNote, ExportReservation, ExportReservationV3, ItineraryItem, ItineraryNoteKey, Trip,
         TripExport, TRIP_EXPORT_SCHEMA_VERSION_V5,
     };
@@ -1671,7 +1671,7 @@ mod tests {
 
     #[test]
     fn test_diff_participants_added_removed_and_is_self_changed() {
-        use crate::models::ExportParticipantV4;
+        use crate::domain::models::ExportParticipantV4;
 
         let old = make_base_export(make_test_trip("Trip"));
         let mut new = make_base_export(make_test_trip("Trip"));
@@ -1720,7 +1720,7 @@ mod tests {
 
     #[test]
     fn test_diff_expense_payer_and_beneficiaries_changed() {
-        use crate::models::{
+        use crate::domain::models::{
             ExportExpense, ExportExpenseBeneficiaryV5, ExportExpenseV3, TRIP_EXPORT_SCHEMA_VERSION,
             TRIP_EXPORT_SCHEMA_VERSION_V4,
         };
@@ -1799,7 +1799,7 @@ mod tests {
 
     #[test]
     fn test_diff_estimate_added_and_amount_changed() {
-        use crate::models::{ExportEstimate, ExportEstimateV3, TRIP_EXPORT_SCHEMA_VERSION};
+        use crate::domain::models::{ExportEstimate, ExportEstimateV3, TRIP_EXPORT_SCHEMA_VERSION};
 
         let itinerary_key = ItineraryNoteKey {
             day_number: 1,

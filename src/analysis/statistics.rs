@@ -4,7 +4,7 @@ use anyhow::Result;
 use rusqlite::Connection;
 use serde::Serialize;
 
-use crate::models::ItineraryCategory;
+use crate::domain::models::ItineraryCategory;
 
 /// 旅行統計の集計結果
 #[derive(Serialize)]
@@ -247,8 +247,8 @@ pub(crate) fn print_trip_stats(conn: &Connection, trip_id: i64) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::open_db_at;
-    use crate::models::ItineraryCategory;
+    use crate::domain::models::ItineraryCategory;
+    use crate::storage::db::open_db_at;
     use crate::trip::add_test_trip;
     use rusqlite::Connection;
 

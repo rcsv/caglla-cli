@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 
-use crate::models::{ExportReservationV3, Reservation};
+use crate::domain::models::{ExportReservationV3, Reservation};
 
 pub(crate) const RESERVATION_TYPES: &[&str] = &[
     "hotel",
@@ -113,7 +113,7 @@ pub(crate) fn add_reservation(
     let reservation_type = validate_reservation_type(reservation_type)?;
     let provider_name = validate_provider_name(provider_name)?;
 
-    let now = crate::db::now_string();
+    let now = crate::storage::db::now_string();
     conn.execute(
         "INSERT INTO reservations
          (itinerary_id, reservation_type, provider_name, confirmation_code,
@@ -144,7 +144,7 @@ pub(crate) fn import_reservation_v3(
     validate_export_reservation_v3(export)?;
     crate::itinerary::get_itinerary_item(conn, itinerary_id)?;
 
-    let now = crate::db::now_string();
+    let now = crate::storage::db::now_string();
     conn.execute(
         "INSERT INTO reservations
          (itinerary_id, reservation_type, provider_name, confirmation_code,
@@ -239,7 +239,7 @@ fn list_reservations_where<P: rusqlite::Params>(
 }
 
 pub(crate) fn get_reservation(conn: &Connection, id: i64) -> Result<Reservation> {
-    crate::db::map_query_row(
+    crate::storage::db::map_query_row(
         conn.query_row(
             &format!("{RESERVATION_SELECT_SQL} WHERE id = ?1"),
             params![id],
@@ -297,7 +297,7 @@ pub(crate) fn update_reservation(
         reservation.end_at = normalize_optional_text(value);
     }
 
-    let now = crate::db::now_string();
+    let now = crate::storage::db::now_string();
     conn.execute(
         "UPDATE reservations
          SET reservation_type = ?1, provider_name = ?2, confirmation_code = ?3,
@@ -488,13 +488,13 @@ pub(crate) fn print_reservation_detail_with_context(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::reset_db;
     use crate::itinerary::add_itinerary_item;
+    use crate::storage::db::reset_db;
     use crate::trip::add_test_trip;
     use rusqlite::Connection;
 
     fn test_db() -> Connection {
-        crate::db::open_db_at(":memory:").expect("インメモリ DB")
+        crate::storage::db::open_db_at(":memory:").expect("インメモリ DB")
     }
 
     fn setup_itinerary(conn: &Connection) -> i64 {
