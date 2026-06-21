@@ -378,6 +378,40 @@ pub(crate) fn print_estimate_detail(estimate: &Estimate) -> Result<()> {
     Ok(())
 }
 
+/// Markdown 表の金額列（例: `JPY 2,180`）
+pub(crate) fn format_estimate_amount_markdown(amount: i64, currency: &str) -> String {
+    format!(
+        "{} {}",
+        currency,
+        crate::money::format_amount_value(amount, currency)
+    )
+}
+
+/// Itinerary 配下 Estimate の Markdown 表（0 件なら None）
+pub(crate) fn format_estimates_markdown_section(estimates: &[Estimate]) -> Option<String> {
+    if estimates.is_empty() {
+        return None;
+    }
+
+    let mut lines = vec![
+        String::new(),
+        "予定費用:".to_string(),
+        "| 項目 | 金額 | メモ |".to_string(),
+        "|---|---:|---|".to_string(),
+    ];
+    for estimate in estimates {
+        let title = estimate
+            .title
+            .as_deref()
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or("-");
+        let amount = format_estimate_amount_markdown(estimate.amount, &estimate.currency);
+        let note = estimate.note.as_deref().unwrap_or("");
+        lines.push(format!("| {title} | {amount} | {note} |"));
+    }
+    Some(lines.join("\n"))
+}
+
 pub(crate) fn build_export_estimate_v3(estimate: &Estimate) -> ExportEstimateV3 {
     ExportEstimateV3 {
         title: estimate.title.clone(),
@@ -662,5 +696,33 @@ mod tests {
         assert_eq!(imported.currency, estimate.currency);
         assert_eq!(imported.note, estimate.note);
         assert_eq!(imported.sort_order, estimate.sort_order);
+    }
+
+    #[test]
+    fn test_format_estimates_markdown_section() {
+        let conn = test_db();
+        let trip_id = add_test_trip(&conn, "MD Trip").unwrap();
+        let itinerary_id = crate::itinerary::add_itinerary_item(
+            &conn, trip_id, 1, "Aquarium", None, None, None, None, None, None, None,
+        )
+        .unwrap();
+        add_estimate(
+            &conn,
+            itinerary_id,
+            "2180",
+            "JPY",
+            Some("入館料"),
+            Some("大人5名想定"),
+            None,
+        )
+        .unwrap();
+        add_estimate(&conn, itinerary_id, "5000", "JPY", None, None, None).unwrap();
+
+        let estimates = list_estimates_for_itinerary(&conn, itinerary_id).unwrap();
+        let section = format_estimates_markdown_section(&estimates).unwrap();
+        assert!(section.contains("予定費用:"));
+        assert!(section.contains("| 入館料 | JPY 2,180 | 大人5名想定 |"));
+        assert!(section.contains("| - | JPY 5,000 |  |"));
+        assert!(format_estimates_markdown_section(&[]).is_none());
     }
 }

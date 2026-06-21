@@ -2,7 +2,7 @@
 
 Caglla.Travel CLI に **Estimate（事前見積 / Planned Budget）** を実装するための計画です。
 
-**Implementation Plan。** Phase 1（CRUD / migration）および Phase 2（export schema v6）は **実装済み**（PR #50 / #51）。Phase 3 以降の工事手順を本書で管理する。
+**Implementation Plan。** Phase 1（CRUD / migration）、Phase 2（export schema v6）、Phase 3（`trip stats` / `export-md`）は **実装済み**（PR #50 / #51 / Phase 3）。Phase 4 以降の工事手順を本書で管理する。
 
 | ドキュメント | 役割 |
 |---|---|
@@ -21,7 +21,8 @@ Entity Design             → estimate-entity-design.md
 Implementation Plan       → estimate-implementation-plan.md（本書）
 Phase 1 Implementation    → CRUD / migration — 実装済み（PR #50）
 Phase 2 Implementation    → export v6 / validate / diff — 実装済み（PR #51）
-Phase 3–5                 → stats / export-md / replicate / review — 未着手
+Phase 3 Implementation    → trip stats / export-md — 実装済み
+Phase 4–5                 → replicate / review — 未着手
 ```
 
 ---
@@ -59,7 +60,7 @@ export v6 / trip stats / export-md / replicate は Phase 2 以降に段階分割
 |---|---|---|
 | **Phase 1** | DB migration + `src/money.rs` + estimate CRUD + CLI + cascade + tests + command-reference | **実装済み**（PR #50） |
 | **Phase 2** | export / import **schema v6**、`validate-export`、`trip diff`、Estimate 配列保持設計メモ | **実装済み**（PR #51） |
-| **Phase 3** | `trip stats` Planned total、`export-md` 予定費用表示 | 3 本目 |
+| **Phase 3** | `trip stats` Planned total、`export-md` 予定費用表示 | **実装済み** |
 | **Phase 4** | `itinerary replicate` の Estimate コピー | 4 本目 |
 | **Phase 5** | Post-Implementation Review ドキュメント | 5 本目 |
 
@@ -497,7 +498,7 @@ tests/              — export roundtrip v5→v6, v6 roundtrip
 
 ---
 
-## Phase 3 — trip stats / export-md
+## Phase 3 — trip stats / export-md（実装済み）
 
 ### trip stats
 
@@ -505,16 +506,18 @@ tests/              — export roundtrip v5→v6, v6 roundtrip
 |---|---|
 | **Planned total** | Trip 配下 Estimate 合計（通貨別） |
 | **Actual total** | 現行 Expense 合計（既存） |
-| **Difference** | 表示時導出 |
+| **Difference** | **defer**（将来） |
 
-触るファイル: `src/stats.rs`、`docs/command-reference.md`
+触ったファイル: `src/stats.rs`、`src/markdown.rs`（Overview）、`docs/command-reference.md`
+
+JSON: `estimate_count` / `estimate_totals` を追加。
 
 ### export-md
 
-- Itinerary セクションに Estimate 一覧
-- Trip 末尾に Planned / Actual / Difference（旅行前は Actual `-`）
+- Itinerary セクションに Estimate 一覧（見出し「予定費用:」）
+- Overview に Planned / Actual 合計（通貨別）
 
-触るファイル: `src/markdown.rs`、関連 docs
+触ったファイル: `src/markdown.rs`、`src/estimate.rs`（Markdown 整形）、関連 docs
 
 ---
 
@@ -589,7 +592,6 @@ Phase 1 PR 内の **推奨 commit / 作業順**:
 ```text
 - Phase 1 実装そのもの（本書は計画のみ）
 - export schema v6（Phase 2）
-- trip stats / export-md（Phase 3）
 - replicate Estimate コピー（Phase 4）
 - post-implementation review（Phase 5）
 - release 作業
