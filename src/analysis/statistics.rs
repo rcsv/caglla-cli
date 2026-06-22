@@ -22,6 +22,8 @@ pub(crate) struct TripStats {
     pub expense_totals: BTreeMap<String, i64>,
     pub estimate_count: usize,
     pub estimate_totals: BTreeMap<String, i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub difference_totals: Option<BTreeMap<String, i64>>,
     pub registered_participant_count: usize,
     pub participants_recorded: bool,
     pub self_known: bool,
@@ -51,6 +53,32 @@ pub(crate) fn format_minutes_duration(total_minutes: i64) -> String {
     } else {
         format!("{hours}h{minutes:02}m")
     }
+}
+
+/// Planned と Actual の両方があるときのみ、通貨別 Difference（Actual − Planned）を返す。
+pub(crate) fn compute_difference_totals(
+    estimate_count: usize,
+    expense_count: usize,
+    estimate_totals: &BTreeMap<String, i64>,
+    expense_totals: &BTreeMap<String, i64>,
+) -> Option<BTreeMap<String, i64>> {
+    if estimate_count == 0 || expense_count == 0 {
+        return None;
+    }
+
+    let mut currencies = BTreeMap::new();
+    for currency in estimate_totals.keys().chain(expense_totals.keys()) {
+        currencies.insert(currency.clone(), ());
+    }
+
+    let mut difference_totals = BTreeMap::new();
+    for currency in currencies.keys() {
+        let planned = estimate_totals.get(currency).copied().unwrap_or(0);
+        let actual = expense_totals.get(currency).copied().unwrap_or(0);
+        difference_totals.insert(currency.clone(), actual - planned);
+    }
+
+    Some(difference_totals)
 }
 
 /// 旅行統計を集計する
@@ -111,6 +139,13 @@ pub(crate) fn compute_trip_stats(conn: &Connection, trip_id: i64) -> Result<Trip
     let participant_counts =
         crate::participant::compute_participant_counts_for_trip(conn, trip_id)?;
 
+    let difference_totals = compute_difference_totals(
+        estimate_count,
+        expense_count,
+        &estimate_totals,
+        &expense_totals,
+    );
+
     Ok(TripStats {
         trip_name: trip.name,
         days,
@@ -125,6 +160,7 @@ pub(crate) fn compute_trip_stats(conn: &Connection, trip_id: i64) -> Result<Trip
         expense_totals,
         estimate_count,
         estimate_totals,
+        difference_totals,
         registered_participant_count: participant_counts.registered_count,
         participants_recorded: participant_counts.participants_recorded,
         self_known: participant_counts.self_known,
@@ -233,6 +269,17 @@ pub(crate) fn print_trip_stats(conn: &Connection, trip_id: i64) -> Result<()> {
     if stats.expense_count > 0 {
         println!("Actual total:");
         for (currency, total) in &stats.expense_totals {
+            println!(
+                "  {} {}",
+                currency,
+                crate::money::format_amount_value(*total, currency)
+            );
+        }
+    }
+    if let Some(difference_totals) = &stats.difference_totals {
+        println!();
+        println!("Difference:");
+        for (currency, total) in difference_totals {
             println!(
                 "  {} {}",
                 currency,
@@ -483,6 +530,7 @@ mod tests {
         assert!(stats.expense_totals.is_empty());
         assert_eq!(stats.estimate_count, 0);
         assert!(stats.estimate_totals.is_empty());
+        assert!(stats.difference_totals.is_none());
 
         print_trip_stats(&conn, trip_id).unwrap();
     }
@@ -523,6 +571,7 @@ mod tests {
         let stats = compute_trip_stats(&conn, trip_id).unwrap();
         assert_eq!(stats.expense_count, 2);
         assert_eq!(stats.expense_totals.get("JPY"), Some(&1500));
+        assert!(stats.difference_totals.is_none());
     }
 
     #[test]
@@ -653,5 +702,114 @@ mod tests {
         assert_eq!(parsed["estimate_count"], 3);
         assert_eq!(parsed["estimate_totals"]["JPY"], 10000);
         assert_eq!(parsed["estimate_totals"]["USD"], 1750);
+        assert!(parsed.get("difference_totals").is_none());
+    }
+
+    #[test]
+    fn test_compute_difference_totals_gate_requires_both() {
+        let mut planned = BTreeMap::new();
+        planned.insert("JPY".to_string(), 1000);
+        let mut actual = BTreeMap::new();
+        actual.insert("JPY".to_string(), 800);
+
+        assert!(compute_difference_totals(0, 1, &planned, &actual).is_none());
+        assert!(compute_difference_totals(1, 0, &planned, &actual).is_none());
+    }
+
+    #[test]
+    fn test_compute_difference_totals_actual_minus_planned() {
+        let mut planned = BTreeMap::new();
+        planned.insert("JPY".to_string(), 180_000);
+        let mut actual = BTreeMap::new();
+        actual.insert("JPY".to_string(), 172_500);
+
+        let diff = compute_difference_totals(1, 1, &planned, &actual).unwrap();
+        assert_eq!(diff.get("JPY"), Some(&-7_500));
+    }
+
+    #[test]
+    fn test_compute_difference_totals_currency_union() {
+        let mut planned = BTreeMap::new();
+        planned.insert("JPY".to_string(), 10_000);
+        planned.insert("USD".to_string(), 50);
+        let mut actual = BTreeMap::new();
+        actual.insert("JPY".to_string(), 9_500);
+
+        let diff = compute_difference_totals(2, 1, &planned, &actual).unwrap();
+        assert_eq!(diff.get("JPY"), Some(&-500));
+        assert_eq!(diff.get("USD"), Some(&-50));
+        assert_eq!(diff.len(), 2);
+    }
+
+    #[test]
+    fn test_compute_difference_totals_zero_when_equal() {
+        let mut planned = BTreeMap::new();
+        planned.insert("JPY".to_string(), 2500);
+        let mut actual = BTreeMap::new();
+        actual.insert("JPY".to_string(), 2500);
+
+        let diff = compute_difference_totals(1, 1, &planned, &actual).unwrap();
+        assert_eq!(diff.get("JPY"), Some(&0));
+    }
+
+    #[test]
+    fn test_stats_difference_when_estimates_and_expenses_present() {
+        let conn = test_db();
+        let trip_id = add_test_trip(&conn, "Difference Stats Trip").unwrap();
+        let itinerary_id = crate::itinerary::add_itinerary_item(
+            &conn, trip_id, 1, "Aquarium", None, None, None, None, None, None, None,
+        )
+        .unwrap();
+        crate::estimate::add_estimate(
+            &conn,
+            itinerary_id,
+            "7180",
+            "JPY",
+            Some("入館料"),
+            None,
+            None,
+        )
+        .unwrap();
+        crate::expense::add_expense(
+            &conn,
+            itinerary_id,
+            "6500",
+            "JPY",
+            Some("入館料"),
+            None,
+            None,
+            None,
+            &crate::expense::ExpenseSharedOptions::default(),
+        )
+        .unwrap();
+
+        let stats = compute_trip_stats(&conn, trip_id).unwrap();
+        assert_eq!(
+            stats.difference_totals.as_ref().unwrap().get("JPY"),
+            Some(&-680)
+        );
+
+        let json = serde_json::to_string_pretty(&stats).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed["difference_totals"]["JPY"], -680);
+    }
+
+    #[test]
+    fn test_stats_estimate_only_has_no_difference_totals() {
+        let conn = test_db();
+        let trip_id = add_test_trip(&conn, "Estimate Only Trip").unwrap();
+        let itinerary_id = crate::itinerary::add_itinerary_item(
+            &conn, trip_id, 1, "Aquarium", None, None, None, None, None, None, None,
+        )
+        .unwrap();
+        crate::estimate::add_estimate(&conn, itinerary_id, "2180", "JPY", None, None, None)
+            .unwrap();
+
+        let stats = compute_trip_stats(&conn, trip_id).unwrap();
+        assert!(stats.difference_totals.is_none());
+
+        let json = serde_json::to_string_pretty(&stats).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert!(parsed.get("difference_totals").is_none());
     }
 }

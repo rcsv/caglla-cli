@@ -204,4 +204,169 @@ fn cli_trip_stats_json_includes_estimate_totals() {
     assert_eq!(parsed["estimate_count"], 1);
     assert_eq!(parsed["estimate_totals"]["JPY"], 2500);
     assert_eq!(parsed["expense_count"], 0);
+    assert!(parsed.get("difference_totals").is_none());
+}
+
+#[test]
+fn cli_trip_stats_shows_difference_with_estimates_and_expenses() {
+    let dir = temp_workdir();
+    setup_trip_with_itinerary(&dir);
+    assert!(run_cli(
+        &dir,
+        &[
+            "estimate",
+            "add",
+            "--itinerary",
+            "1",
+            "--amount",
+            "180000",
+            "--currency",
+            "JPY",
+        ],
+    )
+    .status
+    .success());
+    assert!(run_cli(
+        &dir,
+        &[
+            "expense",
+            "add",
+            "--itinerary",
+            "1",
+            "--amount",
+            "172500",
+            "--currency",
+            "JPY",
+        ],
+    )
+    .status
+    .success());
+
+    let output = run_cli(&dir, &["trip", "stats", "1"]);
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Planned total:"));
+    assert!(stdout.contains("Actual total:"));
+    assert!(stdout.contains("Difference:"));
+    assert!(stdout.contains("JPY -7,500"));
+}
+
+#[test]
+fn cli_trip_stats_json_includes_difference_totals() {
+    let dir = temp_workdir();
+    setup_trip_with_itinerary(&dir);
+    assert!(run_cli(
+        &dir,
+        &[
+            "estimate",
+            "add",
+            "--itinerary",
+            "1",
+            "--amount",
+            "10000",
+            "--currency",
+            "JPY",
+        ],
+    )
+    .status
+    .success());
+    assert!(run_cli(
+        &dir,
+        &[
+            "estimate",
+            "add",
+            "--itinerary",
+            "1",
+            "--amount",
+            "0.50",
+            "--currency",
+            "USD",
+        ],
+    )
+    .status
+    .success());
+    assert!(run_cli(
+        &dir,
+        &[
+            "expense",
+            "add",
+            "--itinerary",
+            "1",
+            "--amount",
+            "9500",
+            "--currency",
+            "JPY",
+        ],
+    )
+    .status
+    .success());
+
+    let output = run_cli(&dir, &["trip", "stats", "1", "--json"]);
+    assert!(output.status.success());
+    let parsed: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("stats json should parse");
+    assert_eq!(parsed["difference_totals"]["JPY"], -500);
+    assert_eq!(parsed["difference_totals"]["USD"], -50);
+}
+
+#[test]
+fn cli_trip_stats_estimate_only_omits_difference() {
+    let dir = temp_workdir();
+    setup_trip_with_itinerary(&dir);
+    assert!(run_cli(
+        &dir,
+        &[
+            "estimate",
+            "add",
+            "--itinerary",
+            "1",
+            "--amount",
+            "2500",
+            "--currency",
+            "JPY",
+        ],
+    )
+    .status
+    .success());
+
+    let output = run_cli(&dir, &["trip", "stats", "1", "--json"]);
+    assert!(output.status.success());
+    let parsed: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("stats json should parse");
+    assert!(parsed.get("difference_totals").is_none());
+
+    let human = run_cli(&dir, &["trip", "stats", "1"]);
+    let stdout = String::from_utf8_lossy(&human.stdout);
+    assert!(!stdout.contains("Difference:"));
+}
+
+#[test]
+fn cli_trip_stats_expense_only_omits_difference() {
+    let dir = temp_workdir();
+    setup_trip_with_itinerary(&dir);
+    assert!(run_cli(
+        &dir,
+        &[
+            "expense",
+            "add",
+            "--itinerary",
+            "1",
+            "--amount",
+            "1200",
+            "--currency",
+            "JPY",
+        ],
+    )
+    .status
+    .success());
+
+    let output = run_cli(&dir, &["trip", "stats", "1", "--json"]);
+    assert!(output.status.success());
+    let parsed: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("stats json should parse");
+    assert!(parsed.get("difference_totals").is_none());
+
+    let human = run_cli(&dir, &["trip", "stats", "1"]);
+    let stdout = String::from_utf8_lossy(&human.stdout);
+    assert!(!stdout.contains("Difference:"));
 }

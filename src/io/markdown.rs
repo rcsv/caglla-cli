@@ -218,6 +218,16 @@ fn append_overview_section(output: &mut String, stats: &TripStats) {
             ));
         }
     }
+    if let Some(difference_totals) = &stats.difference_totals {
+        output.push_str("- Difference:\n");
+        for (currency, total) in difference_totals {
+            output.push_str(&format!(
+                "  - {} {}\n",
+                currency,
+                crate::money::format_amount_value(*total, currency)
+            ));
+        }
+    }
 }
 
 /// 旅行と日程一覧から Markdown 文字列を組み立てる
@@ -880,5 +890,79 @@ mod tests {
 
         let md = generate_trip_markdown(&conn, trip_id).unwrap();
         assert!(!md.contains("Expenses:"));
+    }
+
+    #[test]
+    fn test_export_md_overview_includes_difference() {
+        let conn = test_db();
+        let trip_id = add_test_trip(&conn, "Difference MD Trip").unwrap();
+        let itinerary_id = add_itinerary_item(
+            &conn,
+            trip_id,
+            1,
+            "Aquarium",
+            None,
+            None,
+            Some(0),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        crate::estimate::add_estimate(
+            &conn,
+            itinerary_id,
+            "180000",
+            "JPY",
+            Some("予算"),
+            None,
+            None,
+        )
+        .unwrap();
+        crate::expense::add_expense(
+            &conn,
+            itinerary_id,
+            "172500",
+            "JPY",
+            Some("実績"),
+            None,
+            None,
+            None,
+            &crate::expense::ExpenseSharedOptions::default(),
+        )
+        .unwrap();
+
+        let md = generate_trip_markdown(&conn, trip_id).unwrap();
+        assert!(md.contains("- Planned total:"));
+        assert!(md.contains("- Actual total:"));
+        assert!(md.contains("- Difference:"));
+        assert!(md.contains("JPY -7,500"));
+    }
+
+    #[test]
+    fn test_export_md_overview_omits_difference_without_both() {
+        let conn = test_db();
+        let trip_id = add_test_trip(&conn, "Estimate Only MD Trip").unwrap();
+        let itinerary_id = add_itinerary_item(
+            &conn,
+            trip_id,
+            1,
+            "Aquarium",
+            None,
+            None,
+            Some(0),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        crate::estimate::add_estimate(&conn, itinerary_id, "2180", "JPY", None, None, None)
+            .unwrap();
+
+        let md = generate_trip_markdown(&conn, trip_id).unwrap();
+        assert!(md.contains("- Planned total:"));
+        assert!(!md.contains("- Difference:"));
     }
 }
