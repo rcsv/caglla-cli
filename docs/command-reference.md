@@ -63,9 +63,9 @@ cargo run -- trip stats 1
 cargo run -- trip stats 1 --json
 ```
 
-集計内容: Days、Itineraries、Checklist 進捗、Category Breakdown、Time Summary（所要時間・移動時間・合計）、Estimates（件数と通貨別 **Planned total**）、Expenses（件数と通貨別 **Actual total**）。
+集計内容: Days、Itineraries、Checklist 進捗、Category Breakdown、Time Summary（所要時間・移動時間・合計）、Estimates（件数と通貨別 **Planned total**）、Expenses（件数と通貨別 **Actual total**）。Estimate と Expense が両方ある場合は通貨別 **Difference**（Actual − Planned）も表示します。
 
-`--json` 出力には `estimate_count` / `estimate_totals`（Planned）と `expense_count` / `expense_totals`（Actual）が含まれます。
+`--json` 出力には `estimate_count` / `estimate_totals`（Planned）、`expense_count` / `expense_totals`（Actual）、および両方がある場合の `difference_totals` が含まれます。
 
 ## Day
 
@@ -195,8 +195,8 @@ cargo run -- estimate delete 3
 | 金額の保存 | DB は最小通貨単位の **整数**（JPY=円、USD `12.50` → 1250 セント） |
 | **export / import** | `trip export` / `trip import` の schema v6 で `days[].itineraries[].estimates[]` に含まれる（id / timestamps は出力しない） |
 | **trip diff** | schema v6+ 同士で added / removed / field changed を比較 |
-| **trip stats** | Trip 配下 Estimate の件数・通貨別 **Planned total**（`estimate_count` / `estimate_totals`） |
-| **export-md** | Itinerary セクション内に「予定費用」表。Overview に Planned / Actual 合計 |
+| **trip stats** | Trip 配下 Estimate の件数・通貨別 **Planned total**（`estimate_count` / `estimate_totals`）。Estimate と Expense 両方がある場合は `difference_totals`（Actual − Planned） |
+| **export-md** | Itinerary セクション内に「予定費用」表。Overview に Planned / Actual 合計。両方がある場合は **Difference** |
 | **itinerary replicate** | source Itinerary 配下 Estimate を target にコピー（デフォルト） |
 
 **未実装:** `--without-estimates`（将来需要が明確になった場合に検討）
