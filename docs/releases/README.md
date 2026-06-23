@@ -4,6 +4,7 @@ GitHub Release 用ノート一覧（新しい順）。
 
 | Version | Title | File |
 |---|---|---|
+| v3.5.0 | Receipt Inbox concept design (documentation-only) | [v3.5.0-notes.md](v3.5.0-notes.md) |
 | v3.4.0 | Itinerary-level Planned vs Actual difference | [v3.4.0-notes.md](v3.4.0-notes.md) |
 | v3.3.0 | Planned vs Actual difference | [v3.3.0-notes.md](v3.3.0-notes.md) |
 | v3.2.1 | Module layout refactor | [v3.2.1-notes.md](v3.2.1-notes.md) |

@@ -98,7 +98,7 @@ cargo run -- itinerary timeline 1
 
 ## Releases
 
-GitHub Release 用ノートは [docs/releases/](docs/releases/) にあります。最新: [v3.4.0](docs/releases/v3.4.0-notes.md)
+GitHub Release 用ノートは [docs/releases/](docs/releases/) にあります。最新: [v3.5.0](docs/releases/v3.5.0-notes.md)（documentation-only — Receipt Inbox concept design）
 
 ## Security
 
