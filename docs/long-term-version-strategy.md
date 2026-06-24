@@ -367,7 +367,7 @@ Receipt Inbox **実装**は [v3.6.0-receipt-inbox-metadata-only-implementation-p
 
 ---
 
-## v3.6 — Receipt Inbox Metadata-only（**実装済み — release candidate**）
+## v3.6 — Receipt Inbox Metadata-only（**v3.6.0 リリース済み**）
 
 ### テーマ
 
@@ -375,19 +375,24 @@ Receipt Inbox **実装**は [v3.6.0-receipt-inbox-metadata-only-implementation-p
 画像なしで Expense 化待ちの未整理支払い候補（Receipt）を Trip スコープで保存・整理する
 ```
 
-### 計画内容（実装済み — Post-Implementation Review 作成済み）
+### リリース内容（v3.6.0 — 実装リリース）
 
 ```text
 receipts table（image_path なし、day_id optional のみ）
 receipt add/list/show/update/ignore/delete
 status: unreviewed / ignored のみ
 export schema v7 — trip-level receipts[]
-Planned vs Actual / trip stats には反映しない
-receipt convert / promote（Itinerary 判明 → Expense 昇格）は future work
-Evidence / Attachment による画像証憑は future work（Receipt 専用 image_path は持たない）
+Planned vs Actual / trip stats / export-md には反映しない
+v6 import 互換維持
 ```
 
+Implementation Plan: [v3.6.0-receipt-inbox-metadata-only-implementation-plan.md](specifications/v3.6.0-receipt-inbox-metadata-only-implementation-plan.md)
+
 Post-Implementation Review: [v3.6.0-receipt-inbox-metadata-only-post-implementation-review.md](specifications/v3.6.0-receipt-inbox-metadata-only-post-implementation-review.md)
+
+リリースノート: [v3.6.0-notes.md](releases/v3.6.0-notes.md)
+
+設計系列: [v3.5.0-receipt-inbox-concept-design.md](specifications/v3.5.0-receipt-inbox-concept-design.md) → Implementation Plan → 実装 → Post-Implementation Review → Release v3.6.0。
 
 ### v3.6.x defer（維持）
 
@@ -538,7 +543,7 @@ CLI を中心とした **旅行プラットフォーム** へ発展させる。
 | **v3.3** | Planned vs Actual Difference | Trip 単位の通貨別差分（stats / export-md） — **v3.3.0 リリース済み** |
 | **v3.4** | Itinerary Planned vs Actual | Itinerary 単位差分（export-md） — **v3.4.0 リリース済み** |
 | **v3.5** | Receipt Inbox | concept design — **v3.5.0 リリース済み**（documentation-only） |
-| **v3.6** | Receipt Inbox metadata-only | 未整理レシート CRUD + export v7 — **実装済み**（release 未実施） |
+| **v3.6** | Receipt Inbox metadata-only | Trip-level Receipt CRUD + export v7 — **v3.6.0 リリース済み** |
 | **v4** | Reservation | 予約情報の正式管理 |
 | **v5** | Travel Book | 共有用しおり（MD/PDF） |
 | **v6** | Travel Journal | 写真・添付付き旅行記 |

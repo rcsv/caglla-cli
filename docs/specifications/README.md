@@ -46,5 +46,5 @@ Caglla CLI の内部モデル・設計仕様（実装前の設計メモを含む
 | [v3.4.0-itinerary-planned-vs-actual-implementation-plan.md](v3.4.0-itinerary-planned-vs-actual-implementation-plan.md) | v3.4.0 Itinerary-level Planned vs Actual Difference Implementation Plan（Phase 1 完了 — PR #61 / #62） |
 | [v3.4.0-itinerary-planned-vs-actual-post-implementation-review.md](v3.4.0-itinerary-planned-vs-actual-post-implementation-review.md) | v3.4.0 Itinerary-level Planned vs Actual Difference Post-Implementation Review |
 | [v3.5.0-receipt-inbox-concept-design.md](v3.5.0-receipt-inbox-concept-design.md) | v3.5.0 Receipt Inbox Concept Design（**v3.5.0 リリース済み** — documentation-only） |
-| [v3.6.0-receipt-inbox-metadata-only-implementation-plan.md](v3.6.0-receipt-inbox-metadata-only-implementation-plan.md) | v3.6.0 Receipt Inbox Metadata-only Implementation Plan（**実装済み** — release candidate） |
-| [v3.6.0-receipt-inbox-metadata-only-post-implementation-review.md](v3.6.0-receipt-inbox-metadata-only-post-implementation-review.md) | v3.6.0 Receipt Inbox Metadata-only Post-Implementation Review（**作成済み** — release notes / version bump 前） |
+| [v3.6.0-receipt-inbox-metadata-only-implementation-plan.md](v3.6.0-receipt-inbox-metadata-only-implementation-plan.md) | v3.6.0 Receipt Inbox Metadata-only Implementation Plan（**v3.6.0 リリース済み**） |
+| [v3.6.0-receipt-inbox-metadata-only-post-implementation-review.md](v3.6.0-receipt-inbox-metadata-only-post-implementation-review.md) | v3.6.0 Receipt Inbox Metadata-only Post-Implementation Review（**v3.6.0 リリース済み**） |

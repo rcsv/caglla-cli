@@ -4,6 +4,7 @@ GitHub Release 用ノート一覧（新しい順）。
 
 | Version | Title | File |
 |---|---|---|
+| v3.6.0 | Receipt Inbox metadata-only support | [v3.6.0-notes.md](v3.6.0-notes.md) |
 | v3.5.0 | Receipt Inbox concept design (documentation-only) | [v3.5.0-notes.md](v3.5.0-notes.md) |
 | v3.4.0 | Itinerary-level Planned vs Actual difference | [v3.4.0-notes.md](v3.4.0-notes.md) |
 | v3.3.0 | Planned vs Actual difference | [v3.3.0-notes.md](v3.3.0-notes.md) |

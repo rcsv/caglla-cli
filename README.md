@@ -64,7 +64,7 @@ cargo run -- itinerary timeline 1
 | Trip | `trip add`, `trip list`, `trip show`, `trip update`, `trip delete`, `trip duplicate`, `trip stats` |
 | Day | `day list`, `day show`, `day update`, `day swap` |
 | Itinerary | `itinerary add`, `itinerary list`, `itinerary show`, `itinerary update`, `itinerary delete`, `itinerary timeline` |
-| Note / Expense / Estimate / Reservation | `note add/list/...`, `expense add/list/...`, `estimate add/list/...`, `reservation add/list/...` |
+| Note / Expense / Estimate / Receipt / Reservation | `note add/list/...`, `expense add/list/...`, `estimate add/list/...`, `receipt add/list/...`, `reservation add/list/...` |
 | Checklist | `checklist add/list/check/...`, `trip checklist-generate` |
 | Export | `trip export`, `trip import`, `trip validate-export`, `trip diff`, `trip export-md` |
 | Diagnostics | `trip doctor`, `trip advisor` |
@@ -99,7 +99,7 @@ cargo run -- itinerary timeline 1
 
 ## Releases
 
-GitHub Release 用ノートは [docs/releases/](docs/releases/) にあります。最新: [v3.5.0](docs/releases/v3.5.0-notes.md)（documentation-only — Receipt Inbox concept design）
+GitHub Release 用ノートは [docs/releases/](docs/releases/) にあります。最新: [v3.6.0](docs/releases/v3.6.0-notes.md)（Receipt Inbox metadata-only support — Trip-level `receipts[]`, export schema v7）
 
 ## Security
 
