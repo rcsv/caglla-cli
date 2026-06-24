@@ -367,27 +367,29 @@ Receipt Inbox **実装**は [v3.6.0-receipt-inbox-metadata-only-implementation-p
 
 ---
 
-## v3.6 — Receipt Inbox Metadata-only（**実装済み — release は別途**）
+## v3.6 — Receipt Inbox Metadata-only（**実装済み — release candidate**）
 
 ### テーマ
 
 ```text
-画像なしで未整理の支払い証拠（Receipt）を Trip スコープで保存・整理する
+画像なしで Expense 化待ちの未整理支払い候補（Receipt）を Trip スコープで保存・整理する
 ```
 
-### 計画内容（実装済み — release 前に lifecycle 単純化）
+### 計画内容（実装済み — Post-Implementation Review 作成済み）
 
 ```text
 receipts table（image_path なし、day_id optional のみ）
 receipt add/list/show/update/ignore/delete
 status: unreviewed / ignored のみ
-export schema v7 — trip-level receipts[]（day_ref optional）
+export schema v7 — trip-level receipts[]
 Planned vs Actual / trip stats には反映しない
 receipt convert / promote（Itinerary 判明 → Expense 昇格）は future work
 Evidence / Attachment による画像証憑は future work（Receipt 専用 image_path は持たない）
 ```
 
-### v3.6.x defer
+Post-Implementation Review: [v3.6.0-receipt-inbox-metadata-only-post-implementation-review.md](specifications/v3.6.0-receipt-inbox-metadata-only-post-implementation-review.md)
+
+### v3.6.x defer（維持）
 
 ```text
 receipt convert / promote（Expense 作成ロジック接続）
