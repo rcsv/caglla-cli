@@ -207,7 +207,7 @@ Implementation Plan: [specifications/estimate-implementation-plan.md](specificat
 
 ## Receipt Inbox（metadata-only）
 
-Trip 直下の **未整理支払い証拠**（Receipt）。Expense（確定 Actual）ではありません。`image_path` / OCR / Attachment は **非対象**。
+Trip 直下の **Expense 化待ちの未整理支払い候補**（Receipt）。Expense（確定 Actual）ではありません。`image_path` / OCR / Attachment は **非対象**（将来の証憑画像は Receipt / Expense 共通の Evidence / Attachment レイヤーで検討）。
 
 ```bash
 cargo run -- receipt add --trip 1 --day 1 --amount 1700 --currency JPY --memo "これなんだっけ？"
@@ -223,9 +223,6 @@ cargo run -- receipt update 3 --memo "おかんのお土産っぽい"
 cargo run -- receipt update 3 --amount 1700 --currency JPY
 cargo run -- receipt update 3 --occurred-date 2026-04-26
 
-cargo run -- receipt link 3 --day 1
-cargo run -- receipt link 3 --itinerary 12
-
 cargo run -- receipt ignore 3 --memo "旅行費用ではない"
 cargo run -- receipt delete 3
 ```
@@ -234,13 +231,12 @@ cargo run -- receipt delete 3
 |---|---|
 | 親 | **Trip**（`receipts[]` は export で Trip-level。Itinerary 配下にはネストしない） |
 | `--amount` / `--currency` | **ペア必須**（片方だけはエラー）。どちらも省略可（その場合は `--memo` 必須） |
-| `add` の default status | `unreviewed`（`--day` / `--itinerary` 指定でも自動で `linked` にしない） |
-| `receipt link` | Day / Itinerary 参照を設定し status を `linked` にする（Expense 化はしない） |
+| `add` の default status | `unreviewed` |
 | `receipt ignore` | status を `ignored`。amount / currency / memo は保持 |
-| status 値 | `unreviewed` / `linked` / `converted` / `ignored` のみ |
-| **export / import** | schema **v7** で `receipts[]`（Trip-level）。v6 import は `receipts` 省略可 |
+| status 値 | **`unreviewed` / `ignored` のみ**（user-facing） |
+| **export / import** | schema **v7** で `receipts[]`（Trip-level、`day_ref` optional）。v6 import は `receipts` 省略可 |
 | **trip stats / export-md** | Receipt は **含めない**（Planned / Actual / Difference は Estimate + Expense のみ） |
-| **未実装** | `receipt convert`（Expense 化）は deferred |
+| **未実装** | `receipt convert` / `receipt promote`（Itinerary 判明 → Expense 昇格）、Evidence / Attachment 画像証憑 |
 
 設計: [specifications/v3.5.0-receipt-inbox-concept-design.md](specifications/v3.5.0-receipt-inbox-concept-design.md)  
 Implementation Plan: [specifications/v3.6.0-receipt-inbox-metadata-only-implementation-plan.md](specifications/v3.6.0-receipt-inbox-metadata-only-implementation-plan.md)

@@ -126,10 +126,6 @@ pub struct Receipt {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub day_id: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub itinerary_id: Option<i64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub linked_expense_id: Option<i64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub amount: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub currency: Option<String>,
@@ -880,36 +876,11 @@ pub struct ExportReceiptDayRef {
     pub day_number: i64,
 }
 
-/// trip export schema v7 の Receipt Itinerary 参照
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ExportReceiptItineraryRef {
-    pub day_number: i64,
-    pub sort_order: i64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub start_time: Option<String>,
-    pub title: String,
-}
-
-/// trip export schema v7 の Receipt Expense 参照
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ExportReceiptExpenseRef {
-    pub itinerary_ref: ExportReceiptItineraryRef,
-    pub expense_sort_order: i64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub expense_title: Option<String>,
-    pub amount: i64,
-    pub currency: String,
-}
-
 /// trip export schema v7 の Receipt エントリ（DB id / image_path は含めない）
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ExportReceiptV7 {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub day_ref: Option<ExportReceiptDayRef>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub itinerary_ref: Option<ExportReceiptItineraryRef>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub linked_expense_ref: Option<ExportReceiptExpenseRef>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub amount: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]

@@ -800,9 +800,6 @@ pub enum ReceiptAction {
         /// 日目（任意）
         #[arg(long)]
         day: Option<i64>,
-        /// Itinerary ID（任意）
-        #[arg(long)]
-        itinerary: Option<i64>,
         /// 金額（任意。`--currency` とセット）
         #[arg(long)]
         amount: Option<String>,
@@ -824,7 +821,7 @@ pub enum ReceiptAction {
         /// 未確認（`unreviewed`）のみ
         #[arg(long)]
         unreviewed: bool,
-        /// status で絞り込み（`unreviewed` / `linked` / `converted` / `ignored`）
+        /// status で絞り込み（`unreviewed` / `ignored`）
         #[arg(long)]
         status: Option<String>,
         /// JSON 形式で出力する
@@ -846,9 +843,6 @@ pub enum ReceiptAction {
         /// 日目
         #[arg(long)]
         day: Option<i64>,
-        /// Itinerary ID
-        #[arg(long)]
-        itinerary: Option<i64>,
         /// 金額（`--currency` とセット）
         #[arg(long)]
         amount: Option<String>,
@@ -864,9 +858,6 @@ pub enum ReceiptAction {
         /// day 紐づけをクリア
         #[arg(long)]
         clear_day: bool,
-        /// itinerary 紐づけをクリア
-        #[arg(long)]
-        clear_itinerary: bool,
         /// amount / currency をクリア
         #[arg(long)]
         clear_amount: bool,
@@ -876,17 +867,6 @@ pub enum ReceiptAction {
         /// memo をクリア
         #[arg(long)]
         clear_memo: bool,
-    },
-    /// Day / Itinerary に紐づける（status を `linked` にする）
-    Link {
-        /// Receipt ID
-        id: i64,
-        /// 日目
-        #[arg(long)]
-        day: Option<i64>,
-        /// Itinerary ID
-        #[arg(long)]
-        itinerary: Option<i64>,
     },
     /// Receipt を対象外（`ignored`）にする
     Ignore {

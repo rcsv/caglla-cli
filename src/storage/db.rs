@@ -325,6 +325,7 @@ pub(crate) fn init_db(conn: &Connection) -> Result<()> {
     crate::expense::migrate_expenses_shared_expense(conn)?;
     crate::estimate::migrate_estimates(conn)?;
     crate::receipt::migrate_receipts(conn)?;
+    crate::receipt::migrate_receipts_simplified_schema(conn)?;
     Ok(())
 }
 

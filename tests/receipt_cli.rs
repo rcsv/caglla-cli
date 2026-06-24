@@ -20,7 +20,7 @@ fn temp_workdir() -> std::path::PathBuf {
     dir
 }
 
-fn setup_trip_with_itinerary(dir: &std::path::Path) -> i64 {
+fn setup_trip(dir: &std::path::Path) {
     assert!(run_cli(dir, &["db", "reset"]).status.success());
     assert!(run_cli(
         dir,
@@ -36,18 +36,12 @@ fn setup_trip_with_itinerary(dir: &std::path::Path) -> i64 {
     )
     .status
     .success());
-    assert!(
-        run_cli(dir, &["itinerary", "add", "1", "--day", "1", "Shop"],)
-            .status
-            .success()
-    );
-    1
 }
 
 #[test]
-fn cli_receipt_add_list_show_update_link_ignore_delete() {
+fn cli_receipt_add_list_show_update_ignore_delete() {
     let dir = temp_workdir();
-    setup_trip_with_itinerary(&dir);
+    setup_trip(&dir);
 
     assert!(run_cli(
         &dir,
@@ -88,6 +82,8 @@ fn cli_receipt_add_list_show_update_link_ignore_delete() {
     assert_eq!(show["amount"], 1700);
     assert_eq!(show["currency"], "JPY");
     assert_eq!(show["memo"], "これなんだっけ？");
+    assert!(show.get("itinerary_id").is_none());
+    assert!(show.get("linked_expense_id").is_none());
 
     assert!(run_cli(
         &dir,
@@ -95,20 +91,6 @@ fn cli_receipt_add_list_show_update_link_ignore_delete() {
     )
     .status
     .success());
-
-    assert!(run_cli(&dir, &["receipt", "link", "1", "--day", "1"])
-        .status
-        .success());
-    let linked = run_cli(&dir, &["receipt", "show", "1", "--json"]);
-    let linked_json: serde_json::Value = serde_json::from_slice(&linked.stdout).unwrap();
-    assert_eq!(linked_json["status"], "linked");
-
-    assert!(run_cli(&dir, &["receipt", "link", "1", "--itinerary", "1"])
-        .status
-        .success());
-    let linked_it: serde_json::Value =
-        serde_json::from_slice(&run_cli(&dir, &["receipt", "show", "1", "--json"]).stdout).unwrap();
-    assert_eq!(linked_it["itinerary_id"], 1);
 
     assert!(run_cli(
         &dir,
@@ -130,13 +112,27 @@ fn cli_receipt_add_list_show_update_link_ignore_delete() {
 
     assert!(run_cli(&dir, &["receipt", "delete", "1"]).status.success());
     let empty = run_cli(&dir, &["receipt", "list", "--trip", "1"]);
-    assert!(!String::from_utf8_lossy(&empty.stdout).contains("1700"));
+    assert!(!String::from_utf8_lossy(&empty.stdout).contains("1,700"));
+}
+
+#[test]
+fn cli_receipt_link_command_removed() {
+    let dir = temp_workdir();
+    setup_trip(&dir);
+    assert!(
+        run_cli(&dir, &["receipt", "add", "--trip", "1", "--memo", "inbox",],)
+            .status
+            .success()
+    );
+
+    let output = run_cli(&dir, &["receipt", "link", "1", "--day", "1"]);
+    assert!(!output.status.success());
 }
 
 #[test]
 fn cli_receipt_validation_amount_currency_pair() {
     let dir = temp_workdir();
-    setup_trip_with_itinerary(&dir);
+    setup_trip(&dir);
 
     let amount_only = run_cli(
         &dir,
@@ -172,7 +168,7 @@ fn cli_receipt_validation_amount_currency_pair() {
 #[test]
 fn cli_receipt_list_uses_shared_amount_formatter() {
     let dir = temp_workdir();
-    setup_trip_with_itinerary(&dir);
+    setup_trip(&dir);
 
     assert!(run_cli(
         &dir,
@@ -198,9 +194,9 @@ fn cli_receipt_list_uses_shared_amount_formatter() {
 }
 
 #[test]
-fn cli_receipt_export_v7_trip_level_not_under_itinerary() {
+fn cli_receipt_export_v7_trip_level_simplified() {
     let dir = temp_workdir();
-    setup_trip_with_itinerary(&dir);
+    setup_trip(&dir);
 
     assert!(run_cli(
         &dir,
@@ -227,11 +223,13 @@ fn cli_receipt_export_v7_trip_level_not_under_itinerary() {
         serde_json::from_str(&fs::read_to_string(&export_path).unwrap()).unwrap();
     assert_eq!(exported["schema_version"], 7);
     assert!(exported["receipts"].as_array().unwrap().len() >= 1);
+    let receipt = &exported["receipts"][0];
+    assert!(receipt.get("itinerary_ref").is_none());
+    assert!(receipt.get("linked_expense_ref").is_none());
+    assert!(exported.get("image_path").is_none());
     let first_day = &exported["days"][0];
     let first_it = &first_day["itineraries"][0];
     assert!(first_it.get("receipts").is_none());
-    assert!(exported.get("image_path").is_none());
-    assert!(exported["receipts"][0].get("image_path").is_none());
 }
 
 #[test]
@@ -293,8 +291,13 @@ fn cli_receipt_v6_import_still_works() {
 #[test]
 fn cli_receipt_does_not_affect_trip_stats() {
     let dir = temp_workdir();
-    setup_trip_with_itinerary(&dir);
+    setup_trip(&dir);
 
+    assert!(
+        run_cli(&dir, &["itinerary", "add", "1", "--day", "1", "Breakfast"])
+            .status
+            .success()
+    );
     assert!(run_cli(
         &dir,
         &[

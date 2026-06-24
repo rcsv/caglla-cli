@@ -125,10 +125,6 @@ struct EstimateFieldChange {
 #[derive(Clone, Eq, PartialEq, Hash, PartialOrd, Ord)]
 struct ReceiptKey {
     day_number: Option<i64>,
-    itinerary_day: Option<i64>,
-    itinerary_sort: Option<i64>,
-    itinerary_start_time: Option<String>,
-    itinerary_title: Option<String>,
     amount: Option<i64>,
     currency: Option<String>,
     occurred_date: Option<String>,
@@ -753,13 +749,6 @@ fn compute_estimates_diff(
 fn receipt_key(receipt: &ExportReceiptV7) -> ReceiptKey {
     ReceiptKey {
         day_number: receipt.day_ref.as_ref().map(|d| d.day_number),
-        itinerary_day: receipt.itinerary_ref.as_ref().map(|it| it.day_number),
-        itinerary_sort: receipt.itinerary_ref.as_ref().map(|it| it.sort_order),
-        itinerary_start_time: receipt
-            .itinerary_ref
-            .as_ref()
-            .and_then(|it| it.start_time.clone()),
-        itinerary_title: receipt.itinerary_ref.as_ref().map(|it| it.title.clone()),
         amount: receipt.amount,
         currency: receipt.currency.clone(),
         occurred_date: receipt.occurred_date.clone(),

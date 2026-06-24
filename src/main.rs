@@ -724,7 +724,6 @@ fn main() -> Result<()> {
             ReceiptAction::Add {
                 trip,
                 day,
-                itinerary,
                 amount,
                 currency,
                 occurred_date,
@@ -735,7 +734,6 @@ fn main() -> Result<()> {
                     crate::receipt::AddReceiptParams {
                         trip_id: trip,
                         day_number: day,
-                        itinerary_id: itinerary,
                         amount_input: amount.as_deref(),
                         currency_input: currency.as_deref(),
                         occurred_date: occurred_date.as_deref(),
@@ -785,13 +783,11 @@ fn main() -> Result<()> {
             ReceiptAction::Update {
                 id,
                 day,
-                itinerary,
                 amount,
                 currency,
                 occurred_date,
                 memo,
                 clear_day,
-                clear_itinerary,
                 clear_amount,
                 clear_occurred_date,
                 clear_memo,
@@ -811,13 +807,11 @@ fn main() -> Result<()> {
                     id,
                     crate::receipt::UpdateReceiptParams {
                         day_number: day,
-                        itinerary_id: itinerary,
                         amount_input: amount.as_deref(),
                         currency_input: currency.as_deref(),
                         occurred_date: occurred_date_update,
                         memo: memo_update,
                         clear_day,
-                        clear_itinerary,
                         clear_amount_currency: clear_amount,
                     },
                 )?;
@@ -825,22 +819,6 @@ fn main() -> Result<()> {
                 let receipt = crate::receipt::get_receipt(&conn, id)?;
                 crate::receipt::print_receipt_detail(&conn, &receipt)?;
             }
-            ReceiptAction::Link { id, day, itinerary } => match (day, itinerary) {
-                (Some(day_number), None) => {
-                    crate::receipt::link_receipt_day(&conn, id, day_number)?;
-                    println!("Receipt を Day {day_number} に紐づけました (ID: {id})");
-                }
-                (None, Some(itinerary_id)) => {
-                    crate::receipt::link_receipt_itinerary(&conn, id, itinerary_id)?;
-                    println!("Receipt を Itinerary {itinerary_id} に紐づけました (ID: {id})");
-                }
-                (Some(_), Some(_)) => {
-                    bail!("--day と --itinerary は同時に指定できません");
-                }
-                (None, None) => {
-                    bail!("--day または --itinerary のいずれかを指定してください");
-                }
-            },
             ReceiptAction::Ignore { id, memo } => {
                 crate::receipt::ignore_receipt(&conn, id, memo.as_deref())?;
                 println!("Receipt を ignored にしました (ID: {id})");

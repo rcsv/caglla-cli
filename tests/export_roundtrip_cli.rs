@@ -650,7 +650,6 @@ fn comparable_export_json(value: &serde_json::Value) -> serde_json::Value {
         .map(|item| {
             serde_json::json!({
                 "day_ref": item.get("day_ref"),
-                "itinerary_ref": item.get("itinerary_ref"),
                 "amount": item.get("amount"),
                 "currency": item.get("currency"),
                 "occurred_date": item.get("occurred_date"),

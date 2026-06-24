@@ -2,20 +2,14 @@ use anyhow::{Context, Result};
 use rusqlite::{params, Connection};
 use serde::Serialize;
 
-use crate::domain::models::{
-    ExportReceiptDayRef, ExportReceiptExpenseRef, ExportReceiptItineraryRef, ExportReceiptV7,
-    ItineraryItem, Receipt,
-};
+use crate::domain::models::{ExportReceiptDayRef, ExportReceiptV7, Receipt};
 use crate::money::{format_amount_display, parse_amount_for_currency, validate_currency_code};
 
 pub(crate) const RECEIPT_STATUS_UNREVIEWED: &str = "unreviewed";
-pub(crate) const RECEIPT_STATUS_LINKED: &str = "linked";
-pub(crate) const RECEIPT_STATUS_CONVERTED: &str = "converted";
 pub(crate) const RECEIPT_STATUS_IGNORED: &str = "ignored";
 
 const RECEIPT_SELECT_SQL: &str = "
-    SELECT id, trip_id, day_id, itinerary_id, linked_expense_id,
-           amount, currency, occurred_date, memo, status, created_at, updated_at
+    SELECT id, trip_id, day_id, amount, currency, occurred_date, memo, status, created_at, updated_at
     FROM receipts";
 
 pub(crate) fn migrate_receipts(conn: &Connection) -> Result<()> {
@@ -24,8 +18,6 @@ pub(crate) fn migrate_receipts(conn: &Connection) -> Result<()> {
             id                  INTEGER PRIMARY KEY AUTOINCREMENT,
             trip_id             INTEGER NOT NULL,
             day_id              INTEGER NULL,
-            itinerary_id        INTEGER NULL,
-            linked_expense_id   INTEGER NULL,
             amount              INTEGER NULL,
             currency            TEXT NULL,
             occurred_date       TEXT NULL,
@@ -47,21 +39,84 @@ pub(crate) fn migrate_receipts(conn: &Connection) -> Result<()> {
         [],
     )
     .context("idx_receipts_day の作成に失敗しました")?;
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_receipts_itinerary ON receipts(itinerary_id)",
-        [],
-    )
-    .context("idx_receipts_itinerary の作成に失敗しました")?;
     Ok(())
+}
+
+fn receipts_table_has_column(conn: &Connection, column: &str) -> Result<bool> {
+    let mut stmt = conn
+        .prepare("PRAGMA table_info(receipts)")
+        .context("receipts テーブル情報の取得に失敗しました")?;
+    let exists = stmt
+        .query_map([], |row| row.get::<_, String>(1))?
+        .collect::<std::result::Result<Vec<_>, _>>()?
+        .iter()
+        .any(|name| name == column);
+    Ok(exists)
+}
+
+/// 旧 receipts スキーマ（itinerary_id / linked_expense_id）から単純化スキーマへ移行する
+pub(crate) fn migrate_receipts_simplified_schema(conn: &Connection) -> Result<()> {
+    if !receipts_table_has_column(conn, "itinerary_id")? {
+        return Ok(());
+    }
+
+    crate::storage::db::with_transaction(conn, "receipts schema simplify", |tx| {
+        tx.execute(
+            "CREATE TABLE receipts_simplified (
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                trip_id             INTEGER NOT NULL,
+                day_id              INTEGER NULL,
+                amount              INTEGER NULL,
+                currency            TEXT NULL,
+                occurred_date       TEXT NULL,
+                memo                TEXT NULL,
+                status              TEXT NOT NULL,
+                created_at          TEXT NOT NULL,
+                updated_at          TEXT NOT NULL
+            )",
+            [],
+        )
+        .context("receipts_simplified テーブルの作成に失敗しました")?;
+        tx.execute(
+            "INSERT INTO receipts_simplified
+             (id, trip_id, day_id, amount, currency, occurred_date, memo, status, created_at, updated_at)
+             SELECT id, trip_id, day_id, amount, currency, occurred_date, memo,
+                    CASE WHEN status = 'ignored' THEN 'ignored' ELSE 'unreviewed' END,
+                    created_at, updated_at
+             FROM receipts",
+            [],
+        )
+        .context("receipts の移行に失敗しました")?;
+        tx.execute("DROP TABLE receipts", [])
+            .context("旧 receipts テーブルの削除に失敗しました")?;
+        tx.execute("ALTER TABLE receipts_simplified RENAME TO receipts", [])
+            .context("receipts テーブルのリネームに失敗しました")?;
+        tx.execute(
+            "CREATE INDEX IF NOT EXISTS idx_receipts_trip ON receipts(trip_id)",
+            [],
+        )
+        .context("idx_receipts_trip の作成に失敗しました")?;
+        tx.execute(
+            "CREATE INDEX IF NOT EXISTS idx_receipts_day ON receipts(day_id)",
+            [],
+        )
+        .context("idx_receipts_day の作成に失敗しました")?;
+        Ok(())
+    })
 }
 
 pub(crate) fn validate_receipt_status(status: &str) -> Result<()> {
     match status {
-        RECEIPT_STATUS_UNREVIEWED
-        | RECEIPT_STATUS_LINKED
-        | RECEIPT_STATUS_CONVERTED
-        | RECEIPT_STATUS_IGNORED => Ok(()),
+        RECEIPT_STATUS_UNREVIEWED | RECEIPT_STATUS_IGNORED => Ok(()),
         _ => anyhow::bail!("invalid receipt status: {status}"),
+    }
+}
+
+fn normalize_import_receipt_status(status: &str) -> Result<String> {
+    match status {
+        RECEIPT_STATUS_UNREVIEWED | RECEIPT_STATUS_IGNORED => Ok(status.to_string()),
+        "linked" | "converted" => Ok(RECEIPT_STATUS_UNREVIEWED.to_string()),
+        _ => validate_receipt_status(status).map(|_| status.to_string()),
     }
 }
 
@@ -70,15 +125,13 @@ fn row_to_receipt(row: &rusqlite::Row) -> rusqlite::Result<Receipt> {
         id: row.get(0)?,
         trip_id: row.get(1)?,
         day_id: row.get(2)?,
-        itinerary_id: row.get(3)?,
-        linked_expense_id: row.get(4)?,
-        amount: row.get(5)?,
-        currency: row.get(6)?,
-        occurred_date: row.get(7)?,
-        memo: row.get(8)?,
-        status: row.get(9)?,
-        created_at: row.get(10)?,
-        updated_at: row.get(11)?,
+        amount: row.get(3)?,
+        currency: row.get(4)?,
+        occurred_date: row.get(5)?,
+        memo: row.get(6)?,
+        status: row.get(7)?,
+        created_at: row.get(8)?,
+        updated_at: row.get(9)?,
     })
 }
 
@@ -117,26 +170,9 @@ fn validate_receipt_has_content(memo: &Option<String>, amount: Option<i64>) -> R
     }
 }
 
-pub(crate) fn ensure_itinerary_belongs_to_trip(
-    conn: &Connection,
-    trip_id: i64,
-    itinerary_id: i64,
-) -> Result<ItineraryItem> {
-    let item = crate::itinerary::get_itinerary_item(conn, itinerary_id)?;
-    if item.trip_id != trip_id {
-        anyhow::bail!("itinerary does not belong to this trip");
-    }
-    Ok(item)
-}
-
-fn day_id_for_itinerary_item(conn: &Connection, item: &ItineraryItem) -> Result<i64> {
-    crate::day::find_day_id_by_trip_and_day_number(conn, item.trip_id, item.day)
-}
-
 pub(crate) struct AddReceiptParams<'a> {
     pub trip_id: i64,
     pub day_number: Option<i64>,
-    pub itinerary_id: Option<i64>,
     pub amount_input: Option<&'a str>,
     pub currency_input: Option<&'a str>,
     pub occurred_date: Option<&'a str>,
@@ -163,34 +199,25 @@ pub(crate) fn add_receipt(conn: &Connection, params: AddReceiptParams<'_>) -> Re
         crate::expense::validate_expense_date(date)?;
     }
 
-    let mut day_id = None;
-    if let Some(day_number) = params.day_number {
-        day_id = Some(crate::day::find_day_id_by_trip_and_day_number(
+    let day_id = if let Some(day_number) = params.day_number {
+        Some(crate::day::find_day_id_by_trip_and_day_number(
             conn,
             params.trip_id,
             day_number,
-        )?);
-    }
-
-    let itinerary_id = params.itinerary_id;
-    if let Some(it_id) = itinerary_id {
-        let item = ensure_itinerary_belongs_to_trip(conn, params.trip_id, it_id)?;
-        if day_id.is_none() {
-            day_id = Some(day_id_for_itinerary_item(conn, &item)?);
-        }
-    }
+        )?)
+    } else {
+        None
+    };
 
     let status = RECEIPT_STATUS_UNREVIEWED;
     let now = crate::storage::db::now_string();
     conn.execute(
         "INSERT INTO receipts
-         (trip_id, day_id, itinerary_id, linked_expense_id, amount, currency,
-          occurred_date, memo, status, created_at, updated_at)
-         VALUES (?1, ?2, ?3, NULL, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+         (trip_id, day_id, amount, currency, occurred_date, memo, status, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
         params![
             params.trip_id,
             day_id,
-            itinerary_id,
             amount,
             currency,
             params.occurred_date,
@@ -256,13 +283,11 @@ pub(crate) fn get_receipt(conn: &Connection, id: i64) -> Result<Receipt> {
 
 pub(crate) struct UpdateReceiptParams<'a> {
     pub day_number: Option<i64>,
-    pub itinerary_id: Option<i64>,
     pub amount_input: Option<&'a str>,
     pub currency_input: Option<&'a str>,
     pub occurred_date: Option<Option<&'a str>>,
     pub memo: Option<Option<&'a str>>,
     pub clear_day: bool,
-    pub clear_itinerary: bool,
     pub clear_amount_currency: bool,
 }
 
@@ -273,7 +298,6 @@ pub(crate) fn update_receipt(
 ) -> Result<()> {
     let existing = get_receipt(conn, id)?;
     let mut day_id = existing.day_id;
-    let mut itinerary_id = existing.itinerary_id;
     let mut amount = existing.amount;
     let mut currency = existing.currency;
     let mut occurred_date = existing.occurred_date.clone();
@@ -282,22 +306,12 @@ pub(crate) fn update_receipt(
     if params.clear_day {
         day_id = None;
     }
-    if params.clear_itinerary {
-        itinerary_id = None;
-    }
     if let Some(day_number) = params.day_number {
         day_id = Some(crate::day::find_day_id_by_trip_and_day_number(
             conn,
             existing.trip_id,
             day_number,
         )?);
-    }
-    if let Some(it_id) = params.itinerary_id {
-        let item = ensure_itinerary_belongs_to_trip(conn, existing.trip_id, it_id)?;
-        itinerary_id = Some(it_id);
-        if params.day_number.is_none() && !params.clear_day {
-            day_id = Some(day_id_for_itinerary_item(conn, &item)?);
-        }
     }
 
     if params.clear_amount_currency {
@@ -334,52 +348,12 @@ pub(crate) fn update_receipt(
 
     let now = crate::storage::db::now_string();
     conn.execute(
-        "UPDATE receipts SET day_id = ?1, itinerary_id = ?2, amount = ?3, currency = ?4,
-         occurred_date = ?5, memo = ?6, updated_at = ?7
-         WHERE id = ?8",
-        params![
-            day_id,
-            itinerary_id,
-            amount,
-            currency,
-            occurred_date,
-            memo,
-            &now,
-            id,
-        ],
+        "UPDATE receipts SET day_id = ?1, amount = ?2, currency = ?3,
+         occurred_date = ?4, memo = ?5, updated_at = ?6
+         WHERE id = ?7",
+        params![day_id, amount, currency, occurred_date, memo, &now, id,],
     )
     .context("Receipt の更新に失敗しました")?;
-    Ok(())
-}
-
-pub(crate) fn link_receipt_day(conn: &Connection, id: i64, day_number: i64) -> Result<()> {
-    let receipt = get_receipt(conn, id)?;
-    let day_id = crate::day::find_day_id_by_trip_and_day_number(conn, receipt.trip_id, day_number)?;
-    let now = crate::storage::db::now_string();
-    conn.execute(
-        "UPDATE receipts SET day_id = ?1, status = ?2, updated_at = ?3 WHERE id = ?4",
-        params![day_id, RECEIPT_STATUS_LINKED, &now, id],
-    )
-    .context("Receipt の紐づけに失敗しました")?;
-    Ok(())
-}
-
-pub(crate) fn link_receipt_itinerary(conn: &Connection, id: i64, itinerary_id: i64) -> Result<()> {
-    let receipt = get_receipt(conn, id)?;
-    let item = ensure_itinerary_belongs_to_trip(conn, receipt.trip_id, itinerary_id)?;
-    let now = crate::storage::db::now_string();
-    conn.execute(
-        "UPDATE receipts SET day_id = ?1, itinerary_id = ?2, status = ?3, updated_at = ?4
-         WHERE id = ?5",
-        params![
-            day_id_for_itinerary_item(conn, &item)?,
-            itinerary_id,
-            RECEIPT_STATUS_LINKED,
-            &now,
-            id,
-        ],
-    )
-    .context("Receipt の紐づけに失敗しました")?;
     Ok(())
 }
 
@@ -422,27 +396,6 @@ pub(crate) fn nullify_receipts_for_day(conn: &Connection, day_id: i64) -> Result
     Ok(())
 }
 
-pub(crate) fn nullify_receipts_for_itinerary(conn: &Connection, itinerary_id: i64) -> Result<()> {
-    let now = crate::storage::db::now_string();
-    conn.execute(
-        "UPDATE receipts SET itinerary_id = NULL, updated_at = ?1 WHERE itinerary_id = ?2",
-        params![&now, itinerary_id],
-    )
-    .context("Receipt itinerary_id のクリアに失敗しました")?;
-    Ok(())
-}
-
-pub(crate) fn nullify_receipts_for_expense(conn: &Connection, expense_id: i64) -> Result<()> {
-    let now = crate::storage::db::now_string();
-    conn.execute(
-        "UPDATE receipts SET linked_expense_id = NULL, updated_at = ?1
-         WHERE linked_expense_id = ?2",
-        params![&now, expense_id],
-    )
-    .context("Receipt linked_expense_id のクリアに失敗しました")?;
-    Ok(())
-}
-
 fn day_number_for_receipt(conn: &Connection, receipt: &Receipt) -> Result<Option<i64>> {
     if let Some(day_id) = receipt.day_id {
         let day_number: i64 = conn.query_row(
@@ -451,10 +404,6 @@ fn day_number_for_receipt(conn: &Connection, receipt: &Receipt) -> Result<Option
             |row| row.get(0),
         )?;
         return Ok(Some(day_number));
-    }
-    if let Some(itinerary_id) = receipt.itinerary_id {
-        let item = crate::itinerary::get_itinerary_item(conn, itinerary_id)?;
-        return Ok(Some(item.day));
     }
     Ok(None)
 }
@@ -476,41 +425,8 @@ pub(crate) fn build_export_receipt_v7(
         None
     };
 
-    let itinerary_ref = if let Some(itinerary_id) = receipt.itinerary_id {
-        let item = crate::itinerary::get_itinerary_item(conn, itinerary_id)?;
-        Some(ExportReceiptItineraryRef {
-            day_number: item.day,
-            sort_order: item.sort_order,
-            start_time: item.start_time.clone(),
-            title: item.title.clone(),
-        })
-    } else {
-        None
-    };
-
-    let linked_expense_ref = if let Some(expense_id) = receipt.linked_expense_id {
-        let expense = crate::expense::get_expense(conn, expense_id)?;
-        let item = crate::itinerary::get_itinerary_item(conn, expense.itinerary_id)?;
-        Some(ExportReceiptExpenseRef {
-            itinerary_ref: ExportReceiptItineraryRef {
-                day_number: item.day,
-                sort_order: item.sort_order,
-                start_time: item.start_time.clone(),
-                title: item.title.clone(),
-            },
-            expense_sort_order: expense.sort_order,
-            expense_title: expense.title.clone(),
-            amount: expense.amount,
-            currency: expense.currency.clone(),
-        })
-    } else {
-        None
-    };
-
     Ok(ExportReceiptV7 {
         day_ref,
-        itinerary_ref,
-        linked_expense_ref,
         amount: receipt.amount,
         currency: receipt.currency.clone(),
         occurred_date: receipt.occurred_date.clone(),
@@ -529,60 +445,12 @@ pub(crate) fn build_export_receipts_for_trip(
         .collect()
 }
 
-fn resolve_itinerary_id_from_ref(
-    conn: &Connection,
-    trip_id: i64,
-    itinerary_ref: &ExportReceiptItineraryRef,
-) -> Result<i64> {
-    let items = crate::itinerary::list_itinerary_items(conn, trip_id)?;
-    let export_items: Vec<ItineraryItem> = items
-        .into_iter()
-        .map(|mut item| {
-            item.trip_id = trip_id;
-            item
-        })
-        .collect();
-    let key = crate::domain::models::ItineraryNoteKey {
-        day_number: itinerary_ref.day_number,
-        sort_order: itinerary_ref.sort_order,
-        start_time: itinerary_ref.start_time.clone(),
-        title: itinerary_ref.title.clone(),
-    };
-    crate::note::resolve_itinerary_id_from_export_items(&export_items, &key)
-}
-
-fn resolve_expense_id_from_ref(
-    conn: &Connection,
-    trip_id: i64,
-    expense_ref: &ExportReceiptExpenseRef,
-) -> Result<i64> {
-    let itinerary_id = resolve_itinerary_id_from_ref(conn, trip_id, &expense_ref.itinerary_ref)?;
-    let expenses = crate::expense::list_expenses_for_itinerary(conn, itinerary_id)?;
-    let mut matches: Vec<i64> = expenses
-        .iter()
-        .filter(|e| {
-            e.sort_order == expense_ref.expense_sort_order
-                && e.amount == expense_ref.amount
-                && e.currency == expense_ref.currency
-                && e.title == expense_ref.expense_title
-        })
-        .map(|e| e.id)
-        .collect();
-    if matches.len() == 1 {
-        Ok(matches.remove(0))
-    } else if matches.is_empty() {
-        anyhow::bail!("linked expense not found in export ref")
-    } else {
-        anyhow::bail!("linked expense ref is ambiguous")
-    }
-}
-
 pub(crate) fn import_receipt_v7(
     conn: &Connection,
     trip_id: i64,
     export: &ExportReceiptV7,
 ) -> Result<i64> {
-    validate_receipt_status(&export.status)?;
+    let status = normalize_import_receipt_status(&export.status)?;
     validate_receipt_amount_currency_pair(export.amount, &export.currency)?;
     if let Some(date) = export.occurred_date.as_deref() {
         crate::expense::validate_expense_date(date)?;
@@ -590,26 +458,12 @@ pub(crate) fn import_receipt_v7(
     let memo = export.memo.clone();
     validate_receipt_has_content(&memo, export.amount)?;
 
-    let mut day_id = None;
-    if let Some(day_ref) = &export.day_ref {
-        day_id = Some(crate::day::find_day_id_by_trip_and_day_number(
+    let day_id = if let Some(day_ref) = &export.day_ref {
+        Some(crate::day::find_day_id_by_trip_and_day_number(
             conn,
             trip_id,
             day_ref.day_number,
-        )?);
-    }
-
-    let mut itinerary_id = None;
-    if let Some(itinerary_ref) = &export.itinerary_ref {
-        itinerary_id = Some(resolve_itinerary_id_from_ref(conn, trip_id, itinerary_ref)?);
-        if day_id.is_none() {
-            let item = crate::itinerary::get_itinerary_item(conn, itinerary_id.unwrap())?;
-            day_id = Some(day_id_for_itinerary_item(conn, &item)?);
-        }
-    }
-
-    let linked_expense_id = if let Some(expense_ref) = &export.linked_expense_ref {
-        Some(resolve_expense_id_from_ref(conn, trip_id, expense_ref)?)
+        )?)
     } else {
         None
     };
@@ -617,24 +471,21 @@ pub(crate) fn import_receipt_v7(
     let now = crate::storage::db::now_string();
     conn.execute(
         "INSERT INTO receipts
-         (trip_id, day_id, itinerary_id, linked_expense_id, amount, currency,
-          occurred_date, memo, status, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+         (trip_id, day_id, amount, currency, occurred_date, memo, status, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
         params![
             trip_id,
             day_id,
-            itinerary_id,
-            linked_expense_id,
             export.amount,
             export.currency,
             export.occurred_date,
             memo,
-            export.status,
+            status,
             &now,
             &now,
         ],
     )
-    .context("Receipt import に失敗しました")?;
+    .context("Receipt の import に失敗しました")?;
     Ok(conn.last_insert_rowid())
 }
 
@@ -684,10 +535,6 @@ pub(crate) struct ReceiptJson {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub day_number: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub itinerary_id: Option<i64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub linked_expense_id: Option<i64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub amount: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub currency: Option<String>,
@@ -706,8 +553,6 @@ pub(crate) fn receipt_to_json(conn: &Connection, receipt: &Receipt) -> Result<Re
         trip_id: receipt.trip_id,
         day_id: receipt.day_id,
         day_number: day_number_for_receipt(conn, receipt)?,
-        itinerary_id: receipt.itinerary_id,
-        linked_expense_id: receipt.linked_expense_id,
         amount: receipt.amount,
         currency: receipt.currency.clone(),
         occurred_date: receipt.occurred_date.clone(),
@@ -737,24 +582,20 @@ pub(crate) fn print_receipt_list(conn: &Connection, receipts: &[Receipt]) -> Res
         return Ok(());
     }
     println!(
-        "{:<4} {:<10} {:<6} {:<6} {:<16} {:<12} Memo",
-        "ID", "Status", "Day", "Itin", "Amount", "Date"
+        "{:<4} {:<10} {:<6} {:<16} {:<12} Memo",
+        "ID", "Status", "Day", "Amount", "Date"
     );
-    println!("{}", "-".repeat(72));
+    println!("{}", "-".repeat(64));
     for receipt in receipts {
         let day_number = day_number_for_receipt(conn, receipt)?
             .map(|d| d.to_string())
-            .unwrap_or_else(|| "-".to_string());
-        let itinerary = receipt
-            .itinerary_id
-            .map(|id| id.to_string())
             .unwrap_or_else(|| "-".to_string());
         let amount = format_amount_optional(receipt.amount, &receipt.currency);
         let date = receipt.occurred_date.as_deref().unwrap_or("-");
         let memo = receipt.memo.as_deref().unwrap_or("-");
         println!(
-            "{:<4} {:<10} {:<6} {:<6} {:<16} {:<12} {}",
-            receipt.id, receipt.status, day_number, itinerary, amount, date, memo,
+            "{:<4} {:<10} {:<6} {:<16} {:<12} {}",
+            receipt.id, receipt.status, day_number, amount, date, memo,
         );
     }
     println!();
@@ -770,20 +611,6 @@ pub(crate) fn print_receipt_detail(conn: &Connection, receipt: &Receipt) -> Resu
         "Day             : {}",
         day_number
             .map(|d| d.to_string())
-            .unwrap_or_else(|| "-".to_string())
-    );
-    println!(
-        "Itinerary ID    : {}",
-        receipt
-            .itinerary_id
-            .map(|id| id.to_string())
-            .unwrap_or_else(|| "-".to_string())
-    );
-    println!(
-        "Linked Expense  : {}",
-        receipt
-            .linked_expense_id
-            .map(|id| id.to_string())
             .unwrap_or_else(|| "-".to_string())
     );
     println!(
@@ -847,7 +674,6 @@ mod tests {
             AddReceiptParams {
                 trip_id,
                 day_number: Some(1),
-                itinerary_id: None,
                 amount_input: Some("1700"),
                 currency_input: Some("JPY"),
                 occurred_date: Some("2026-04-26"),
@@ -864,23 +690,17 @@ mod tests {
             id,
             UpdateReceiptParams {
                 day_number: None,
-                itinerary_id: None,
                 amount_input: None,
                 currency_input: None,
                 occurred_date: None,
                 memo: Some(Some("おかんのお土産っぽい")),
                 clear_day: false,
-                clear_itinerary: false,
                 clear_amount_currency: false,
             },
         )
         .unwrap();
         let updated = get_receipt(&conn, id).unwrap();
         assert_eq!(updated.memo.as_deref(), Some("おかんのお土産っぽい"));
-
-        link_receipt_day(&conn, id, 1).unwrap();
-        let linked = get_receipt(&conn, id).unwrap();
-        assert_eq!(linked.status, RECEIPT_STATUS_LINKED);
 
         ignore_receipt(&conn, id, Some("旅行費用ではない")).unwrap();
         let ignored = get_receipt(&conn, id).unwrap();
@@ -892,51 +712,38 @@ mod tests {
     }
 
     #[test]
-    fn test_receipt_amount_currency_pair_validation() {
+    fn test_invalid_receipt_status_rejected() {
+        assert!(validate_receipt_status("linked").is_err());
+        assert!(validate_receipt_status("converted").is_err());
+        assert!(validate_receipt_status("bogus").is_err());
+    }
+
+    #[test]
+    fn test_import_normalizes_legacy_linked_status() {
         let conn = memory_conn();
         let trip_id = setup_trip(&conn);
-        assert!(add_receipt(
-            &conn,
-            AddReceiptParams {
-                trip_id,
-                day_number: None,
-                itinerary_id: None,
-                amount_input: Some("100"),
-                currency_input: None,
-                occurred_date: None,
-                memo: None,
-            },
-        )
-        .is_err());
-        assert!(add_receipt(
-            &conn,
-            AddReceiptParams {
-                trip_id,
-                day_number: None,
-                itinerary_id: None,
-                amount_input: None,
-                currency_input: Some("JPY"),
-                occurred_date: None,
-                memo: None,
-            },
-        )
-        .is_err());
+        let export = ExportReceiptV7 {
+            day_ref: None,
+            amount: Some(100),
+            currency: Some("JPY".to_string()),
+            occurred_date: None,
+            memo: Some("legacy".to_string()),
+            status: "linked".to_string(),
+        };
+        import_receipt_v7(&conn, trip_id, &export).unwrap();
+        let receipt = list_receipts_for_trip(&conn, trip_id, None).unwrap()[0].clone();
+        assert_eq!(receipt.status, RECEIPT_STATUS_UNREVIEWED);
     }
 
     #[test]
     fn test_export_import_receipt_roundtrip() {
         let (conn, _dir) = temp_conn();
         let trip_id = setup_trip(&conn);
-        let it_id = crate::itinerary::add_itinerary_item(
-            &conn, trip_id, 1, "Shop", None, None, None, None, None, None, None,
-        )
-        .unwrap();
         add_receipt(
             &conn,
             AddReceiptParams {
                 trip_id,
-                day_number: None,
-                itinerary_id: Some(it_id),
+                day_number: Some(1),
                 amount_input: Some("1700"),
                 currency_input: Some("JPY"),
                 occurred_date: None,
@@ -948,14 +755,10 @@ mod tests {
         let exports = build_export_receipts_for_trip(&conn, trip_id).unwrap();
         assert_eq!(exports.len(), 1);
         assert_eq!(exports[0].status, RECEIPT_STATUS_UNREVIEWED);
-        assert!(exports[0].itinerary_ref.is_some());
+        assert!(exports[0].day_ref.is_some());
 
         crate::storage::db::reset_db(&conn).unwrap();
         let new_trip = setup_trip(&conn);
-        crate::itinerary::add_itinerary_item(
-            &conn, new_trip, 1, "Shop", None, None, None, None, None, None, None,
-        )
-        .unwrap();
         import_receipt_v7(&conn, new_trip, &exports[0]).unwrap();
         let imported = list_receipts_for_trip(&conn, new_trip, None).unwrap();
         assert_eq!(imported.len(), 1);
@@ -963,19 +766,15 @@ mod tests {
     }
 
     #[test]
-    fn test_nullify_on_itinerary_delete() {
+    fn test_nullify_on_day_delete() {
         let conn = memory_conn();
         let trip_id = setup_trip(&conn);
-        let it_id = crate::itinerary::add_itinerary_item(
-            &conn, trip_id, 1, "Shop", None, None, None, None, None, None, None,
-        )
-        .unwrap();
+        let day_id = crate::day::find_day_id_by_trip_and_day_number(&conn, trip_id, 1).unwrap();
         let receipt_id = add_receipt(
             &conn,
             AddReceiptParams {
                 trip_id,
-                day_number: None,
-                itinerary_id: Some(it_id),
+                day_number: Some(1),
                 amount_input: None,
                 currency_input: None,
                 occurred_date: None,
@@ -983,10 +782,9 @@ mod tests {
             },
         )
         .unwrap();
-        nullify_receipts_for_itinerary(&conn, it_id).unwrap();
-        crate::itinerary::delete_itinerary_item(&conn, it_id).unwrap();
+        nullify_receipts_for_day(&conn, day_id).unwrap();
         let receipt = get_receipt(&conn, receipt_id).unwrap();
-        assert!(receipt.itinerary_id.is_none());
+        assert!(receipt.day_id.is_none());
         assert_eq!(receipt.memo.as_deref(), Some("keep"));
     }
 
@@ -995,5 +793,44 @@ mod tests {
         let display = format_amount_optional(Some(-50), &Some("USD".to_string()));
         assert_eq!(display, "-0.50 USD");
         assert!(!display.contains("-0.500"));
+    }
+
+    #[test]
+    fn test_migrate_receipts_simplified_schema_from_legacy() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute(
+            "CREATE TABLE receipts (
+                id INTEGER PRIMARY KEY,
+                trip_id INTEGER NOT NULL,
+                day_id INTEGER NULL,
+                itinerary_id INTEGER NULL,
+                linked_expense_id INTEGER NULL,
+                amount INTEGER NULL,
+                currency TEXT NULL,
+                occurred_date TEXT NULL,
+                memo TEXT NULL,
+                status TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO receipts
+             (id, trip_id, day_id, itinerary_id, linked_expense_id, amount, currency,
+              occurred_date, memo, status, created_at, updated_at)
+             VALUES (1, 1, NULL, 2, 3, 100, 'JPY', NULL, 'x', 'linked', 't', 't')",
+            [],
+        )
+        .unwrap();
+        migrate_receipts_simplified_schema(&conn).unwrap();
+        assert!(!receipts_table_has_column(&conn, "itinerary_id").unwrap());
+        let receipt = conn
+            .query_row("SELECT status FROM receipts WHERE id = 1", [], |row| {
+                row.get::<_, String>(0)
+            })
+            .unwrap();
+        assert_eq!(receipt, RECEIPT_STATUS_UNREVIEWED);
     }
 }

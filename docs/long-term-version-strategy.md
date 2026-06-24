@@ -375,30 +375,27 @@ Receipt Inbox **実装**は [v3.6.0-receipt-inbox-metadata-only-implementation-p
 画像なしで未整理の支払い証拠（Receipt）を Trip スコープで保存・整理する
 ```
 
-### 計画内容（本書時点 — 未実装）
+### 計画内容（実装済み — release 前に lifecycle 単純化）
 
 ```text
-receipts table（image_path なし）
-receipt add/list/show/update/link/ignore/delete
-export schema v7 候補 — trip-level receipts[]
+receipts table（image_path なし、day_id optional のみ）
+receipt add/list/show/update/ignore/delete
+status: unreviewed / ignored のみ
+export schema v7 — trip-level receipts[]（day_ref optional）
 Planned vs Actual / trip stats には反映しない
-receipt convert / post-trip review 表示は deferred 可
+receipt convert / promote（Itinerary 判明 → Expense 昇格）は future work
+Evidence / Attachment による画像証憑は future work（Receipt 専用 image_path は持たない）
 ```
-
-Implementation Plan: [v3.6.0-receipt-inbox-metadata-only-implementation-plan.md](specifications/v3.6.0-receipt-inbox-metadata-only-implementation-plan.md)
-
-設計系列: [v3.5.0-receipt-inbox-concept-design.md](specifications/v3.5.0-receipt-inbox-concept-design.md) → 本 Implementation Plan → Entity Design（未着手）→ 実装 → Release v3.6.0。
 
 ### v3.6.x defer
 
 ```text
-Receipt image handling
-receipt convert（要検討 — 初期実装に含めるか）
+receipt convert / promote（Expense 作成ロジック接続）
+Receipt / Expense 共通の Evidence / Attachment 画像証憑
+Receipt image handling / OCR / automatic receipt parsing
 post-trip review auxiliary / Potential Actual 表示
 Day 単位 Planned vs Actual difference
 Balance / Settlement
-Attachment / Photo 汎用化
-OCR / automatic receipt parsing
 trip stats への Receipt 反映
 ```
 
