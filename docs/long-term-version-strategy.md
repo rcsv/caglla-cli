@@ -352,7 +352,6 @@ Concept Design: [v3.5.0-receipt-inbox-concept-design.md](specifications/v3.5.0-r
 ### v3.5.x defer（実装・拡張）
 
 ```text
-Receipt Inbox 実装（Entity Design / Implementation Plan 未着手 — metadata-only から検討）
 Receipt image handling（image_path 先行実装・export/import・archive・CUI 表示は含む）
 Day 単位 Planned vs Actual difference
 doctor / advisor Estimate / Receipt 活用
@@ -360,9 +359,47 @@ Budget 独立エンティティ
 FX conversion
 Balance / Settlement / advance payment / transfer
 generic Attachment / Photo model
-export / import schema 変更
 --db <path> / CAGLLA_DB / db use
 commands/ への段階移行
+```
+
+Receipt Inbox **実装**は [v3.6.0-receipt-inbox-metadata-only-implementation-plan.md](specifications/v3.6.0-receipt-inbox-metadata-only-implementation-plan.md) で **metadata-only から検討**（export schema v7 候補）。Receipt image は引き続き deferred。
+
+---
+
+## v3.6 — Receipt Inbox Metadata-only（**v3.6.0 候補 — implementation plan**）
+
+### テーマ
+
+```text
+画像なしで未整理の支払い証拠（Receipt）を Trip スコープで保存・整理する
+```
+
+### 計画内容（本書時点 — 未実装）
+
+```text
+receipts table（image_path なし）
+receipt add/list/show/update/link/ignore/delete
+export schema v7 候補 — trip-level receipts[]
+Planned vs Actual / trip stats には反映しない
+receipt convert / post-trip review 表示は deferred 可
+```
+
+Implementation Plan: [v3.6.0-receipt-inbox-metadata-only-implementation-plan.md](specifications/v3.6.0-receipt-inbox-metadata-only-implementation-plan.md)
+
+設計系列: [v3.5.0-receipt-inbox-concept-design.md](specifications/v3.5.0-receipt-inbox-concept-design.md) → 本 Implementation Plan → Entity Design（未着手）→ 実装 → Release v3.6.0。
+
+### v3.6.x defer
+
+```text
+Receipt image handling
+receipt convert（要検討 — 初期実装に含めるか）
+post-trip review auxiliary / Potential Actual 表示
+Day 単位 Planned vs Actual difference
+Balance / Settlement
+Attachment / Photo 汎用化
+OCR / automatic receipt parsing
+trip stats への Receipt 反映
 ```
 
 ---
@@ -501,7 +538,8 @@ CLI を中心とした **旅行プラットフォーム** へ発展させる。
 | **v3.2.1** | Module Layout | `src/` 責務別 module 整理（refactor） |
 | **v3.3** | Planned vs Actual Difference | Trip 単位の通貨別差分（stats / export-md） — **v3.3.0 リリース済み** |
 | **v3.4** | Itinerary Planned vs Actual | Itinerary 単位差分（export-md） — **v3.4.0 リリース済み** |
-| **v3.5** | Receipt Inbox | 未整理レシート concept design — **v3.5.0 リリース済み**（documentation-only） |
+| **v3.5** | Receipt Inbox | concept design — **v3.5.0 リリース済み**（documentation-only） |
+| **v3.6** | Receipt Inbox metadata-only | 未整理レシート CRUD + export v7 候補 — **implementation plan** |
 | **v4** | Reservation | 予約情報の正式管理 |
 | **v5** | Travel Book | 共有用しおり（MD/PDF） |
 | **v6** | Travel Journal | 写真・添付付き旅行記 |
