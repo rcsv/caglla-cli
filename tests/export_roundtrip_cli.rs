@@ -204,7 +204,7 @@ fn cli_export_import_reexport_roundtrip_with_notes() {
 
     let exported: serde_json::Value =
         serde_json::from_str(&fs::read_to_string(&export_path).unwrap()).unwrap();
-    assert_eq!(exported["schema_version"], 7);
+    assert_eq!(exported["schema_version"], 8);
     assert_eq!(exported["notes"].as_array().unwrap().len(), 3);
 
     assert!(run_cli(&dir, &["db", "reset"]).status.success());
@@ -328,7 +328,7 @@ fn cli_export_import_reexport_roundtrip_with_expenses() {
 
     let exported: serde_json::Value =
         serde_json::from_str(&fs::read_to_string(&export_path).unwrap()).unwrap();
-    assert_eq!(exported["schema_version"], 7);
+    assert_eq!(exported["schema_version"], 8);
     assert_eq!(
         exported["days"][1]["itineraries"][0]["expenses"]
             .as_array()
@@ -460,7 +460,7 @@ fn cli_export_import_reexport_roundtrip_with_estimates() {
 
     let exported: serde_json::Value =
         serde_json::from_str(&fs::read_to_string(&export_path).unwrap()).unwrap();
-    assert_eq!(exported["schema_version"], 7);
+    assert_eq!(exported["schema_version"], 8);
     assert_eq!(
         exported["days"][0]["itineraries"][0]["estimates"]
             .as_array()

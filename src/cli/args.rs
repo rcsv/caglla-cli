@@ -818,6 +818,12 @@ pub enum ReceiptAction {
         /// Trip ID（必須）
         #[arg(long)]
         trip: i64,
+        /// Trash のみ表示する（`trashed_at IS NOT NULL`）
+        #[arg(long)]
+        trashed: bool,
+        /// Trash を含めて表示する（default は active のみ）
+        #[arg(long)]
+        all: bool,
         /// 未確認（`unreviewed`）のみ
         #[arg(long)]
         unreviewed: bool,
@@ -827,6 +833,33 @@ pub enum ReceiptAction {
         /// JSON 形式で出力する
         #[arg(long)]
         json: bool,
+    },
+    /// Receipt を Itinerary に割り当てて Expense 化する（Receipt は削除される）
+    Assign {
+        /// Receipt ID
+        id: i64,
+        /// Itinerary ID（必須）
+        #[arg(long)]
+        itinerary: i64,
+        /// assign 時に金額を補完する（`--currency` とセット）
+        #[arg(long)]
+        amount: Option<String>,
+        /// assign 時に通貨を補完する（`--amount` とセット）
+        #[arg(long)]
+        currency: Option<String>,
+        /// assign 時にメモを補完する（Expense title の候補になる）
+        #[arg(long)]
+        memo: Option<String>,
+    },
+    /// Receipt を Trash に移動する（物理削除しない）
+    Trash {
+        /// Receipt ID
+        id: i64,
+    },
+    /// Trash から Receipt を復元する（Inbox に戻す）
+    Restore {
+        /// Receipt ID
+        id: i64,
     },
     /// Receipt 詳細を表示
     Show {

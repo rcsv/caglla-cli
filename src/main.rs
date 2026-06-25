@@ -746,16 +746,28 @@ fn main() -> Result<()> {
             }
             ReceiptAction::List {
                 trip,
+                trashed,
+                all,
                 unreviewed,
                 status,
                 json,
             } => {
+                if trashed && all {
+                    anyhow::bail!("--trashed と --all は同時に指定できません");
+                }
                 let status_filter = if unreviewed {
                     Some(crate::receipt::RECEIPT_STATUS_UNREVIEWED)
                 } else {
                     status.as_deref()
                 };
-                let receipts = crate::receipt::list_receipts_for_trip(&conn, trip, status_filter)?;
+                let pending_summary = crate::receipt::compute_pending_receipt_summary(&conn, trip)?;
+                let receipts = crate::receipt::list_receipts_for_trip(
+                    &conn,
+                    trip,
+                    status_filter,
+                    all,
+                    trashed,
+                )?;
                 if json {
                     let json_receipts: Vec<crate::receipt::ReceiptJson> = receipts
                         .iter()
@@ -763,10 +775,12 @@ fn main() -> Result<()> {
                         .collect::<Result<Vec<_>>>()?;
                     crate::output::json::print_json(&crate::receipt::ReceiptListJson {
                         trip_id: trip,
+                        summary: pending_summary,
                         receipts: json_receipts,
                     })?;
                 } else {
                     println!("旅行 ID {trip} の Receipt:");
+                    crate::receipt::print_pending_receipt_summary(&pending_summary);
                     crate::receipt::print_receipt_list(&conn, &receipts)?;
                 }
             }
@@ -819,9 +833,38 @@ fn main() -> Result<()> {
                 let receipt = crate::receipt::get_receipt(&conn, id)?;
                 crate::receipt::print_receipt_detail(&conn, &receipt)?;
             }
+            ReceiptAction::Assign {
+                id,
+                itinerary,
+                amount,
+                currency,
+                memo,
+            } => {
+                let expense_id = crate::receipt::assign_receipt_to_itinerary(
+                    &conn,
+                    id,
+                    itinerary,
+                    amount.as_deref(),
+                    currency.as_deref(),
+                    memo.as_deref(),
+                )?;
+                println!("Receipt を Expense に昇格しました (Expense ID: {expense_id})");
+            }
+            ReceiptAction::Trash { id } => {
+                crate::receipt::trash_receipt(&conn, id)?;
+                println!("Receipt を Trash に移動しました (ID: {id})");
+                let receipt = crate::receipt::get_receipt(&conn, id)?;
+                crate::receipt::print_receipt_detail(&conn, &receipt)?;
+            }
+            ReceiptAction::Restore { id } => {
+                crate::receipt::restore_receipt(&conn, id)?;
+                println!("Receipt を復元しました (ID: {id})");
+                let receipt = crate::receipt::get_receipt(&conn, id)?;
+                crate::receipt::print_receipt_detail(&conn, &receipt)?;
+            }
             ReceiptAction::Ignore { id, memo } => {
                 crate::receipt::ignore_receipt(&conn, id, memo.as_deref())?;
-                println!("Receipt を ignored にしました (ID: {id})");
+                println!("Receipt を Trash に移動しました (deprecated: ignore) (ID: {id})");
                 let receipt = crate::receipt::get_receipt(&conn, id)?;
                 crate::receipt::print_receipt_detail(&conn, &receipt)?;
             }

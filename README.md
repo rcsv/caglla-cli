@@ -11,7 +11,7 @@ Caglla.Travel のコマンドライン版です。旅行の計画を、ターミ
 - **Itinerary（行動・予定）** の登録・一覧・詳細・更新・削除・タイムライン表示
 - **Note（メモ）** / **Expense（支出）** / **Estimate（予定費用 / Planned Budget）** / **Receipt Inbox（Expense 化待ちの未整理支払い候補）** / **Participant（参加者）** の CRUD
 - **Checklist（持ち物・準備リスト）** の管理と自動生成（`checklist-generate`）
-- **JSON エクスポート / インポート**（`trip export` / `trip import`、現行 **schema v7**）と `trip diff`
+- **JSON エクスポート / インポート**（`trip export` / `trip import`、現行 **schema v8**）と `trip diff`
 - **Markdown エクスポート**（`trip export-md`）による旅行しおり出力
 - **trip stats** による旅行統計
 - **trip doctor / advisor** による旅行計画の点検と改善提案

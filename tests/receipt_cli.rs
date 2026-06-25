@@ -105,7 +105,15 @@ fn cli_receipt_add_list_show_update_ignore_delete() {
 
     let ignored_list = run_cli(
         &dir,
-        &["receipt", "list", "--trip", "1", "--status", "ignored"],
+        &[
+            "receipt",
+            "list",
+            "--trip",
+            "1",
+            "--trashed",
+            "--status",
+            "ignored",
+        ],
     );
     assert!(ignored_list.status.success());
     assert!(String::from_utf8_lossy(&ignored_list.stdout).contains("ignored"));
@@ -194,7 +202,7 @@ fn cli_receipt_list_uses_shared_amount_formatter() {
 }
 
 #[test]
-fn cli_receipt_export_v7_trip_level_simplified() {
+fn cli_receipt_export_v8_trip_level_simplified() {
     let dir = temp_workdir();
     setup_trip(&dir);
 
@@ -221,7 +229,7 @@ fn cli_receipt_export_v7_trip_level_simplified() {
 
     let exported: serde_json::Value =
         serde_json::from_str(&fs::read_to_string(&export_path).unwrap()).unwrap();
-    assert_eq!(exported["schema_version"], 7);
+    assert_eq!(exported["schema_version"], 8);
     assert!(exported["receipts"].as_array().unwrap().len() >= 1);
     let receipt = &exported["receipts"][0];
     assert!(receipt.get("itinerary_ref").is_none());

@@ -125,6 +125,9 @@ pub struct Receipt {
     pub trip_id: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub day_id: Option<i64>,
+    /// `trashed_at` がある場合、この Receipt は Trash にある（Inbox の active ではない）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trashed_at: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub amount: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -677,7 +680,10 @@ pub struct ParticipantCounts {
 }
 
 /// trip export 用 JSON の schema バージョン（現行 export）
-pub const TRIP_EXPORT_SCHEMA_VERSION: i32 = 7;
+pub const TRIP_EXPORT_SCHEMA_VERSION: i32 = 8;
+
+/// trip export schema v7（import 互換）
+pub const TRIP_EXPORT_SCHEMA_VERSION_V7: i32 = 7;
 
 /// trip export schema v6（import 互換）
 pub const TRIP_EXPORT_SCHEMA_VERSION_V6: i32 = 6;
@@ -742,6 +748,7 @@ pub fn is_supported_export_schema_version(schema_version: Option<i32>) -> bool {
             | TRIP_EXPORT_SCHEMA_VERSION_V4
             | TRIP_EXPORT_SCHEMA_VERSION_V5
             | TRIP_EXPORT_SCHEMA_VERSION_V6
+            | TRIP_EXPORT_SCHEMA_VERSION_V7
             | TRIP_EXPORT_SCHEMA_VERSION
     )
 }
@@ -890,6 +897,9 @@ pub struct ExportReceiptV7 {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub memo: Option<String>,
     pub status: String,
+    /// schema v8+: Trash 導入。v7 import 互換のため optional。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trashed_at: Option<String>,
 }
 
 /// trip export schema v3 の JSON 構造

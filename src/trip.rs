@@ -9,6 +9,7 @@ use crate::domain::models::{
     TripExport, TripExportMetadata, TripExportV3, TripImportSummary, TRIP_EXPORT_GENERATOR,
     TRIP_EXPORT_SCHEMA_VERSION, TRIP_EXPORT_SCHEMA_VERSION_V1, TRIP_EXPORT_SCHEMA_VERSION_V3,
     TRIP_EXPORT_SCHEMA_VERSION_V4, TRIP_EXPORT_SCHEMA_VERSION_V5, TRIP_EXPORT_SCHEMA_VERSION_V6,
+    TRIP_EXPORT_SCHEMA_VERSION_V7,
 };
 use crate::storage::db::now_string;
 
@@ -710,7 +711,7 @@ pub(crate) fn analyze_trip_export_json(file: &str, json: &str) -> ExportValidati
         let receipts_is_array = root
             .get("receipts")
             .map(|v| v.is_array())
-            .unwrap_or(effective_schema < TRIP_EXPORT_SCHEMA_VERSION);
+            .unwrap_or(effective_schema < TRIP_EXPORT_SCHEMA_VERSION_V7);
         push_check(
             &mut report.checks,
             ExportValidationCheckId::Receipts,
@@ -2345,13 +2346,13 @@ mod tests {
     }
 
     #[test]
-    fn test_export_schema_version_is_seven() {
+    fn test_export_schema_version_is_eight() {
         let conn = test_db();
         let trip_id = add_test_trip(&conn, "Metadata Trip").unwrap();
 
         let json = export_trip_to_json(&conn, trip_id).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
-        assert_eq!(parsed["schema_version"], 7);
+        assert_eq!(parsed["schema_version"], 8);
         assert!(parsed.get("notes").is_some());
         assert!(parsed.get("days").is_some());
         assert!(parsed.get("participants").is_some());
@@ -2389,7 +2390,7 @@ mod tests {
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed["generator"], TRIP_EXPORT_GENERATOR);
         assert_eq!(parsed["generator_version"], env!("CARGO_PKG_VERSION"));
-        assert_eq!(parsed["schema_version"], 7);
+        assert_eq!(parsed["schema_version"], 8);
     }
 
     #[test]

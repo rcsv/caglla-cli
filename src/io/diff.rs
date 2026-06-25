@@ -125,6 +125,7 @@ struct EstimateFieldChange {
 #[derive(Clone, Eq, PartialEq, Hash, PartialOrd, Ord)]
 struct ReceiptKey {
     day_number: Option<i64>,
+    trashed_at: Option<String>,
     amount: Option<i64>,
     currency: Option<String>,
     occurred_date: Option<String>,
@@ -749,6 +750,7 @@ fn compute_estimates_diff(
 fn receipt_key(receipt: &ExportReceiptV7) -> ReceiptKey {
     ReceiptKey {
         day_number: receipt.day_ref.as_ref().map(|d| d.day_number),
+        trashed_at: receipt.trashed_at.clone(),
         amount: receipt.amount,
         currency: receipt.currency.clone(),
         occurred_date: receipt.occurred_date.clone(),
@@ -773,9 +775,14 @@ fn format_receipt_line(receipt: &ExportReceiptV7) -> String {
         .unwrap_or_else(|| "-".to_string());
     let currency = receipt.currency.as_deref().unwrap_or("-");
     let memo = receipt.memo.as_deref().unwrap_or("-");
+    let trash = if receipt.trashed_at.is_some() {
+        " / trashed"
+    } else {
+        ""
+    };
     format!(
-        "Day {day} / {amount} {currency} / {memo} / {}",
-        receipt.status
+        "Day {day} / {amount} {currency} / {memo} / {}{}",
+        receipt.status, trash
     )
 }
 
@@ -795,6 +802,11 @@ fn receipt_content_changed(
         .unwrap_or_else(|| "-".to_string());
     let fields = [
         ("day_ref", old_day, new_day),
+        (
+            "trashed_at",
+            fmt_diff_option_str(&old.trashed_at),
+            fmt_diff_option_str(&new.trashed_at),
+        ),
         (
             "amount",
             fmt_diff_option_i64(old.amount),

@@ -9,7 +9,7 @@ pub(crate) const RECEIPT_STATUS_UNREVIEWED: &str = "unreviewed";
 pub(crate) const RECEIPT_STATUS_IGNORED: &str = "ignored";
 
 const RECEIPT_SELECT_SQL: &str = "
-    SELECT id, trip_id, day_id, amount, currency, occurred_date, memo, status, created_at, updated_at
+    SELECT id, trip_id, day_id, trashed_at, amount, currency, occurred_date, memo, status, created_at, updated_at
     FROM receipts";
 
 pub(crate) fn migrate_receipts(conn: &Connection) -> Result<()> {
@@ -18,6 +18,7 @@ pub(crate) fn migrate_receipts(conn: &Connection) -> Result<()> {
             id                  INTEGER PRIMARY KEY AUTOINCREMENT,
             trip_id             INTEGER NOT NULL,
             day_id              INTEGER NULL,
+            trashed_at          TEXT NULL,
             amount              INTEGER NULL,
             currency            TEXT NULL,
             occurred_date       TEXT NULL,
@@ -29,6 +30,7 @@ pub(crate) fn migrate_receipts(conn: &Connection) -> Result<()> {
         [],
     )
     .context("receipts テーブルの作成に失敗しました")?;
+    crate::storage::db::add_column_if_not_exists(conn, "receipts", "trashed_at", "TEXT NULL")?;
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_receipts_trip ON receipts(trip_id)",
         [],
@@ -39,6 +41,21 @@ pub(crate) fn migrate_receipts(conn: &Connection) -> Result<()> {
         [],
     )
     .context("idx_receipts_day の作成に失敗しました")?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_receipts_trashed ON receipts(trashed_at)",
+        [],
+    )
+    .context("idx_receipts_trashed の作成に失敗しました")?;
+
+    // v3.7+: ignored は Trash として扱う（既存データを normalize）
+    let now = crate::storage::db::now_string();
+    conn.execute(
+        "UPDATE receipts
+         SET trashed_at = ?1
+         WHERE status = 'ignored' AND trashed_at IS NULL",
+        params![&now],
+    )
+    .context("ignored receipts の trashed_at 正規化に失敗しました")?;
     Ok(())
 }
 
@@ -66,6 +83,7 @@ pub(crate) fn migrate_receipts_simplified_schema(conn: &Connection) -> Result<()
                 id                  INTEGER PRIMARY KEY AUTOINCREMENT,
                 trip_id             INTEGER NOT NULL,
                 day_id              INTEGER NULL,
+                trashed_at          TEXT NULL,
                 amount              INTEGER NULL,
                 currency            TEXT NULL,
                 occurred_date       TEXT NULL,
@@ -79,8 +97,10 @@ pub(crate) fn migrate_receipts_simplified_schema(conn: &Connection) -> Result<()
         .context("receipts_simplified テーブルの作成に失敗しました")?;
         tx.execute(
             "INSERT INTO receipts_simplified
-             (id, trip_id, day_id, amount, currency, occurred_date, memo, status, created_at, updated_at)
-             SELECT id, trip_id, day_id, amount, currency, occurred_date, memo,
+             (id, trip_id, day_id, trashed_at, amount, currency, occurred_date, memo, status, created_at, updated_at)
+             SELECT id, trip_id, day_id,
+                    CASE WHEN status = 'ignored' THEN updated_at ELSE NULL END,
+                    amount, currency, occurred_date, memo,
                     CASE WHEN status = 'ignored' THEN 'ignored' ELSE 'unreviewed' END,
                     created_at, updated_at
              FROM receipts",
@@ -101,6 +121,11 @@ pub(crate) fn migrate_receipts_simplified_schema(conn: &Connection) -> Result<()
             [],
         )
         .context("idx_receipts_day の作成に失敗しました")?;
+        tx.execute(
+            "CREATE INDEX IF NOT EXISTS idx_receipts_trashed ON receipts(trashed_at)",
+            [],
+        )
+        .context("idx_receipts_trashed の作成に失敗しました")?;
         Ok(())
     })
 }
@@ -125,13 +150,14 @@ fn row_to_receipt(row: &rusqlite::Row) -> rusqlite::Result<Receipt> {
         id: row.get(0)?,
         trip_id: row.get(1)?,
         day_id: row.get(2)?,
-        amount: row.get(3)?,
-        currency: row.get(4)?,
-        occurred_date: row.get(5)?,
-        memo: row.get(6)?,
-        status: row.get(7)?,
-        created_at: row.get(8)?,
-        updated_at: row.get(9)?,
+        trashed_at: row.get(3)?,
+        amount: row.get(4)?,
+        currency: row.get(5)?,
+        occurred_date: row.get(6)?,
+        memo: row.get(7)?,
+        status: row.get(8)?,
+        created_at: row.get(9)?,
+        updated_at: row.get(10)?,
     })
 }
 
@@ -213,8 +239,8 @@ pub(crate) fn add_receipt(conn: &Connection, params: AddReceiptParams<'_>) -> Re
     let now = crate::storage::db::now_string();
     conn.execute(
         "INSERT INTO receipts
-         (trip_id, day_id, amount, currency, occurred_date, memo, status, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+         (trip_id, day_id, trashed_at, amount, currency, occurred_date, memo, status, created_at, updated_at)
+         VALUES (?1, ?2, NULL, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
         params![
             params.trip_id,
             day_id,
@@ -235,25 +261,25 @@ pub(crate) fn list_receipts_for_trip(
     conn: &Connection,
     trip_id: i64,
     status_filter: Option<&str>,
+    include_trashed: bool,
+    trashed_only: bool,
 ) -> Result<Vec<Receipt>> {
     crate::trip::get_trip(conn, trip_id)?;
     if let Some(status) = status_filter {
         validate_receipt_status(status)?;
     }
 
-    let sql = if status_filter.is_some() {
-        format!(
-            "{RECEIPT_SELECT_SQL}
-             WHERE trip_id = ?1 AND status = ?2
-             ORDER BY id ASC"
-        )
-    } else {
-        format!(
-            "{RECEIPT_SELECT_SQL}
-             WHERE trip_id = ?1
-             ORDER BY id ASC"
-        )
-    };
+    let mut where_clauses = vec!["trip_id = ?1".to_string()];
+    if trashed_only {
+        where_clauses.push("trashed_at IS NOT NULL".to_string());
+    } else if !include_trashed {
+        where_clauses.push("trashed_at IS NULL".to_string());
+    }
+    if status_filter.is_some() {
+        where_clauses.push("status = ?2".to_string());
+    }
+    let where_sql = where_clauses.join(" AND ");
+    let sql = format!("{RECEIPT_SELECT_SQL} WHERE {where_sql} ORDER BY id ASC");
 
     let mut stmt = conn
         .prepare(&sql)
@@ -358,19 +384,126 @@ pub(crate) fn update_receipt(
 }
 
 pub(crate) fn ignore_receipt(conn: &Connection, id: i64, memo: Option<&str>) -> Result<()> {
+    // v3.7+: `ignore` は deprecated alias として `trash` 相当に扱う
     let existing = get_receipt(conn, id)?;
     let new_memo = if let Some(text) = memo {
         normalize_optional_memo(Some(text))?
     } else {
         existing.memo
     };
+    trash_receipt_with_memo(conn, id, new_memo.as_deref())
+}
+
+pub(crate) fn trash_receipt(conn: &Connection, id: i64) -> Result<()> {
+    trash_receipt_with_memo(conn, id, None)
+}
+
+fn trash_receipt_with_memo(conn: &Connection, id: i64, memo: Option<&str>) -> Result<()> {
+    get_receipt(conn, id)?;
+    let new_memo = memo.map(|m| m.to_string());
     let now = crate::storage::db::now_string();
     conn.execute(
-        "UPDATE receipts SET status = ?1, memo = ?2, updated_at = ?3 WHERE id = ?4",
-        params![RECEIPT_STATUS_IGNORED, new_memo, &now, id],
+        "UPDATE receipts
+         SET status = ?1, trashed_at = ?2, memo = COALESCE(?3, memo), updated_at = ?4
+         WHERE id = ?5",
+        params![RECEIPT_STATUS_IGNORED, &now, new_memo, &now, id],
     )
-    .context("Receipt の ignore に失敗しました")?;
+    .context("Receipt の trash に失敗しました")?;
     Ok(())
+}
+
+pub(crate) fn restore_receipt(conn: &Connection, id: i64) -> Result<()> {
+    get_receipt(conn, id)?;
+    let now = crate::storage::db::now_string();
+    conn.execute(
+        "UPDATE receipts
+         SET status = ?1, trashed_at = NULL, updated_at = ?2
+         WHERE id = ?3",
+        params![RECEIPT_STATUS_UNREVIEWED, &now, id],
+    )
+    .context("Receipt の restore に失敗しました")?;
+    Ok(())
+}
+
+pub(crate) fn assign_receipt_to_itinerary(
+    conn: &Connection,
+    receipt_id: i64,
+    itinerary_id: i64,
+    amount_input: Option<&str>,
+    currency_input: Option<&str>,
+    memo_input: Option<&str>,
+) -> Result<i64> {
+    // NOTE: Receipt は Actual ではない。assign により Expense を作ることでのみ Actual に入る。
+    let receipt = get_receipt(conn, receipt_id)?;
+    if receipt.trashed_at.is_some() {
+        anyhow::bail!("cannot assign trashed receipt");
+    }
+
+    // Receipt 側の amount/currency が無い場合は assign で補完できる。
+    let (amount_str, currency_str) = match (
+        receipt.amount,
+        receipt.currency.as_deref(),
+        amount_input,
+        currency_input,
+    ) {
+        (Some(amount), Some(currency), None, None) => (amount.to_string(), currency.to_string()),
+        (_, _, Some(a), Some(c)) => (a.to_string(), c.to_string()),
+        (Some(_), Some(_), Some(_), None) | (Some(_), Some(_), None, Some(_)) => {
+            anyhow::bail!("amount and currency must be provided together")
+        }
+        (None, None, None, None) => anyhow::bail!("amount and currency are required for assign"),
+        (None, None, Some(_), None) | (None, None, None, Some(_)) => {
+            anyhow::bail!("amount and currency must be provided together")
+        }
+        (Some(_), None, _, _) | (None, Some(_), _, _) => {
+            anyhow::bail!("receipt amount/currency pair is invalid")
+        }
+    };
+
+    // Expense title: memo を優先。無ければ amount/currency から自動生成。
+    let merged_memo = memo_input
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+        .or_else(|| receipt.memo.clone());
+    let parsed_currency = validate_currency_code(&currency_str)?;
+    let parsed_amount = parse_amount_for_currency(&amount_str, &parsed_currency)?;
+    let generated_title = format!(
+        "Receipt {}",
+        format_amount_display(parsed_amount, &parsed_currency)
+    );
+    let title = merged_memo.as_deref().unwrap_or(generated_title.as_str());
+
+    // occurred_date は Expense の expense_date として引き継ぐ（存在する場合）。
+    let expense_date = receipt.occurred_date.as_deref();
+
+    let shared = crate::expense::ExpenseSharedOptions {
+        paid_by_participant_id: None,
+        beneficiary_participant_ids: None,
+        clear_paid_by: false,
+        clear_beneficiaries: false,
+    };
+
+    let tx = conn
+        .unchecked_transaction()
+        .context("receipt assign: トランザクション開始に失敗しました")?;
+    let expense_id = crate::expense::add_expense(
+        &tx,
+        itinerary_id,
+        &amount_str,
+        &currency_str,
+        Some(title),
+        None,
+        None,
+        expense_date,
+        &shared,
+    )
+    .context("receipt assign: Expense 作成に失敗しました")?;
+    tx.execute("DELETE FROM receipts WHERE id = ?1", params![receipt_id])
+        .context("receipt assign: Receipt の削除に失敗しました")?;
+    tx.commit()
+        .context("receipt assign: トランザクション確定に失敗しました")?;
+    Ok(expense_id)
 }
 
 pub(crate) fn delete_receipt(conn: &Connection, id: i64) -> Result<()> {
@@ -427,6 +560,7 @@ pub(crate) fn build_export_receipt_v7(
 
     Ok(ExportReceiptV7 {
         day_ref,
+        trashed_at: receipt.trashed_at.clone(),
         amount: receipt.amount,
         currency: receipt.currency.clone(),
         occurred_date: receipt.occurred_date.clone(),
@@ -439,7 +573,8 @@ pub(crate) fn build_export_receipts_for_trip(
     conn: &Connection,
     trip_id: i64,
 ) -> Result<Vec<ExportReceiptV7>> {
-    list_receipts_for_trip(conn, trip_id, None)?
+    // export では trashed Receipt も含める（restore 可能性を保つ）
+    list_receipts_for_trip(conn, trip_id, None, true, false)?
         .iter()
         .map(|r| build_export_receipt_v7(conn, r))
         .collect()
@@ -469,13 +604,21 @@ pub(crate) fn import_receipt_v7(
     };
 
     let now = crate::storage::db::now_string();
+    let trashed_at = if let Some(value) = export.trashed_at.as_deref() {
+        Some(value.to_string())
+    } else if status == RECEIPT_STATUS_IGNORED {
+        Some(now.clone())
+    } else {
+        None
+    };
     conn.execute(
         "INSERT INTO receipts
-         (trip_id, day_id, amount, currency, occurred_date, memo, status, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+         (trip_id, day_id, trashed_at, amount, currency, occurred_date, memo, status, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
         params![
             trip_id,
             day_id,
+            trashed_at,
             export.amount,
             export.currency,
             export.occurred_date,
@@ -493,9 +636,9 @@ pub(crate) fn collect_export_receipt_validation_errors(
     receipts: &[ExportReceiptV7],
     effective_schema: i32,
 ) -> Vec<String> {
-    use crate::domain::models::TRIP_EXPORT_SCHEMA_VERSION;
+    use crate::domain::models::{TRIP_EXPORT_SCHEMA_VERSION, TRIP_EXPORT_SCHEMA_VERSION_V7};
 
-    if effective_schema < TRIP_EXPORT_SCHEMA_VERSION {
+    if effective_schema < TRIP_EXPORT_SCHEMA_VERSION_V7 {
         return Vec::new();
     }
 
@@ -522,6 +665,15 @@ pub(crate) fn collect_export_receipt_validation_errors(
                 errors.push(format!("{prefix}.occurred_date: {error}"));
             }
         }
+        if effective_schema >= TRIP_EXPORT_SCHEMA_VERSION {
+            if let Some(ts) = receipt.trashed_at.as_deref() {
+                if chrono::DateTime::parse_from_rfc3339(ts).is_err() {
+                    errors.push(format!("{prefix}.trashed_at: invalid RFC3339 timestamp"));
+                }
+            }
+        } else if receipt.trashed_at.is_some() {
+            errors.push(format!("{prefix}.trashed_at: unsupported before schema v8"));
+        }
     }
     errors
 }
@@ -534,6 +686,8 @@ pub(crate) struct ReceiptJson {
     pub day_id: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub day_number: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trashed_at: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub amount: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -553,6 +707,7 @@ pub(crate) fn receipt_to_json(conn: &Connection, receipt: &Receipt) -> Result<Re
         trip_id: receipt.trip_id,
         day_id: receipt.day_id,
         day_number: day_number_for_receipt(conn, receipt)?,
+        trashed_at: receipt.trashed_at.clone(),
         amount: receipt.amount,
         currency: receipt.currency.clone(),
         occurred_date: receipt.occurred_date.clone(),
@@ -563,10 +718,54 @@ pub(crate) fn receipt_to_json(conn: &Connection, receipt: &Receipt) -> Result<Re
     })
 }
 
+#[derive(Clone, Serialize)]
+pub(crate) struct PendingReceiptSummaryJson {
+    pub active_count: usize,
+    pub without_amount_count: usize,
+    pub totals_by_currency: std::collections::BTreeMap<String, i64>,
+}
+
 #[derive(Serialize)]
 pub(crate) struct ReceiptListJson {
     pub trip_id: i64,
+    pub summary: PendingReceiptSummaryJson,
     pub receipts: Vec<ReceiptJson>,
+}
+
+pub(crate) fn compute_pending_receipt_summary(
+    conn: &Connection,
+    trip_id: i64,
+) -> Result<PendingReceiptSummaryJson> {
+    let receipts = list_receipts_for_trip(conn, trip_id, None, false, false)?;
+    let active_count = receipts.len();
+    let without_amount_count = receipts.iter().filter(|r| r.amount.is_none()).count();
+    let mut totals_by_currency: std::collections::BTreeMap<String, i64> =
+        std::collections::BTreeMap::new();
+    for r in &receipts {
+        if let (Some(amount), Some(currency)) = (r.amount, r.currency.as_deref()) {
+            *totals_by_currency.entry(currency.to_string()).or_default() += amount;
+        }
+    }
+    Ok(PendingReceiptSummaryJson {
+        active_count,
+        without_amount_count,
+        totals_by_currency,
+    })
+}
+
+pub(crate) fn print_pending_receipt_summary(summary: &PendingReceiptSummaryJson) {
+    println!("Pending Receipts:");
+    println!("  Count: {}", summary.active_count);
+    println!("  Without amount: {}", summary.without_amount_count);
+    if summary.totals_by_currency.is_empty() {
+        println!("  Totals: -");
+    } else {
+        println!("  Totals:");
+        for (currency, amount) in &summary.totals_by_currency {
+            println!("    - {}", format_amount_display(*amount, currency));
+        }
+    }
+    println!();
 }
 
 fn format_amount_optional(amount: Option<i64>, currency: &Option<String>) -> String {
@@ -582,20 +781,25 @@ pub(crate) fn print_receipt_list(conn: &Connection, receipts: &[Receipt]) -> Res
         return Ok(());
     }
     println!(
-        "{:<4} {:<10} {:<6} {:<16} {:<12} Memo",
-        "ID", "Status", "Day", "Amount", "Date"
+        "{:<4} {:<10} {:<6} {:<16} {:<12} {:<6} Memo",
+        "ID", "Status", "Day", "Amount", "Date", "Trash"
     );
-    println!("{}", "-".repeat(64));
+    println!("{}", "-".repeat(72));
     for receipt in receipts {
         let day_number = day_number_for_receipt(conn, receipt)?
             .map(|d| d.to_string())
             .unwrap_or_else(|| "-".to_string());
         let amount = format_amount_optional(receipt.amount, &receipt.currency);
         let date = receipt.occurred_date.as_deref().unwrap_or("-");
+        let trash = if receipt.trashed_at.is_some() {
+            "yes"
+        } else {
+            "-"
+        };
         let memo = receipt.memo.as_deref().unwrap_or("-");
         println!(
-            "{:<4} {:<10} {:<6} {:<16} {:<12} {}",
-            receipt.id, receipt.status, day_number, amount, date, memo,
+            "{:<4} {:<10} {:<6} {:<16} {:<12} {:<6} {}",
+            receipt.id, receipt.status, day_number, amount, date, trash, memo,
         );
     }
     println!();
@@ -624,6 +828,10 @@ pub(crate) fn print_receipt_detail(conn: &Connection, receipt: &Receipt) -> Resu
     println!(
         "Occurred date   : {}",
         receipt.occurred_date.as_deref().unwrap_or("-")
+    );
+    println!(
+        "Trashed at      : {}",
+        receipt.trashed_at.as_deref().unwrap_or("-")
     );
     println!(
         "Memo            : {}",
@@ -681,7 +889,7 @@ mod tests {
             },
         )
         .unwrap();
-        let receipts = list_receipts_for_trip(&conn, trip_id, None).unwrap();
+        let receipts = list_receipts_for_trip(&conn, trip_id, None, true, false).unwrap();
         assert_eq!(receipts.len(), 1);
         assert_eq!(receipts[0].status, RECEIPT_STATUS_UNREVIEWED);
 
@@ -729,9 +937,10 @@ mod tests {
             occurred_date: None,
             memo: Some("legacy".to_string()),
             status: "linked".to_string(),
+            trashed_at: None,
         };
         import_receipt_v7(&conn, trip_id, &export).unwrap();
-        let receipt = list_receipts_for_trip(&conn, trip_id, None).unwrap()[0].clone();
+        let receipt = list_receipts_for_trip(&conn, trip_id, None, true, false).unwrap()[0].clone();
         assert_eq!(receipt.status, RECEIPT_STATUS_UNREVIEWED);
     }
 
@@ -760,7 +969,7 @@ mod tests {
         crate::storage::db::reset_db(&conn).unwrap();
         let new_trip = setup_trip(&conn);
         import_receipt_v7(&conn, new_trip, &exports[0]).unwrap();
-        let imported = list_receipts_for_trip(&conn, new_trip, None).unwrap();
+        let imported = list_receipts_for_trip(&conn, new_trip, None, true, false).unwrap();
         assert_eq!(imported.len(), 1);
         assert_eq!(imported[0].memo.as_deref(), Some("memo"));
     }
