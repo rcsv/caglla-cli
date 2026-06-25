@@ -22,6 +22,10 @@ exp() {
   run expense add --itinerary "$iid" --amount "$amount" --currency JPY "$@"
 }
 
+rec() {
+  run receipt add --trip 1 "$@"
+}
+
 echo "==> DB を初期化"
 run db reset
 
@@ -348,11 +352,27 @@ run checklist add 1 "駐車場予約確認（セントレア P1G）"
 run checklist check 2
 run checklist check 4
 
+echo "==> Receipt Inbox（帰宅後に整理する未整理支払い候補）"
+# Receipt は Actual ではない。assign 後に作成された Expense だけが Actual に入る。
+rec --day 2 --amount 4860 --currency JPY \
+  --memo "美ら海水族館ショップ: ぬいぐるみ、キーホルダー"
+rec --day 2 --amount 2340 --currency JPY \
+  --memo "ハナサキマルシェ: ちんすこう、紅芋タルト"
+rec --amount 3180 --currency JPY \
+  --memo "道の駅 許田: お土産まとめ買い"
+rec --day 4 --amount 5600 --currency JPY \
+  --memo "那覇空港売店: 職場向け土産"
+rec --day 4 --memo "コンビニのレシート（金額未入力・あとで確認）"
+rec --day 3 --amount 1200 --currency JPY \
+  --memo "個人的な雑貨購入（旅行共通費にはしない予定）"
+run receipt trash 6
+
 echo ""
 echo "==> canonical sample v0 の投入が完了しました (Trip ID: 1)"
 echo ""
 echo "確認コマンド:"
 echo "  cargo run -- trip stats 1"
+echo "  cargo run -- receipt list --trip 1"
 echo "  cargo run -- trip export-md 1"
 echo "  cargo run -- trip export 1 --output samples/okinawa_sesoko_2026/trip-export.json"
 echo "  cargo run -- trip validate-export samples/okinawa_sesoko_2026/trip-export.json"

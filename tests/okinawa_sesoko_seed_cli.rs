@@ -25,6 +25,40 @@ fn temp_workdir() -> std::path::PathBuf {
     dir
 }
 
+fn normalize_receipts(value: &serde_json::Value) -> Vec<serde_json::Value> {
+    let mut receipts: Vec<serde_json::Value> = value
+        .as_array()
+        .cloned()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|receipt| {
+            serde_json::json!({
+                "day_ref": receipt.get("day_ref"),
+                "amount": receipt.get("amount"),
+                "currency": receipt.get("currency"),
+                "memo": receipt.get("memo"),
+                "status": receipt.get("status"),
+                "trashed": receipt
+                    .get("trashed")
+                    .and_then(|v| v.as_bool())
+                    .or_else(|| {
+                        receipt
+                            .get("trashed_at")
+                            .map(|v| !v.is_null())
+                    })
+                    .unwrap_or(false),
+            })
+        })
+        .collect();
+    receipts.sort_by(|a, b| {
+        a["memo"]
+            .as_str()
+            .unwrap_or("")
+            .cmp(b["memo"].as_str().unwrap_or(""))
+    });
+    receipts
+}
+
 fn normalize_export_v3(value: &serde_json::Value) -> serde_json::Value {
     serde_json::json!({
         "schema_version": value["schema_version"],
@@ -52,6 +86,7 @@ fn normalize_export_v3(value: &serde_json::Value) -> serde_json::Value {
             .get("participants")
             .cloned()
             .unwrap_or(serde_json::json!([])),
+        "receipts": normalize_receipts(value.get("receipts").unwrap_or(&serde_json::json!([]))),
     })
 }
 
@@ -77,6 +112,20 @@ fn okinawa_sesoko_expected_export_structure() {
         .map(|it| it["expenses"].as_array().map(|v| v.len()).unwrap_or(0))
         .sum();
     assert_eq!(expense_count, 49);
+    assert_eq!(
+        expected["receipts"]
+            .as_array()
+            .map(|v| v.len())
+            .unwrap_or(0),
+        6
+    );
+    let trashed_count = expected["receipts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|r| r["trashed"].as_bool() == Some(true))
+        .count();
+    assert_eq!(trashed_count, 1);
 }
 
 #[test]
@@ -137,4 +186,12 @@ fn cli_okinawa_sesoko_seed_export_matches_expected() {
     let stats_stdout = String::from_utf8_lossy(&stats.stdout);
     assert!(stats_stdout.contains("Expenses: 49"));
     assert!(stats_stdout.contains("561,780"));
+
+    let receipts = run_cli(&dir, &["receipt", "list", "--trip", "1"]);
+    assert!(receipts.status.success());
+    let receipts_stdout = String::from_utf8_lossy(&receipts.stdout);
+    assert!(receipts_stdout.contains("Pending Receipts:"));
+    assert!(receipts_stdout.contains("15,980 JPY"));
+    assert!(receipts_stdout.contains("美ら海水族館ショップ"));
+    assert!(!receipts_stdout.contains("個人的な雑貨購入"));
 }

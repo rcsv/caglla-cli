@@ -5,7 +5,6 @@
     "start_date": "2026-04-26",
     "end_date": "2026-04-29"
   },
-  "participants": [],
   "days": [
     {
       "day_number": 1,
@@ -930,5 +929,66 @@
       "sort_order": 0
     }
   ],
-  "notes": []
+  "notes": [],
+  "participants": [],
+  "receipts": [
+    {
+      "day_ref": {
+        "day_number": 4
+      },
+      "amount": null,
+      "currency": null,
+      "memo": "コンビニのレシート（金額未入力・あとで確認）",
+      "status": "unreviewed",
+      "trashed": false
+    },
+    {
+      "day_ref": {
+        "day_number": 2
+      },
+      "amount": 2340,
+      "currency": "JPY",
+      "memo": "ハナサキマルシェ: ちんすこう、紅芋タルト",
+      "status": "unreviewed",
+      "trashed": false
+    },
+    {
+      "day_ref": {
+        "day_number": 3
+      },
+      "amount": 1200,
+      "currency": "JPY",
+      "memo": "個人的な雑貨購入（旅行共通費にはしない予定）",
+      "status": "ignored",
+      "trashed": true
+    },
+    {
+      "day_ref": {
+        "day_number": 2
+      },
+      "amount": 4860,
+      "currency": "JPY",
+      "memo": "美ら海水族館ショップ: ぬいぐるみ、キーホルダー",
+      "status": "unreviewed",
+      "trashed": false
+    },
+    {
+      "day_ref": null,
+      "amount": 3180,
+      "currency": "JPY",
+      "memo": "道の駅 許田: お土産まとめ買い",
+      "status": "unreviewed",
+      "trashed": false
+    },
+    {
+      "day_ref": {
+        "day_number": 4
+      },
+      "amount": 5600,
+      "currency": "JPY",
+      "memo": "那覇空港売店: 職場向け土産",
+      "status": "unreviewed",
+      "trashed": false
+    }
+  ]
 }

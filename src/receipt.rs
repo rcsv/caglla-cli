@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use chrono::{DateTime, Local, NaiveDateTime, TimeZone};
 use rusqlite::{params, Connection};
 use serde::Serialize;
 
@@ -529,6 +530,18 @@ pub(crate) fn nullify_receipts_for_day(conn: &Connection, day_id: i64) -> Result
     Ok(())
 }
 
+fn format_db_timestamp_for_export(ts: &str) -> String {
+    if DateTime::parse_from_rfc3339(ts).is_ok() {
+        return ts.to_string();
+    }
+    if let Ok(naive) = NaiveDateTime::parse_from_str(ts, "%Y-%m-%d %H:%M:%S") {
+        if let Some(local) = Local.from_local_datetime(&naive).single() {
+            return local.to_rfc3339();
+        }
+    }
+    ts.to_string()
+}
+
 fn day_number_for_receipt(conn: &Connection, receipt: &Receipt) -> Result<Option<i64>> {
     if let Some(day_id) = receipt.day_id {
         let day_number: i64 = conn.query_row(
@@ -560,7 +573,10 @@ pub(crate) fn build_export_receipt_v7(
 
     Ok(ExportReceiptV7 {
         day_ref,
-        trashed_at: receipt.trashed_at.clone(),
+        trashed_at: receipt
+            .trashed_at
+            .as_deref()
+            .map(format_db_timestamp_for_export),
         amount: receipt.amount,
         currency: receipt.currency.clone(),
         occurred_date: receipt.occurred_date.clone(),
