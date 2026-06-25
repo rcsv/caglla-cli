@@ -99,7 +99,16 @@ cargo run -- itinerary timeline 1
 
 ## Releases
 
-GitHub Release 用ノートは [docs/releases/](docs/releases/) にあります。最新: [v3.7.0](docs/releases/v3.7.0-notes.md)（Receipt assignment and trash workflow — `receipt assign` / trash / restore, pending sum, export schema v8）
+GitHub Release 用ノートは [docs/releases/](docs/releases/) にあります。
+
+**最新:** [v3.7.1](docs/releases/v3.7.1-notes.md) — **patch release** after v3.7.0. Okinawa canonical sample の Receipt Inbox ストーリー追加と、trashed Receipt の `trashed_at` export を RFC3339 に整形する修正（`validate-export` 互換）。
+
+**直近のリリース履歴:**
+
+| Version | 種別 | 概要 |
+|---|---|---|
+| [v3.7.1](docs/releases/v3.7.1-notes.md) | patch | Okinawa Receipt Inbox sample + trashed Receipt export fix |
+| [v3.7.0](docs/releases/v3.7.0-notes.md) | minor | Receipt assignment and trash workflow — `receipt assign` / trash / restore, pending sum, export schema v8 |
 
 ## Security
 
