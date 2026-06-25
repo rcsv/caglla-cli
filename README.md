@@ -99,7 +99,7 @@ cargo run -- itinerary timeline 1
 
 ## Releases
 
-GitHub Release 用ノートは [docs/releases/](docs/releases/) にあります。最新: [v3.6.0](docs/releases/v3.6.0-notes.md)（Receipt Inbox metadata-only support — Trip-level `receipts[]`, export schema v7）
+GitHub Release 用ノートは [docs/releases/](docs/releases/) にあります。最新: [v3.7.0](docs/releases/v3.7.0-notes.md)（Receipt assignment and trash workflow — `receipt assign` / trash / restore, pending sum, export schema v8）
 
 ## Security
 
