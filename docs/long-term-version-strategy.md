@@ -437,6 +437,8 @@ Expense correction routes（reassign / unassign / trash）は future work
 
 設計文書: [v3.7.0-receipt-assignment-and-trash-workflow-design.md](specifications/v3.7.0-receipt-assignment-and-trash-workflow-design.md)
 
+Implementation Plan: [v3.7.0-receipt-assignment-and-trash-implementation-plan.md](specifications/v3.7.0-receipt-assignment-and-trash-implementation-plan.md)
+
 ### v3.7.x defer（維持）
 
 ```text
