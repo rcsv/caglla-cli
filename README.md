@@ -101,12 +101,13 @@ cargo run -- itinerary timeline 1
 
 GitHub Release 用ノートは [docs/releases/](docs/releases/) にあります。
 
-**最新:** [v3.7.1](docs/releases/v3.7.1-notes.md) — **patch release** after v3.7.0. Okinawa canonical sample の Receipt Inbox ストーリー追加と、trashed Receipt の `trashed_at` export を RFC3339 に整形する修正（`validate-export` 互換）。
+**最新:** [v3.8.0](docs/releases/v3.8.0-notes.md) — **documentation-only**. v3.7.1 後のロードマップ再整列（v4 Reservation 退役・Travel Book → v4・次候補テーマの開始可否）。
 
 **直近のリリース履歴:**
 
 | Version | 種別 | 概要 |
 |---|---|---|
+| [v3.8.0](docs/releases/v3.8.0-notes.md) | docs | Roadmap realignment after Receipt Inbox |
 | [v3.7.1](docs/releases/v3.7.1-notes.md) | patch | Okinawa Receipt Inbox sample + trashed Receipt export fix |
 | [v3.7.0](docs/releases/v3.7.0-notes.md) | minor | Receipt assignment and trash workflow — `receipt assign` / trash / restore, pending sum, export schema v8 |
 

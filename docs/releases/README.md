@@ -4,6 +4,7 @@ GitHub Release 用ノート一覧（新しい順）。
 
 | Version | Title | File |
 |---|---|---|
+| v3.8.0 | Roadmap realignment after Receipt Inbox | [v3.8.0-notes.md](v3.8.0-notes.md) |
 | v3.7.1 | Okinawa Receipt Inbox sample and export fix | [v3.7.1-notes.md](v3.7.1-notes.md) |
 | v3.7.0 | Receipt assignment and trash workflow | [v3.7.0-notes.md](v3.7.0-notes.md) |
 | v3.6.0 | Receipt Inbox metadata-only support | [v3.6.0-notes.md](v3.6.0-notes.md) |

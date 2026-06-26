@@ -459,6 +459,8 @@ Post-Implementation Review: [v3.7.1-receipt-inbox-post-implementation-review.md]
 
 設計系列: v3.7.0 Release → Okinawa sample（feb4043）→ Release v3.7.1（d498e70）→ Post-Implementation Review。
 
+設計系列: v3.7.0 Release → Okinawa sample（feb4043）→ Release v3.7.1（d498e70）→ Post-Implementation Review → **v3.8.0 roadmap realignment**（本書 §v3.8）。
+
 ### v3.7.x defer（維持）
 
 ```text
@@ -474,69 +476,84 @@ Planned vs Actual / trip stats への Receipt 反映
 
 ---
 
-## v4 — Reservation
+## v3.8 — Roadmap realignment（**v3.8.0 — documentation-only**）
 
 ### テーマ
 
 ```text
-予約情報の正式管理
+v3.7.1 後の製品メジャー版ロードマップ再整列
+v4 Reservation 矛盾の解消
+次候補テーマの開始可否整理
 ```
 
-### 追加予定
+### リリース内容（v3.8.0）
 
 ```text
-Reservation Entity
-Reservation Export
-Reservation Display
+v4 = Reservation を退役（v1.18.0 実装済みと明記）
+v4 = Travel Book に差し替え（旧 v5）
+v5–v8 = Travel Journal / Identity / Cloud / Platform（旧 v6–v9 を繰り上げ）
+Do not start yet を current-work と同期
+コード / DB / export / CLI 変更なし
 ```
 
-**設計フェーズは v1 系ドキュメントで進行済み**（[reservation-model.md](specifications/reservation-model.md) 系列）。製品メジャー v4 では、旅行計画の **中核情報として Reservation を正式実装** する到達点を想定。
+Roadmap document: [v3.8.0-roadmap-realignment-after-receipt-inbox.md](specifications/v3.8.0-roadmap-realignment-after-receipt-inbox.md)
 
-> **注:** v1 系パッチで Summary 実装が先に入る可能性はある。本ロードマップの **番号** と **CLI パッチバージョン** は一致しない場合がある。
+リリースノート: [v3.8.0-notes.md](releases/v3.8.0-notes.md)
+
+### v3.8 後の設計着手候補（実装は別判断）
+
+| 優先 | 候補 | 設計 | 実装 |
+|---|---|---|---|
+| 高 | DB path 切替（`--db` / `CAGLLA_DB` / `db use`） | 可 | 未 |
+| 中 | Travel Book v4 concept design | 可 | v4 スコープ |
+| 中 | doctor / advisor Estimate・Receipt 活用 | 可 | 未 |
+
+**着手不可（canonical defer）:** Evidence / Attachment / image_path / OCR / Balance / Settlement / Travel Journal 実装 / Receipt→Actual 集計変更 等 — [current-work.md](current-work.md) を正本とする。
 
 ---
 
-## v5 — Travel Book
+## v4 — Travel Book
 
 ### テーマ
 
 ```text
-旅のしおり
+旅のしおり（旅行前の共有資料）
 ```
 
-### 追加予定
+### 到達イメージ
 
 ```text
-Rich Markdown Export
+Rich Markdown Export（export-md 拡張）
 PDF Export
-Reservation Integration
-Summary Integration
+Summary / Reservation のしおり向け統合表示
 ```
 
-旅行 **前** の共有資料を生成できる状態を目指す。
+現行 `trip export-md` は **Travel Book Generator v0**（[summary-post-implementation-review.md](specifications/summary-post-implementation-review.md)）。製品 v4 では出力パイプラインと共有体験を強化する。
+
+> **注:** **Reservation** は v1.18.0 で CRUD + export 済み。v4 では新規 Entity ではなく **しおりへの統合表示** が主な伸びしろ。
 
 ---
 
-## v6 — Travel Journal
+## v5 — Travel Journal
 
 ### テーマ
 
 ```text
-旅行記録
+旅行記録（旅行後の振り返り）
 ```
 
-### 追加予定
+### 到達イメージ
 
 ```text
 Photo
-Attachment
+Attachment（Evidence 共通レイヤー経由 — Receipt 専用 image_path は採用しない）
 ```
 
-旅行 **後** の記録保存・振り返りを強化する。
+**ブロッカー:** Evidence / Attachment 設計が先。v3.8.0 時点では **設計・実装とも着手不可**。
 
 ---
 
-## v7 — Identity
+## v6 — Identity
 
 ### テーマ
 
@@ -544,7 +561,7 @@ Attachment
 利用者
 ```
 
-### 追加予定
+### 到達イメージ
 
 ```text
 User
@@ -555,7 +572,7 @@ Authentication
 
 ---
 
-## v8 — Cloud
+## v7 — Cloud
 
 ### テーマ
 
@@ -563,7 +580,7 @@ Authentication
 共有と同期
 ```
 
-### 追加予定
+### 到達イメージ
 
 ```text
 Cloud Sync
@@ -571,11 +588,9 @@ Backup
 Sharing
 ```
 
-複数端末での利用・共有を実現する。
-
 ---
 
-## v9 — Platform
+## v8 — Platform
 
 ### テーマ
 
@@ -583,7 +598,7 @@ Sharing
 Caglla Engine
 ```
 
-### 追加予定
+### 到達イメージ
 
 ```text
 Desktop Application
@@ -592,7 +607,19 @@ Backend Library
 Public API
 ```
 
-CLI を中心とした **旅行プラットフォーム** へ発展させる。
+---
+
+## 退役: 旧ロードマップ「v4 — Reservation」
+
+以下は **製品メジャー v4 としては採用しない**（v1.18.0 で到達済み）:
+
+```text
+Reservation Entity（Itinerary 配下）
+Reservation Export / Import
+Reservation Display（Trip / Itinerary 一覧）
+```
+
+設計系列は v1.11–v1.19 および [v1.18.0-notes.md](releases/v1.18.0-notes.md) を参照。将来の予約 **機能拡張** は Travel Book（v4）またはパッチ設計で扱う。
 
 ---
 
@@ -610,13 +637,14 @@ CLI を中心とした **旅行プラットフォーム** へ発展させる。
 | **v3.4** | Itinerary Planned vs Actual | Itinerary 単位差分（export-md） — **v3.4.0 リリース済み** |
 | **v3.5** | Receipt Inbox | concept design — **v3.5.0 リリース済み**（documentation-only） |
 | **v3.6** | Receipt Inbox metadata-only | Trip-level Receipt CRUD + export v7 — **v3.6.0 リリース済み** |
-| **v3.7** | Receipt assign / trash | assign / trash / restore + pending sum + export v8 — **v3.7.0 リリース済み**；v3.7.1 patch（sample + export fix）**リリース済み** |
-| **v4** | Reservation | 予約情報の正式管理 |
-| **v5** | Travel Book | 共有用しおり（MD/PDF） |
-| **v6** | Travel Journal | 写真・添付付き旅行記 |
-| **v7** | Identity | 利用者・アカウント |
-| **v8** | Cloud | 同期・バックアップ・共有 |
-| **v9** | Platform | デスクトップ / モバイル / API |
+| **v3.7** | Receipt assign / trash | assign / trash / restore + pending sum + export v8 — **v3.7.0 リリース済み**；v3.7.1 patch **リリース済み** |
+| **v3.8** | Roadmap realignment | v4+ 再整列・次候補の開始可否 — **v3.8.0 documentation-only** |
+| **v4** | Travel Book | 共有用しおり（MD/PDF、Summary・Reservation 統合） |
+| **v5** | Travel Journal | 写真・添付付き旅行記（Evidence 設計が先） |
+| **v6** | Identity | 利用者・アカウント |
+| **v7** | Cloud | 同期・バックアップ・共有 |
+| **v8** | Platform | デスクトップ / モバイル / API |
+| *(退役)* | *旧 v4 Reservation* | *v1.18.0 で実装済み — 製品メジャー v4 ではない* |
 
 ---
 
