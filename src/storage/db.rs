@@ -835,6 +835,246 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    mod legacy_smoke {
+        use super::*;
+        use std::path::{Path, PathBuf};
+        use std::sync::atomic::{AtomicU64, Ordering};
+
+        static FIXTURE_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+        struct LegacyDbFixture {
+            dir: PathBuf,
+            path: PathBuf,
+        }
+
+        impl LegacyDbFixture {
+            fn new() -> Self {
+                let n = FIXTURE_COUNTER.fetch_add(1, Ordering::Relaxed);
+                let dir = std::env::temp_dir().join(format!("travel-ledger-cli-legacy-smoke-{n}"));
+                let _ = std::fs::remove_dir_all(&dir);
+                std::fs::create_dir_all(&dir).unwrap();
+                let path = dir.join("legacy.db");
+                Self { dir, path }
+            }
+
+            fn path(&self) -> &Path {
+                &self.path
+            }
+        }
+
+        impl Drop for LegacyDbFixture {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.dir);
+            }
+        }
+
+        fn table_column_names(conn: &Connection, table: &str) -> Vec<String> {
+            conn.prepare(&format!("PRAGMA table_info({table})"))
+                .unwrap()
+                .query_map([], |row| row.get(1))
+                .unwrap()
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap()
+        }
+
+        fn assert_opens_and_collects_status(path: &Path) -> Connection {
+            let conn = open_db_at(path.to_str().unwrap()).expect("legacy open_db_at");
+            let status = collect_db_status(&crate::config::ResolvedDbPath {
+                path: path.to_path_buf(),
+                source: crate::config::DbPathSource::Default,
+                config_path: None,
+            })
+            .expect("legacy collect_db_status");
+            assert!(status.exists);
+            assert_eq!(status.schema_version, 2);
+            assert!(status.table_counts.is_some());
+            conn
+        }
+
+        #[test]
+        fn legacy_smoke_days_description_renamed_before_backfill() {
+            let fixture = LegacyDbFixture::new();
+            let conn = Connection::open(fixture.path()).unwrap();
+            let now = now_string();
+            conn.execute_batch("PRAGMA foreign_keys = ON").unwrap();
+            conn.execute(
+                "CREATE TABLE trips (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    start_date TEXT,
+                    end_date TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )",
+                [],
+            )
+            .unwrap();
+            conn.execute(
+                "CREATE TABLE days (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    trip_id INTEGER NOT NULL,
+                    day_number INTEGER NOT NULL,
+                    title TEXT NOT NULL DEFAULT '',
+                    description TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    UNIQUE(trip_id, day_number)
+                )",
+                [],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO trips (name, start_date, end_date, created_at, updated_at)
+                 VALUES ('Legacy Trip', '2026-01-01', '2026-01-03', ?1, ?1)",
+                params![&now],
+            )
+            .unwrap();
+            drop(conn);
+
+            let conn = assert_opens_and_collects_status(fixture.path());
+            let columns = table_column_names(&conn, "days");
+            assert!(columns.contains(&"summary".to_string()));
+            assert!(!columns.contains(&"description".to_string()));
+
+            let days_count: i64 = conn
+                .query_row("SELECT COUNT(*) FROM days WHERE trip_id = 1", [], |row| {
+                    row.get(0)
+                })
+                .unwrap();
+            assert_eq!(days_count, 3);
+        }
+
+        #[test]
+        fn legacy_smoke_no_days_table_backfills_day_id() {
+            let fixture = LegacyDbFixture::new();
+            let conn = Connection::open(fixture.path()).unwrap();
+            let now = now_string();
+            conn.execute_batch("PRAGMA foreign_keys = ON").unwrap();
+            conn.execute(
+                "CREATE TABLE trips (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    start_date TEXT,
+                    end_date TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )",
+                [],
+            )
+            .unwrap();
+            conn.execute(
+                "CREATE TABLE itinerary_items (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    trip_id INTEGER NOT NULL,
+                    day INTEGER NOT NULL,
+                    title TEXT NOT NULL,
+                    note TEXT,
+                    sort_order INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )",
+                [],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO trips (name, start_date, end_date, created_at, updated_at)
+                 VALUES ('Legacy Trip', '2026-01-01', '2026-01-03', ?1, ?1)",
+                params![&now],
+            )
+            .unwrap();
+            let trip_id = conn.last_insert_rowid();
+            conn.execute(
+                "INSERT INTO itinerary_items (trip_id, day, title, sort_order, created_at, updated_at)
+                 VALUES (?1, 2, 'Activity', 0, ?2, ?2)",
+                params![trip_id, &now],
+            )
+            .unwrap();
+            drop(conn);
+
+            let conn = assert_opens_and_collects_status(fixture.path());
+            let days_count: i64 = conn
+                .query_row("SELECT COUNT(*) FROM days WHERE trip_id = 1", [], |row| {
+                    row.get(0)
+                })
+                .unwrap();
+            assert_eq!(days_count, 3);
+
+            let day_id: i64 = conn
+                .query_row(
+                    "SELECT day_id FROM itinerary_items WHERE trip_id = 1",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            let expected_day_id: i64 = conn
+                .query_row(
+                    "SELECT id FROM days WHERE trip_id = 1 AND day_number = 2",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(day_id, expected_day_id);
+        }
+
+        #[test]
+        fn legacy_smoke_receipts_without_trashed_at() {
+            let fixture = LegacyDbFixture::new();
+            let conn = Connection::open(fixture.path()).unwrap();
+            let now = now_string();
+            conn.execute_batch("PRAGMA foreign_keys = ON").unwrap();
+            conn.execute(
+                "CREATE TABLE trips (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    start_date TEXT,
+                    end_date TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )",
+                [],
+            )
+            .unwrap();
+            conn.execute(
+                "CREATE TABLE receipts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    trip_id INTEGER NOT NULL,
+                    day_id INTEGER NULL,
+                    amount INTEGER NULL,
+                    currency TEXT NULL,
+                    occurred_date TEXT NULL,
+                    memo TEXT NULL,
+                    status TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )",
+                [],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO trips (name, start_date, end_date, created_at, updated_at)
+                 VALUES ('Receipt Trip', NULL, NULL, ?1, ?1)",
+                params![&now],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO receipts (trip_id, status, created_at, updated_at)
+                 VALUES (1, 'unreviewed', ?1, ?1)",
+                params![&now],
+            )
+            .unwrap();
+            drop(conn);
+
+            let conn = assert_opens_and_collects_status(fixture.path());
+            let columns = table_column_names(&conn, "receipts");
+            assert!(columns.contains(&"trashed_at".to_string()));
+
+            let receipt_count: i64 = conn
+                .query_row("SELECT COUNT(*) FROM receipts", [], |row| row.get(0))
+                .unwrap();
+            assert_eq!(receipt_count, 1);
+        }
+    }
+
     #[test]
     fn test_migrate_indexes_creates_recommended_indexes() {
         let conn = test_db();
