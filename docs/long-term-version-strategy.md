@@ -504,7 +504,41 @@ Roadmap document: [v3.8.0-roadmap-realignment-after-receipt-inbox.md](specificat
 
 | 優先 | 候補 | 設計 | 実装 |
 |---|---|---|---|
-| 高 | DB path 切替（`--db` / `CAGLLA_DB` / `db use`） | 可 | 未 |
+| 高 | DB path 切替（`--db` / `CAGLLA_DB` / `db use`） | 可 | **Phase 1 完了（v3.9.0）** — `db use` は未 |
+| 中 | Travel Book v4 concept design | 可 | v4 スコープ |
+| 中 | doctor / advisor Estimate・Receipt 活用 | 可 | 未 |
+
+---
+
+## v3.9 — Config and DB path foundation（**v3.9.0**）
+
+### テーマ
+
+```text
+DB 参照先の明示的解決（--db / CAGLLA_DB / caglla.toml）
+v3.2.0 db path / db status の拡張
+```
+
+### リリース内容（v3.9.0 Phase 1）
+
+```text
+--db <path>（global）
+CAGLLA_DB
+./caglla.toml [database].path
+default ./caglla.db
+db status JSON schema v2（path_source / config_path）
+SQLite schema / trip export schema 変更なし
+```
+
+Implementation plan: [v3.9.0-config-and-db-path-foundation-implementation-plan.md](specifications/v3.9.0-config-and-db-path-foundation-implementation-plan.md)
+
+リリースノート: [v3.9.0-notes.md](releases/v3.9.0-notes.md)
+
+### v3.9 後の設計着手候補
+
+| 優先 | 候補 | 設計 | 実装 |
+|---|---|---|---|
+| 中 | DB path Phase 2（`db use`、config 自動生成、親 dir 探索） | 可 | 未 |
 | 中 | Travel Book v4 concept design | 可 | v4 スコープ |
 | 中 | doctor / advisor Estimate・Receipt 活用 | 可 | 未 |
 
@@ -639,6 +673,7 @@ Reservation Display（Trip / Itinerary 一覧）
 | **v3.6** | Receipt Inbox metadata-only | Trip-level Receipt CRUD + export v7 — **v3.6.0 リリース済み** |
 | **v3.7** | Receipt assign / trash | assign / trash / restore + pending sum + export v8 — **v3.7.0 リリース済み**；v3.7.1 patch **リリース済み** |
 | **v3.8** | Roadmap realignment | v4+ 再整列・次候補の開始可否 — **v3.8.0 documentation-only** |
+| **v3.9** | Config and DB path foundation | `--db` / `CAGLLA_DB` / `caglla.toml` — **v3.9.0 Phase 1** |
 | **v4** | Travel Book | 共有用しおり（MD/PDF、Summary・Reservation 統合） |
 | **v5** | Travel Journal | 写真・添付付き旅行記（Evidence 設計が先） |
 | **v6** | Identity | 利用者・アカウント |

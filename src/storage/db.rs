@@ -3,17 +3,8 @@ use chrono::Local;
 use rusqlite::Connection;
 use serde::Serialize;
 use std::fs;
-use std::path::PathBuf;
 
-pub(crate) const DB_FILE: &str = "caglla.db";
-
-const DB_STATUS_JSON_SCHEMA_VERSION: i32 = 1;
-
-/// 現行ルール（CWD + `DB_FILE`）で解決した DB パス（絶対パス）。open しない。
-pub(crate) fn resolve_db_path() -> Result<PathBuf> {
-    let cwd = std::env::current_dir().context("作業ディレクトリの取得に失敗しました")?;
-    Ok(cwd.join(DB_FILE))
-}
+const DB_STATUS_JSON_SCHEMA_VERSION: i32 = 2;
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub(crate) struct DbTableCounts {
@@ -34,6 +25,9 @@ pub(crate) struct DbTableCounts {
 pub(crate) struct DbStatusJson {
     pub schema_version: i32,
     pub path: String,
+    pub path_source: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub config_path: Option<String>,
     pub exists: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub file_size_bytes: Option<u64>,
@@ -65,15 +59,22 @@ pub(crate) fn collect_table_counts(conn: &Connection) -> Result<DbTableCounts> {
 }
 
 /// DB ファイル未存在時は open せず、存在時のみ `open_db_at` + migration 後の状態を返す。
-pub(crate) fn collect_db_status() -> Result<DbStatusJson> {
-    let path_buf = resolve_db_path()?;
+pub(crate) fn collect_db_status(resolved: &crate::config::ResolvedDbPath) -> Result<DbStatusJson> {
+    let path_buf = &resolved.path;
     let path = path_buf.to_string_lossy().into_owned();
+    let path_source = resolved.source.as_str().to_string();
+    let config_path = resolved
+        .config_path
+        .as_ref()
+        .map(|p| p.to_string_lossy().into_owned());
     let trip_export_schema_version = crate::domain::models::TRIP_EXPORT_SCHEMA_VERSION;
 
     if !path_buf.exists() {
         return Ok(DbStatusJson {
             schema_version: DB_STATUS_JSON_SCHEMA_VERSION,
             path,
+            path_source,
+            config_path,
             exists: false,
             file_size_bytes: None,
             trip_export_schema_version,
@@ -81,7 +82,7 @@ pub(crate) fn collect_db_status() -> Result<DbStatusJson> {
         });
     }
 
-    let file_size_bytes = fs::metadata(&path_buf)
+    let file_size_bytes = fs::metadata(path_buf)
         .with_context(|| format!("DB ファイル '{path}' の情報取得に失敗しました"))?
         .len();
     let conn = open_db_at(&path)?;
@@ -90,6 +91,8 @@ pub(crate) fn collect_db_status() -> Result<DbStatusJson> {
     Ok(DbStatusJson {
         schema_version: DB_STATUS_JSON_SCHEMA_VERSION,
         path,
+        path_source,
+        config_path,
         exists: true,
         file_size_bytes: Some(file_size_bytes),
         trip_export_schema_version,
@@ -97,14 +100,14 @@ pub(crate) fn collect_db_status() -> Result<DbStatusJson> {
     })
 }
 
-pub(crate) fn run_db_path() -> Result<()> {
-    let path = resolve_db_path()?;
-    println!("{}", path.display());
+pub(crate) fn run_db_path(resolved: &crate::config::ResolvedDbPath) -> Result<()> {
+    println!("{}", resolved.path.display());
     Ok(())
 }
 
 pub(crate) fn print_db_status_human(status: &DbStatusJson) -> Result<()> {
     println!("Path                      : {}", status.path);
+    println!("Path source               : {}", status.path_source);
     println!(
         "Exists                    : {}",
         if status.exists { "yes" } else { "no" }
@@ -136,8 +139,8 @@ pub(crate) fn print_db_status_human(status: &DbStatusJson) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn run_db_status(json: bool) -> Result<()> {
-    let status = collect_db_status()?;
+pub(crate) fn run_db_status(resolved: &crate::config::ResolvedDbPath, json: bool) -> Result<()> {
+    let status = collect_db_status(resolved)?;
     if json {
         crate::output::json::print_json(&status)?;
     } else {
@@ -181,11 +184,6 @@ pub(crate) fn open_db_at(path: &str) -> Result<Connection> {
         .context("外部キー制約の有効化に失敗しました")?;
     init_db(&conn)?;
     Ok(conn)
-}
-
-/// 本番 DB (caglla.db) に接続する
-pub(crate) fn open_db() -> Result<Connection> {
-    open_db_at(DB_FILE)
 }
 
 /// テーブルを作成する（既に存在する場合は何もしない）
@@ -888,15 +886,18 @@ mod tests {
     #[test]
     fn test_db_status_json_omits_optional_fields_when_missing() {
         let status = DbStatusJson {
-            schema_version: 1,
+            schema_version: 2,
             path: "/tmp/caglla.db".to_string(),
+            path_source: "default".to_string(),
+            config_path: None,
             exists: false,
             file_size_bytes: None,
             trip_export_schema_version: crate::domain::models::TRIP_EXPORT_SCHEMA_VERSION,
             table_counts: None,
         };
         let json = serde_json::to_value(&status).unwrap();
-        assert_eq!(json["schema_version"], 1);
+        assert_eq!(json["schema_version"], 2);
+        assert_eq!(json["path_source"], "default");
         assert_eq!(json["exists"], false);
         assert_eq!(
             json["trip_export_schema_version"],
@@ -904,6 +905,7 @@ mod tests {
         );
         assert!(json.get("file_size_bytes").is_none());
         assert!(json.get("table_counts").is_none());
+        assert!(json.get("config_path").is_none());
     }
 
     #[test]
@@ -914,8 +916,10 @@ mod tests {
         assert_eq!(counts.trips, 1);
 
         let status = DbStatusJson {
-            schema_version: 1,
+            schema_version: 2,
             path: "/tmp/caglla.db".to_string(),
+            path_source: "cli".to_string(),
+            config_path: None,
             exists: true,
             file_size_bytes: Some(123),
             trip_export_schema_version: crate::domain::models::TRIP_EXPORT_SCHEMA_VERSION,

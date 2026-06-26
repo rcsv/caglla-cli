@@ -2,29 +2,28 @@
 
 ## Current phase
 
-v3.8.0 release verification
+v3.9.0 release verification
 
 ## Latest completed
 
-- v3.8.0 roadmap realignment documentation was created.
-- v3.7.1 Receipt Inbox workflow, Okinawa sample, and post-implementation review are complete.
+- v3.9.0 Config and DB path foundation Phase 1 (`--db`, `CAGLLA_DB`, `./caglla.toml`, `db status` JSON v2).
+- v3.8.0 roadmap realignment documentation.
+- v3.7.1 Receipt Inbox workflow, Okinawa sample, and post-implementation review.
 - Package binary is `travel-ledger-cli`.
 
 ## Repository state
 
-- Latest tag: `v3.8.0` (after release)
-- Latest release: `v3.8.0 — Roadmap realignment after Receipt Inbox`
-- Cargo version: `3.8.0`
-- Working tree: clean (after release)
-- `origin/master`: up to date (after push)
+- Latest tag: `v3.8.0` (before v3.9.0 release)
+- Cargo version: `3.9.0` (implementation complete; release pending)
+- Working tree: v3.9.0 changes staged locally
 
 ## Next action
 
-Pick **one** design topic to start (do not parallelize by default):
+After v3.9.0 release, pick **one** design topic (do not parallelize by default):
 
-1. **DB path switching** — `--db` / `CAGLLA_DB` / `db use` (extends v3.2.0 `db path` / `db status`)
-2. **Travel Book v4 concept design** — `trip export-md` as Generator v0; PDF / shared pre-trip output
-3. **doctor / advisor utilization** — Estimate / Receipt / Pending hints only (no stats Actual change)
+1. **Travel Book v4 concept design** — `trip export-md` as Generator v0; PDF / shared pre-trip output
+2. **doctor / advisor utilization** — Estimate / Receipt / Pending hints only (no stats Actual change)
+3. **DB path Phase 2** — `db use`, config auto-generation, parent-dir search (not started)
 
 See [v3.8.0-roadmap-realignment-after-receipt-inbox.md](specifications/v3.8.0-roadmap-realignment-after-receipt-inbox.md) §5.
 

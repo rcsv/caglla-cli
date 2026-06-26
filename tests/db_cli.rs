@@ -62,6 +62,7 @@ fn cli_db_status_missing_db_does_not_create_file() {
             || stdout.contains(&normalize_path_str(&db_path.to_string_lossy()))
     );
     assert!(stdout.contains("Exists                    : no"));
+    assert!(stdout.contains("Path source               : default"));
     assert!(stdout.contains("Trip export schema version: 8"));
     assert!(!stdout.contains("File size (bytes)"));
     assert!(!stdout.contains("Table counts:"));
@@ -84,12 +85,14 @@ fn cli_db_status_json_missing_db_omits_optional_fields() {
     assert!(!stdout.contains("Path"));
 
     let parsed: serde_json::Value = serde_json::from_str(stdout.trim()).expect("valid JSON");
-    assert_eq!(parsed["schema_version"], 1);
+    assert_eq!(parsed["schema_version"], 2);
     assert_same_resolved_db_path(parsed["path"].as_str().unwrap(), &db_path);
+    assert_eq!(parsed["path_source"], "default");
     assert_eq!(parsed["exists"], false);
     assert_eq!(parsed["trip_export_schema_version"], 8);
     assert!(parsed.get("file_size_bytes").is_none());
     assert!(parsed.get("table_counts").is_none());
+    assert!(parsed.get("config_path").is_none());
     assert!(
         !db_path.exists(),
         "db status --json must not create SQLite file"
@@ -151,7 +154,8 @@ fn cli_db_status_json_existing_db_includes_table_counts() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let parsed: serde_json::Value = serde_json::from_str(stdout.trim()).expect("valid JSON");
-    assert_eq!(parsed["schema_version"], 1);
+    assert_eq!(parsed["schema_version"], 2);
+    assert_eq!(parsed["path_source"], "default");
     assert_eq!(parsed["exists"], true);
     assert_eq!(parsed["trip_export_schema_version"], 8);
     assert!(parsed["file_size_bytes"].as_u64().unwrap() > 0);
@@ -185,7 +189,121 @@ fn cli_db_status_existing_db_shows_table_counts() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("Exists                    : yes"));
+    assert!(stdout.contains("Path source               : default"));
     assert!(stdout.contains("File size (bytes)"));
     assert!(stdout.contains("Table counts:"));
     assert!(stdout.contains("trips                   : 1"));
+}
+
+#[test]
+fn cli_db_path_with_cli_db_flag() {
+    let dir = temp_workdir();
+    let db_path = dir.join("a.db");
+
+    let output = run_cli(&dir, &["--db", db_path.to_str().unwrap(), "db", "path"]);
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    assert_same_resolved_db_path(&stdout, &db_path);
+    assert!(!db_path.exists());
+}
+
+#[test]
+fn cli_db_path_with_caglla_db_env() {
+    let dir = temp_workdir();
+    let db_path = dir.join("b.db");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_travel-ledger-cli"))
+        .current_dir(&dir)
+        .env("CAGLLA_DB", "./b.db")
+        .args(["db", "path"])
+        .output()
+        .expect("failed to run CLI");
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    assert_same_resolved_db_path(&stdout, &db_path);
+    assert!(!db_path.exists());
+}
+
+#[test]
+fn cli_db_path_with_caglla_toml() {
+    let dir = temp_workdir();
+    let db_path = dir.join("from-config.db");
+    fs::write(
+        dir.join("caglla.toml"),
+        "[database]\npath = \"./from-config.db\"\n",
+    )
+    .unwrap();
+
+    let output = run_cli(&dir, &["db", "path"]);
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    assert_same_resolved_db_path(&stdout, &db_path);
+    assert!(!db_path.exists());
+}
+
+#[test]
+fn cli_trip_add_uses_selected_db_only() {
+    let dir = temp_workdir();
+    let alt_db = dir.join("alt.db");
+    let default_db = dir.join("caglla.db");
+
+    let output = run_cli(
+        &dir,
+        &[
+            "--db",
+            alt_db.to_str().unwrap(),
+            "trip",
+            "add",
+            "Alt Trip",
+            "--start",
+            "2026-06-01",
+            "--end",
+            "2026-06-02",
+        ],
+    );
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(alt_db.exists(), "selected DB should be created");
+    assert!(
+        !default_db.exists(),
+        "default caglla.db must not be created"
+    );
+}
+
+#[test]
+fn cli_trip_list_accepts_trailing_db_flag() {
+    let dir = temp_workdir();
+    let alt_db = dir.join("trailing.db");
+
+    assert!(run_cli(
+        &dir,
+        &[
+            "--db",
+            alt_db.to_str().unwrap(),
+            "trip",
+            "add",
+            "Trailing DB Trip",
+            "--start",
+            "2026-06-10",
+            "--end",
+            "2026-06-11",
+        ],
+    )
+    .status
+    .success());
+
+    let output = run_cli(&dir, &["trip", "list", "--db", alt_db.to_str().unwrap()]);
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Trailing DB Trip"));
 }

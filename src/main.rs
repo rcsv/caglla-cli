@@ -2,6 +2,7 @@ mod analysis;
 mod checklist;
 mod cli;
 mod commands;
+mod config;
 mod day;
 mod domain;
 mod estimate;
@@ -40,14 +41,17 @@ fn main() -> Result<()> {
         bail!("a subcommand is required");
     };
 
-    if commands::db::run_before_open_db(&command)? {
+    let resolved = config::resolve_db_path_for_cli(cli.db.as_deref())?;
+
+    if commands::db::run_before_open_db(&command, &resolved)? {
         return Ok(());
     }
 
-    let conn = storage::db::open_db()?;
+    let db_path = resolved.path.to_string_lossy().into_owned();
+    let conn = storage::db::open_db_at(&db_path)?;
 
     match command {
-        Command::Db { action } => commands::db::run_after_open(&conn, action)?,
+        Command::Db { action } => commands::db::run_after_open(&conn, action, &resolved)?,
         Command::Itinerary { action } => match action {
             ItineraryAction::Add {
                 trip_id,

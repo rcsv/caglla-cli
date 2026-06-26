@@ -2,7 +2,7 @@
 
 A local-first travel planning CLI for managing trips, itineraries, checklists, expenses, and Markdown/JSON exports.
 
-Caglla.Travel のコマンドライン版です。旅行の計画を、ターミナルから管理できます。データはローカルの SQLite データベース（`caglla.db`）に保存されます。Web 版やクラウド同期は未対応です。
+Caglla.Travel のコマンドライン版です。旅行の計画を、ターミナルから管理できます。データはローカルの SQLite データベースに保存されます（既定は CWD の `caglla.db`）。`--db` / `CAGLLA_DB` / `./caglla.toml` でパスを切り替えられます。Web 版やクラウド同期は未対応です。
 
 ## Features
 
@@ -68,7 +68,7 @@ cargo run -- itinerary timeline 1
 | Checklist | `checklist add/list/check/...`, `trip checklist-generate` |
 | Export | `trip export`, `trip import`, `trip validate-export`, `trip diff`, `trip export-md` |
 | Diagnostics | `trip doctor`, `trip advisor` |
-| Dev | `db path`, `db status`, `db reset` |
+| Dev | `db path`, `db status`, `db reset`（`--db` / `CAGLLA_DB` / `caglla.toml` で DB パス指定可） |
 
 コマンド詳細: [docs/command-reference.md](docs/command-reference.md)
 
@@ -92,7 +92,7 @@ cargo run -- itinerary timeline 1
 
 | 項目 | 状態 |
 |---|---|
-| データ保存 | ローカル SQLite（`caglla.db`）のみ。Web 版・クラウド同期は未対応 |
+| データ保存 | ローカル SQLite（既定 `caglla.db`）。`--db` / `CAGLLA_DB` / `./caglla.toml` でパス切替可。Web 版・クラウド同期は未対応 |
 | JSON 出力（`--json`） | ツール連携向け。**内部仕様扱い**（構造は将来変更の可能性あり） |
 | 費用管理・通貨換算 | Expense（実績）・Estimate（予定）CRUD は対応。Trip / Itinerary 単位の Planned vs Actual 差分表示は対応。精算（Settlement）は未対応 |
 | 類似旅行検索（Similarity） | 将来候補（現 CLI には未実装） |
@@ -101,12 +101,13 @@ cargo run -- itinerary timeline 1
 
 GitHub Release 用ノートは [docs/releases/](docs/releases/) にあります。
 
-**最新:** [v3.8.0](docs/releases/v3.8.0-notes.md) — **documentation-only**. v3.7.1 後のロードマップ再整列（v4 Reservation 退役・Travel Book → v4・次候補テーマの開始可否）。
+**最新:** [v3.9.0](docs/releases/v3.9.0-notes.md) — Config and DB path foundation（`--db` / `CAGLLA_DB` / `caglla.toml`、`db status` JSON v2）。
 
 **直近のリリース履歴:**
 
 | Version | 種別 | 概要 |
 |---|---|---|
+| [v3.9.0](docs/releases/v3.9.0-notes.md) | minor | Config and DB path foundation |
 | [v3.8.0](docs/releases/v3.8.0-notes.md) | docs | Roadmap realignment after Receipt Inbox |
 | [v3.7.1](docs/releases/v3.7.1-notes.md) | patch | Okinawa Receipt Inbox sample + trashed Receipt export fix |
 | [v3.7.0](docs/releases/v3.7.0-notes.md) | minor | Receipt assignment and trash workflow — `receipt assign` / trash / restore, pending sum, export schema v8 |

@@ -14,6 +14,10 @@ pub struct Cli {
     #[arg(long)]
     pub about: bool,
 
+    /// SQLite database file path (overrides CAGLLA_DB and caglla.toml)
+    #[arg(long, value_name = "PATH", global = true)]
+    pub db: Option<std::path::PathBuf>,
+
     #[command(subcommand)]
     pub command: Option<Command>,
 }
