@@ -307,3 +307,58 @@ fn cli_trip_list_accepts_trailing_db_flag() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("Trailing DB Trip"));
 }
+
+fn create_legacy_days_db_without_summary(dir: &std::path::Path) {
+    let db_path = dir.join("caglla.db");
+    let sql = r"
+CREATE TABLE trips (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    name        TEXT NOT NULL,
+    start_date  TEXT,
+    end_date    TEXT,
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL
+);
+CREATE TABLE days (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    trip_id     INTEGER NOT NULL,
+    day_number  INTEGER NOT NULL,
+    title       TEXT NOT NULL DEFAULT '',
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL,
+    UNIQUE(trip_id, day_number)
+);
+INSERT INTO trips (name, start_date, end_date, created_at, updated_at)
+VALUES ('Legacy Trip', '2026-01-01', '2026-01-03', '2026-01-01 00:00:00', '2026-01-01 00:00:00');
+";
+    let status = Command::new("sqlite3")
+        .arg(&db_path)
+        .arg(sql)
+        .status()
+        .expect("sqlite3 required for legacy DB simulation");
+    assert!(
+        status.success(),
+        "failed to create legacy caglla.db without days.summary"
+    );
+}
+
+#[test]
+fn cli_db_status_json_legacy_days_without_summary_column() {
+    let dir = temp_workdir();
+    create_legacy_days_db_without_summary(&dir);
+
+    let output = run_cli(&dir, &["db", "status", "--json"]);
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: serde_json::Value = serde_json::from_str(stdout.trim()).expect("valid JSON");
+    assert_eq!(parsed["schema_version"], 2);
+    assert_eq!(parsed["exists"], true);
+    assert_eq!(parsed["path_source"], "default");
+    assert_eq!(parsed["table_counts"]["trips"], 1);
+    assert_eq!(parsed["table_counts"]["days"], 3);
+}

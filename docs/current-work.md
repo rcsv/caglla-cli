@@ -2,10 +2,11 @@
 
 ## Current phase
 
-v3.9.0 release verification
+v3.9.1 release verification
 
 ## Latest completed
 
+- v3.9.1 legacy `days.summary` migration order fix (`db status` on existing `caglla.db`).
 - v3.9.0 Config and DB path foundation Phase 1 (`--db`, `CAGLLA_DB`, `./caglla.toml`, `db status` JSON v2).
 - v3.8.0 roadmap realignment documentation.
 - v3.7.1 Receipt Inbox workflow, Okinawa sample, and post-implementation review.
@@ -13,8 +14,8 @@ v3.9.0 release verification
 
 ## Repository state
 
-- Latest tag: `v3.8.0` (before v3.9.0 release)
-- Cargo version: `3.9.0` (implementation complete; release pending)
+- Latest tag: `v3.9.0` (before v3.9.1 release)
+- Cargo version: `3.9.1` (patch ready; release pending)
 - Working tree: v3.9.0 changes staged locally
 
 ## Next action

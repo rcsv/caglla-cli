@@ -315,9 +315,10 @@ pub(crate) fn init_db(conn: &Connection) -> Result<()> {
     )
     .context("estimates テーブルの作成に失敗しました")?;
     migrate_itinerary_items(conn)?;
+    // days backfill (migrate_days) inserts into days.summary — add column first.
+    migrate_summaries(conn)?;
     migrate_days(conn)?;
     migrate_itinerary_day_id(conn)?;
-    migrate_summaries(conn)?;
     migrate_indexes(conn)?;
     crate::participant::migrate_participants(conn)?;
     crate::expense::migrate_expenses_shared_expense(conn)?;
@@ -758,6 +759,80 @@ mod tests {
             )
             .unwrap();
         assert_eq!(day_id, expected_day_id);
+    }
+
+    #[test]
+    fn test_init_db_legacy_days_without_summary_column() {
+        let dir = std::env::temp_dir().join(format!(
+            "travel-ledger-cli-legacy-days-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("legacy.db");
+        let conn = Connection::open(&path).unwrap();
+        let now = now_string();
+        conn.execute_batch("PRAGMA foreign_keys = ON").unwrap();
+        conn.execute(
+            "CREATE TABLE trips (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                start_date TEXT,
+                end_date TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "CREATE TABLE days (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                trip_id INTEGER NOT NULL,
+                day_number INTEGER NOT NULL,
+                title TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(trip_id, day_number)
+            )",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO trips (name, start_date, end_date, created_at, updated_at)
+             VALUES ('Legacy Trip', '2026-01-01', '2026-01-03', ?1, ?1)",
+            params![&now],
+        )
+        .unwrap();
+        drop(conn);
+
+        let conn = open_db_at(path.to_str().unwrap()).expect("legacy DB should open");
+        let columns: Vec<String> = conn
+            .prepare("PRAGMA table_info(days)")
+            .unwrap()
+            .query_map([], |row| row.get(1))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert!(columns.contains(&"summary".to_string()));
+
+        let days_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM days WHERE trip_id = 1", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(days_count, 3);
+
+        let status = collect_db_status(&crate::config::ResolvedDbPath {
+            path: path.clone(),
+            source: crate::config::DbPathSource::Default,
+            config_path: None,
+        })
+        .unwrap();
+        assert!(status.exists);
+        assert_eq!(status.schema_version, 2);
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

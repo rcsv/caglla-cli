@@ -101,12 +101,13 @@ cargo run -- itinerary timeline 1
 
 GitHub Release 用ノートは [docs/releases/](docs/releases/) にあります。
 
-**最新:** [v3.9.0](docs/releases/v3.9.0-notes.md) — Config and DB path foundation（`--db` / `CAGLLA_DB` / `caglla.toml`、`db status` JSON v2）。
+**最新:** [v3.9.1](docs/releases/v3.9.1-notes.md) — Legacy `days.summary` migration fix（既存 `caglla.db` での `db status` 互換）。
 
 **直近のリリース履歴:**
 
 | Version | 種別 | 概要 |
 |---|---|---|
+| [v3.9.1](docs/releases/v3.9.1-notes.md) | patch | Legacy days summary migration fix |
 | [v3.9.0](docs/releases/v3.9.0-notes.md) | minor | Config and DB path foundation |
 | [v3.8.0](docs/releases/v3.8.0-notes.md) | docs | Roadmap realignment after Receipt Inbox |
 | [v3.7.1](docs/releases/v3.7.1-notes.md) | patch | Okinawa Receipt Inbox sample + trashed Receipt export fix |
