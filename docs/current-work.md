@@ -10,6 +10,7 @@ v3.7.1 release verification completed
 - v3.7.1 patch release was completed.
 - v3.7.1 adds the Okinawa Receipt Inbox sample story.
 - v3.7.1 fixes trashed Receipt export timestamp formatting so `validate-export` accepts exported trashed Receipts.
+- v3.7.1 post-implementation review was created (`v3.7.1-receipt-inbox-post-implementation-review.md`).
 - GitHub Release assets were generated:
   - caglla-cli-3.7.1-linux-amd64.tar.gz
   - caglla-cli-3.7.1-macos-arm64.tar.gz
@@ -26,10 +27,6 @@ v3.7.1 release verification completed
 ## Next action
 
 Pause before starting the next design topic.
-
-Optional next documentation task:
-
-- Create v3.7.1 post-implementation review if needed.
 
 ## Do not start yet
 
