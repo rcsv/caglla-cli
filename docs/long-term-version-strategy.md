@@ -651,8 +651,9 @@ PDF Export（構造安定後）
 
 | 優先 | 候補 | 設計 | 実装 |
 |---|---|---|---|
-| 高 | Travel Book Markdown structure design | **v4.1.0 完了** | v4.2.0 候補 |
-| 中 | export-md layout improvement | **v4.1.0 章立て完了** | v4.2.0 候補 |
+| 高 | Travel Book Markdown structure design | **v4.1.0 完了** | — |
+| 高 | Okinawa Travel Book sample enrichment | **v4.1.1 完了** | v4.1.2 |
+| 中 | export-md layout improvement | v4.1.2 後 | v4.2.0 |
 | 中 | Reservation / Summary display refinement | v4.2 後 | v4.3.0 候補 |
 | 中 | 親 dir `caglla.toml` 探索（Phase 3） | 要設計 | 未 |
 | 中 | doctor / advisor Estimate・Receipt 活用 | 可 | 未 |
@@ -687,12 +688,46 @@ Chapter structure design: [v4.1.0-travel-book-chapter-structure-design.md](speci
 
 | 優先 | 候補 | 設計 | 実装 |
 |---|---|---|---|
-| 高 | export-md layout improvement | **v4.1.0 完了** | v4.2.0 候補 |
+| 高 | export-md layout improvement | **v4.1.0 章立て完了** | v4.2.0 候補（**v4.1.2 sample 後**） |
+| 高 | Okinawa Travel Book sample enrichment | **v4.1.1 plan 完了** | v4.1.2 候補 |
 | 中 | Reservation / Summary display refinement | v4.2 後 | v4.3.0 候補 |
 | 中 | 親 dir `caglla.toml` 探索（Phase 3） | 要設計 | 未 |
 | 中 | doctor / advisor Estimate・Receipt 活用 | 可 | 未 |
 | 低 | PDF feasibility study | defer | 未 |
 | 低 | user-global config / profile | defer | 未 |
+
+---
+
+## v4.1.1 — Okinawa Travel Book sample enrichment plan（**v4.1.1 — documentation-only**）
+
+### テーマ
+
+```text
+Okinawa canonical sample を Travel Book fixture として拡充する計画
+台帳不変（58 / 49 / ¥561,780）+ Summary / Note / Reservation / Estimate
+```
+
+### リリース内容（v4.1.1）
+
+```text
+追加対象・責務境界・itinerary 対応表（Day + sort_order + title）
+golden 更新方針（trip.summary を normalize に追加）
+v4.1.2 seed / v4.2.0 export-md の前段
+コード / seed / golden 変更なし
+```
+
+Enrichment plan: [v4.1.1-okinawa-travel-book-sample-enrichment-plan.md](specifications/v4.1.1-okinawa-travel-book-sample-enrichment-plan.md)
+
+リリースノート: [v4.1.1-notes.md](releases/v4.1.1-notes.md)
+
+### v4.1.1 後の着手候補
+
+| 優先 | 候補 | 設計 | 実装 |
+|---|---|---|---|
+| 高 | Okinawa sample enrichment | **v4.1.1 完了** | **v4.1.2** |
+| 高 | export-md layout improvement | v4.1.0 + v4.1.2 後 | v4.2.0 |
+| 中 | Reservation / Summary display refinement | v4.2 後 | v4.3.0 候補 |
+| 低 | PDF feasibility study | defer | 未 |
 
 ---
 
@@ -804,7 +839,7 @@ Reservation Display（Trip / Itinerary 一覧）
 | **v3.9** | Config and DB path foundation | `--db` / `CAGLLA_DB` / `caglla.toml` — **v3.9.0 Phase 1**；v3.9.1–v3.9.2 patches |
 | **v3.10** | DB Use concept design | `db use` 永続 config — **v3.10.0 documentation-only** |
 | **v3.11** | DB Use implementation | `db use` / `db use --clear` — **v3.11.0** |
-| **v4** | Travel Book | 共有用しおり — **v4.0.0 concept** + **v4.1.0 chapter structure**（documentation-only） |
+| **v4** | Travel Book | 共有用しおり — v4.0 concept + v4.1 章立て + **v4.1.1 Okinawa plan** |
 | **v5** | Travel Journal | 写真・添付付き旅行記（Evidence 設計が先） |
 | **v6** | Identity | 利用者・アカウント |
 | **v7** | Cloud | 同期・バックアップ・共有 |

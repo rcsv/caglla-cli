@@ -121,7 +121,14 @@ cargo run -- trip import /tmp/okinawa-export.json
 
 Receipt Inbox は **未整理候補のみ** 投入。assign 前は Expense にしない（Actual に混ぜない）。
 
-canonical sample は主に **旅行後の台帳・清算・export 検証** 向けです。旅行前の計画共有（概要・主な行先・予約一覧）は同仕様の Future スコープとして整理しています。
+canonical sample は **旅行後の台帳・清算・export 検証** と、v4.1 以降の **Travel Book（旅行前しおり）fixture** の二重役割を想定しています。
+
+| 役割 | 内容 | 状態 |
+|---|---|---|
+| 行動台帳・会計 | Itinerary 58 / Expense 49 / Receipt Inbox | **現行 seed（v0）** |
+| Travel Book 章検証 | Trip・Day Summary / Note / Reservation / Estimate | **v4.1.2 で追加予定** — 計画は [v4.1.1-okinawa-travel-book-sample-enrichment-plan.md](../../docs/specifications/v4.1.1-okinawa-travel-book-sample-enrichment-plan.md) |
+
+v4.1.1 時点では seed 本体は未変更。Summary / Reservation 等は従来どおり省略しています（下記「意図的に省略したもの」）。
 
 ## ファイル
 

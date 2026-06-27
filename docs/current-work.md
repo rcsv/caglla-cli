@@ -2,36 +2,38 @@
 
 ## Current phase
 
-v4.1.0 release verification
+v4.1.1 release verification
 
 ## Latest completed
 
-- v4.1.0 Travel Book chapter structure design (documentation-only).
+- v4.1.1 Okinawa Travel Book sample enrichment plan (documentation-only).
+- v4.1.0 Travel Book chapter structure design.
 - v4.0.0 Travel Book concept design.
-- v3.11.0 DB Use implementation.
 
 ## Repository state
 
-- Latest tag: `v4.0.0` (expected; update after release)
-- Latest release: `v4.0.0 — Travel Book concept design` (expected; update after release)
-- Cargo version: `4.1.0` (chapter structure design ready; release pending)
+- Latest tag: `v4.1.0` (expected; update after release)
+- Latest release: `v4.1.0 — Travel Book chapter structure design` (expected; update after release)
+- Cargo version: `4.1.1` (enrichment plan ready; release pending)
 
 ## Next action
 
-Pick **one** design or implementation topic (do not parallelize by default):
+**v4.1.2 — Okinawa Travel Book sample enrichment** (single topic):
 
-1. **Travel Book v4.2** — `export-md` layout improvement（v4.1.0 章立てに沿った実装）
-2. **DB path Phase 3** — parent-directory `caglla.toml` search (design first)
-3. **doctor / advisor utilization** — Estimate / Receipt / Pending hints only
+- `seed.sh` — Summary / Note / Reservation / Estimate per [v4.1.1 plan](specifications/v4.1.1-okinawa-travel-book-sample-enrichment-plan.md)
+- `expected-export-v3.json` + `normalize_export_v3` (`trip.summary`)
+- 58 / 49 / ¥561,780 / Receipt 不変
 
-Deferred:
+Then **v4.2.0** — `export-md` layout improvement (use enriched Okinawa for chapter verification).
 
-- PDF export (until Markdown structure is implemented in v4.2+)
+Deferred until after v4.1.2 / v4.2:
+
+- DB path Phase 3
+- PDF export
 - Highlights auto-extraction
-- Travel Journal (v5 — Evidence / Attachment 未設計)
-- Evidence / Attachment / OCR / Settlement
+- Travel Journal / Evidence / Settlement
 
-See [v4.1.0-travel-book-chapter-structure-design.md](specifications/v4.1.0-travel-book-chapter-structure-design.md) §8–9.
+See [v4.1.1-okinawa-travel-book-sample-enrichment-plan.md](specifications/v4.1.1-okinawa-travel-book-sample-enrichment-plan.md).
 
 ## Do not start yet
 
