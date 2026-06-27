@@ -53,3 +53,4 @@ Caglla CLI の内部モデル・設計仕様（実装前の設計メモを含む
 | [v3.7.1-receipt-inbox-post-implementation-review.md](v3.7.1-receipt-inbox-post-implementation-review.md) | v3.7.1 Receipt Inbox Post-Implementation Review（Okinawa sample + export fix — **v3.7.1 リリース済み**） |
 | [v3.8.0-roadmap-realignment-after-receipt-inbox.md](v3.8.0-roadmap-realignment-after-receipt-inbox.md) | v3.8.0 Roadmap Realignment after Receipt Inbox（**v3.8.0 documentation-only**） |
 | [v3.9.0-config-and-db-path-foundation-implementation-plan.md](v3.9.0-config-and-db-path-foundation-implementation-plan.md) | v3.9.0 Config and DB Path Foundation Implementation Plan（**v3.9.0 Phase 1**） |
+| [v3.10.0-db-use-concept-design.md](v3.10.0-db-use-concept-design.md) | v3.10.0 DB Use Concept Design（**v3.10.0 documentation-only**） |

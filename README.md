@@ -101,12 +101,13 @@ cargo run -- itinerary timeline 1
 
 GitHub Release 用ノートは [docs/releases/](docs/releases/) にあります。
 
-**最新:** [v3.9.2](docs/releases/v3.9.2-notes.md) — Legacy migration test hardening（test-only、挙動変更なし）。
+**最新:** [v3.10.0](docs/releases/v3.10.0-notes.md) — **documentation-only**. DB Use concept design（`db use` / Phase 2 config write rules）。
 
 **直近のリリース履歴:**
 
 | Version | 種別 | 概要 |
 |---|---|---|
+| [v3.10.0](docs/releases/v3.10.0-notes.md) | docs | DB Use concept design |
 | [v3.9.2](docs/releases/v3.9.2-notes.md) | test | Legacy migration test hardening |
 | [v3.9.1](docs/releases/v3.9.1-notes.md) | patch | Legacy days summary migration fix |
 | [v3.9.0](docs/releases/v3.9.0-notes.md) | minor | Config and DB path foundation |

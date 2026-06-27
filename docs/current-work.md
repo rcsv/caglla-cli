@@ -2,26 +2,33 @@
 
 ## Current phase
 
-v3.9.2 release verification
+v3.10.0 release verification
 
 ## Latest completed
 
-- v3.9.2 legacy migration smoke tests (`open_db_at` / `collect_db_status` for description→summary, no days table, receipts without `trashed_at`).
-- v3.9.1 legacy `days.summary` migration order fix (`db status` on existing `caglla.db`).
+- v3.10.0 DB Use concept design (`db use` / `db use --clear` / config write rules — documentation-only).
+- v3.9.2 legacy migration smoke tests (test-only patch).
+- v3.9.1 legacy `days.summary` migration order fix.
 - v3.9.0 Config and DB path foundation Phase 1 (`--db`, `CAGLLA_DB`, `./caglla.toml`, `db status` JSON v2).
 
 ## Repository state
 
-- Latest tag: `v3.9.1` (before v3.9.2 release)
-- Cargo version: `3.9.2` (test-only patch ready; release pending)
+- Latest tag: `v3.9.2`
+- Latest release: `v3.9.2 — Legacy migration test hardening`
+- Cargo version: `3.10.0` (documentation-only; release pending)
 
 ## Next action
 
-After v3.9.2 release, pick **one** design topic (do not parallelize by default):
+Pick **one** implementation or design topic (do not parallelize by default):
 
-1. **Travel Book v4 concept design** — `trip export-md` as Generator v0; PDF / shared pre-trip output
-2. **doctor / advisor utilization** — Estimate / Receipt / Pending hints only (no stats Actual change)
-3. **DB path Phase 2** — `db use`, config auto-generation, parent-dir search (not started)
+1. **`db use` Implementation Plan + Phase 2 implementation** — per [v3.10.0-db-use-concept-design.md](specifications/v3.10.0-db-use-concept-design.md)
+2. **Travel Book v4 concept design** — `trip export-md` as Generator v0; PDF / shared pre-trip output
+3. **doctor / advisor utilization** — Estimate / Receipt / Pending hints only (no stats Actual change)
+
+Deferred from DB path track (not next by default):
+
+- Parent-directory `caglla.toml` search (Phase 3+)
+- User-global config / profile switching
 
 See [v3.8.0-roadmap-realignment-after-receipt-inbox.md](specifications/v3.8.0-roadmap-realignment-after-receipt-inbox.md) §5.
 
