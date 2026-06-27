@@ -113,12 +113,13 @@ caglla db use --clear           # config の path を削除（既定 ./caglla.db
 
 GitHub Release 用ノートは [docs/releases/](docs/releases/) にあります。
 
-**最新:** [v4.0.0](docs/releases/v4.0.0-notes.md) — **documentation-only**. Travel Book concept design（`trip export-md` = Generator v0）。
+**最新:** [v4.1.0](docs/releases/v4.1.0-notes.md) — **documentation-only**. Travel Book chapter structure（9 章 + 奥付）。
 
 **直近のリリース履歴:**
 
 | Version | 種別 | 概要 |
 |---|---|---|
+| [v4.1.0](docs/releases/v4.1.0-notes.md) | docs | Travel Book chapter structure design |
 | [v4.0.0](docs/releases/v4.0.0-notes.md) | docs | Travel Book concept design |
 | [v3.11.0](docs/releases/v3.11.0-notes.md) | minor | DB Use implementation |
 | [v3.10.0](docs/releases/v3.10.0-notes.md) | docs | DB Use concept design |

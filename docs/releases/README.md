@@ -4,6 +4,7 @@ GitHub Release 用ノート一覧（新しい順）。
 
 | Version | Title | File |
 |---|---|---|
+| v4.1.0 | Travel Book chapter structure design | [v4.1.0-notes.md](v4.1.0-notes.md) |
 | v4.0.0 | Travel Book concept design | [v4.0.0-notes.md](v4.0.0-notes.md) |
 | v3.11.0 | DB Use implementation | [v3.11.0-notes.md](v3.11.0-notes.md) |
 | v3.10.0 | DB Use concept design | [v3.10.0-notes.md](v3.10.0-notes.md) |

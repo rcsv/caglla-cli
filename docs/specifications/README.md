@@ -56,3 +56,4 @@ Caglla CLI の内部モデル・設計仕様（実装前の設計メモを含む
 | [v3.10.0-db-use-concept-design.md](v3.10.0-db-use-concept-design.md) | v3.10.0 DB Use Concept Design（**v3.10.0 documentation-only**） |
 | [v3.11.0-db-use-implementation-plan.md](v3.11.0-db-use-implementation-plan.md) | v3.11.0 DB Use Implementation Plan（**v3.11.0** — `db use` / `db use --clear`） |
 | [v4.0.0-travel-book-concept-design.md](v4.0.0-travel-book-concept-design.md) | v4.0.0 Travel Book Concept Design（**v4.0.0 documentation-only**） |
+| [v4.1.0-travel-book-chapter-structure-design.md](v4.1.0-travel-book-chapter-structure-design.md) | v4.1.0 Travel Book Chapter Structure Design（**v4.1.0 documentation-only**） |

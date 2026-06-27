@@ -651,8 +651,43 @@ PDF Export（構造安定後）
 
 | 優先 | 候補 | 設計 | 実装 |
 |---|---|---|---|
-| 高 | Travel Book Markdown structure design | **v4.0.0 完了** | v4.1.0 候補 |
-| 中 | export-md layout improvement | v4.1 後 | v4.2.0 候補 |
+| 高 | Travel Book Markdown structure design | **v4.1.0 完了** | v4.2.0 候補 |
+| 中 | export-md layout improvement | **v4.1.0 章立て完了** | v4.2.0 候補 |
+| 中 | Reservation / Summary display refinement | v4.2 後 | v4.3.0 候補 |
+| 中 | 親 dir `caglla.toml` 探索（Phase 3） | 要設計 | 未 |
+| 中 | doctor / advisor Estimate・Receipt 活用 | 可 | 未 |
+| 低 | PDF feasibility study | v4.2+ 後 | defer |
+
+---
+
+## v4.1 — Travel Book chapter structure（**v4.1.0 — documentation-only**）
+
+### テーマ
+
+```text
+Travel Book Markdown の章立て正本
+章順・entity 割当・空章ルール・奥付（Colophon）
+```
+
+### リリース内容（v4.1.0）
+
+```text
+9 章: Cover → … → Notes → Colophon
+常時出力: Cover / Daily schedule / Colophon
+奥付に DB path は通常非表示
+export-md とのギャップ整理（実装は v4.2）
+コード / DB / export / CLI 変更なし
+```
+
+Chapter structure design: [v4.1.0-travel-book-chapter-structure-design.md](specifications/v4.1.0-travel-book-chapter-structure-design.md)
+
+リリースノート: [v4.1.0-notes.md](releases/v4.1.0-notes.md)
+
+### v4.1 後の着手候補
+
+| 優先 | 候補 | 設計 | 実装 |
+|---|---|---|---|
+| 高 | export-md layout improvement | **v4.1.0 完了** | v4.2.0 候補 |
 | 中 | Reservation / Summary display refinement | v4.2 後 | v4.3.0 候補 |
 | 中 | 親 dir `caglla.toml` 探索（Phase 3） | 要設計 | 未 |
 | 中 | doctor / advisor Estimate・Receipt 活用 | 可 | 未 |
@@ -769,7 +804,7 @@ Reservation Display（Trip / Itinerary 一覧）
 | **v3.9** | Config and DB path foundation | `--db` / `CAGLLA_DB` / `caglla.toml` — **v3.9.0 Phase 1**；v3.9.1–v3.9.2 patches |
 | **v3.10** | DB Use concept design | `db use` 永続 config — **v3.10.0 documentation-only** |
 | **v3.11** | DB Use implementation | `db use` / `db use --clear` — **v3.11.0** |
-| **v4** | Travel Book | 共有用しおり — **v4.0.0 concept design**（documentation-only） |
+| **v4** | Travel Book | 共有用しおり — **v4.0.0 concept** + **v4.1.0 chapter structure**（documentation-only） |
 | **v5** | Travel Journal | 写真・添付付き旅行記（Evidence 設計が先） |
 | **v6** | Identity | 利用者・アカウント |
 | **v7** | Cloud | 同期・バックアップ・共有 |
