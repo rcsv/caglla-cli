@@ -52,7 +52,7 @@ v4.1.2 Okinawa Travel Book sample enrichment
 release notes は次のファイルを使用する。
 
 ```text
-docs/releases/4.1.2-notes.md
+docs/releases/v4.1.2-notes.md
 ```
 
 ## create-tag.sh

@@ -2,38 +2,31 @@
 
 ## Current phase
 
-v4.1.1 release verification
+v4.1.2 release verification
 
 ## Latest completed
 
-- v4.1.1 Okinawa Travel Book sample enrichment plan (documentation-only).
+- v4.1.2 Okinawa Travel Book sample enrichment (seed + golden).
+- v4.1.1 Okinawa enrichment plan (documentation-only).
 - v4.1.0 Travel Book chapter structure design.
-- v4.0.0 Travel Book concept design.
 
 ## Repository state
 
-- Latest tag: `v4.1.0` (expected; update after release)
-- Latest release: `v4.1.0 — Travel Book chapter structure design` (expected; update after release)
-- Cargo version: `4.1.1` (enrichment plan ready; release pending)
+- Latest tag: `v4.1.1` (expected; update after release)
+- Cargo version: `4.1.2` (implementation ready; release pending)
 
 ## Next action
 
-**v4.1.2 — Okinawa Travel Book sample enrichment** (single topic):
+**v4.2.0 — export-md layout improvement** (after v4.1.2 release):
 
-- `seed.sh` — Summary / Note / Reservation / Estimate per [v4.1.1 plan](specifications/v4.1.1-okinawa-travel-book-sample-enrichment-plan.md)
-- `expected-export-v3.json` + `normalize_export_v3` (`trip.summary`)
-- 58 / 49 / ¥561,780 / Receipt 不変
+- Implement [v4.1.0 chapter structure](specifications/v4.1.0-travel-book-chapter-structure-design.md) in `src/io/markdown.rs`
+- Verify with enriched Okinawa sample (`trip export-md 1`)
 
-Then **v4.2.0** — `export-md` layout improvement (use enriched Okinawa for chapter verification).
-
-Deferred until after v4.1.2 / v4.2:
+Deferred:
 
 - DB path Phase 3
 - PDF export
 - Highlights auto-extraction
-- Travel Journal / Evidence / Settlement
-
-See [v4.1.1-okinawa-travel-book-sample-enrichment-plan.md](specifications/v4.1.1-okinawa-travel-book-sample-enrichment-plan.md).
 
 ## Do not start yet
 

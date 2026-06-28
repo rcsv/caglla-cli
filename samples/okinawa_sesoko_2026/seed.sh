@@ -1,16 +1,20 @@
 #!/usr/bin/env bash
-# 沖縄・瀬底 2026-04-26〜04-29 canonical sample v0
+# 沖縄・瀬底 2026-04-26〜04-29 canonical sample v1
 #
 # 使い方（リポジトリルートから）:
 #   bash samples/okinawa_sesoko_2026/seed.sh
 #
 # 元データ: EstimateTrip_20260426.pdf（実旅行の行動台帳）
+# v1: v4.1.2 Travel Book fixture（Summary / Note / Reservation / Estimate）
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 WORK="${CAGLLA_SAMPLE_WORKDIR:-$ROOT}"
 cd "$WORK"
+
+RESERVATION_FIXTURE_REMARK="canonical sample fixture — derived from actual ledger"
+ESTIMATE_FIXTURE_NOTE="Travel Book planned-cost fixture; not original pre-trip budget"
 
 run() {
   cargo run --quiet --manifest-path "$ROOT/Cargo.toml" -- "$@"
@@ -352,6 +356,70 @@ run checklist add 1 "駐車場予約確認（セントレア P1G）"
 run checklist check 2
 run checklist check 4
 
+echo "==> Travel Book fixture（v4.1.2 — Summary / Note / Reservation / Estimate）"
+# Itinerary ID は現行投入順の参考値。正本は Day + sort_order + title（v4.1.1 plan §4–5）。
+
+run trip update 1 --summary "高齢者2名を含む5名で、沖縄本島北部・瀬底島を拠点に過ごす4日間の家族旅行。レンタカーで美ら海水族館、古宇利島、伊江島、万座毛を巡り、最終日は那覇空港へ戻る。"
+
+run day update 1 1 --summary "中部国際空港から那覇へ移動し、レンタカーを受け取って首里城を観光。夕方に瀬底島へ入り、買い出し後にヒルトン瀬底へチェックインする移動中心の日。"
+run day update 1 2 --summary "朝から美ら海水族館を楽しみ、カフェ オーシャンブルーやドリームセンターを回る。午後は古宇利島・ハナサキマルシェ方面に立ち寄り、夜はホテルで夕食。"
+run day update 1 3 --summary "フェリーで伊江島へ渡り、リリー園やハイビスカス園を訪れる。午後は瀬底へ戻り、買い出しと海水浴でゆっくり過ごす日。"
+run day update 1 4 --summary "朝食後にチェックアウトし、御菓子御殿・万座毛・ウミカジテラスを経由して那覇空港へ向かう。レンタカー返却後、空港で夕食と買い物を済ませて中部国際空港へ戻る。"
+
+run note add --trip 1 --body "高齢者2名を含むため、移動時間と休憩を多めに見る。レンタカー移動を前提にし、空港・ホテル・観光地間の乗り換え負担を減らす。"
+run note add --trip 1 --body "部屋食や買い出しを活用し、外食だけに寄せない。天候や体調次第で、古宇利島・海水浴・空港買い物は調整可能とする。"
+
+run note add --trip 1 --day 1 --body "朝が早いため、セントレア到着後の朝食と休憩を確保する。沖縄到着後はレンタカー受け取りに時間がかかる可能性あり。"
+run note add --trip 1 --day 2 --body "美ら海水族館は早め到着を前提にする。カフェや植物園は混雑・体調に応じて滞在時間を調整する。"
+run note add --trip 1 --day 3 --body "フェリー利用日。出港時刻を優先し、朝の移動に余裕を持つ。午後はホテル周辺で無理をしない構成にする。"
+run note add --trip 1 --day 4 --body "チェックアウト後から夜便まで時間が長い。荷物・高齢者の疲労・レンタカー返却時刻を優先して調整する。"
+
+# R1: Day 1 / sort 3 / P1 G Parking (id 3)
+run reservation add --itinerary 3 \
+  --reservation-type parking \
+  --provider "セントレア P1 G Parking" \
+  --confirmation 655098 \
+  --remark "$RESERVATION_FIXTURE_REMARK"
+# R2: Day 1 / sort 6 / NU045 (id 6)
+run reservation add --itinerary 6 \
+  --reservation-type flight \
+  --provider "NU045 NGO ⇒ OKA" \
+  --remark "$RESERVATION_FIXTURE_REMARK"
+# R3: Day 4 / sort 17 / NU046 (id 54)
+run reservation add --itinerary 54 \
+  --reservation-type flight \
+  --provider "NU046 OKA ⇒ NGO" \
+  --remark "$RESERVATION_FIXTURE_REMARK"
+# R4: Day 1 / sort 9 / Toyota Alphard (id 9)
+run reservation add --itinerary 9 \
+  --reservation-type rental_car \
+  --provider "Ks Rent A Car" \
+  --remark "$RESERVATION_FIXTURE_REMARK — ETC card required"
+# R5: Day 1 / sort 14 / チェックイン (id 14)
+run reservation add --itinerary 14 \
+  --reservation-type hotel \
+  --provider "ヒルトン瀬底" \
+  --remark "$RESERVATION_FIXTURE_REMARK" \
+  --start-at "2026-04-26T16:40" \
+  --end-at "2026-04-29T10:00"
+
+run estimate add --itinerary 6 --amount 200000 --currency JPY \
+  --title "航空券（往路）" --note "$ESTIMATE_FIXTURE_NOTE"
+run estimate add --itinerary 54 --amount 200000 --currency JPY \
+  --title "航空券（復路）" --note "$ESTIMATE_FIXTURE_NOTE"
+run estimate add --itinerary 9 --amount 50000 --currency JPY \
+  --title "レンタカー" --note "$ESTIMATE_FIXTURE_NOTE"
+run estimate add --itinerary 3 --amount 13000 --currency JPY \
+  --title "駐車場（出発）" --note "$ESTIMATE_FIXTURE_NOTE"
+run estimate add --itinerary 14 --amount 120000 --currency JPY \
+  --title "宿泊（3泊）" --note "$ESTIMATE_FIXTURE_NOTE"
+run estimate add --itinerary 19 --amount 10000 --currency JPY \
+  --title "美ら海水族館" --note "$ESTIMATE_FIXTURE_NOTE"
+run estimate add --itinerary 29 --amount 6000 --currency JPY \
+  --title "フェリー" --note "$ESTIMATE_FIXTURE_NOTE"
+run estimate add --itinerary 27 --amount 80000 --currency JPY \
+  --title "食費ざっくり" --note "$ESTIMATE_FIXTURE_NOTE"
+
 echo "==> Receipt Inbox（帰宅後に整理する未整理支払い候補）"
 # Receipt は Actual ではない。assign 後に作成された Expense だけが Actual に入る。
 rec --day 2 --amount 4860 --currency JPY \
@@ -368,7 +436,7 @@ rec --day 3 --amount 1200 --currency JPY \
 run receipt trash 6
 
 echo ""
-echo "==> canonical sample v0 の投入が完了しました (Trip ID: 1)"
+echo "==> canonical sample v1 の投入が完了しました (Trip ID: 1)"
 echo ""
 echo "確認コマンド:"
 echo "  cargo run -- trip stats 1"

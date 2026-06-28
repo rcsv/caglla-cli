@@ -44,8 +44,8 @@ cargo_version() {
 }
 
 release_notes_file() {
-  version_without_v="$(strip_v "$1")"
-  printf 'docs/releases/%s-notes.md' "$version_without_v"
+  version_with_v="$(with_v "$1")"
+  printf 'docs/releases/%s-notes.md' "$version_with_v"
 }
 
 assert_on_main_branch() {

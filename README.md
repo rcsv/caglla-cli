@@ -113,13 +113,14 @@ caglla db use --clear           # config の path を削除（既定 ./caglla.db
 
 GitHub Release 用ノートは [docs/releases/](docs/releases/) にあります。
 
-**最新:** [v4.1.1](docs/releases/v4.1.1-notes.md) — **documentation-only**. Okinawa Travel Book sample enrichment plan。
+**最新:** [v4.1.2](docs/releases/v4.1.2-notes.md) — Okinawa Travel Book sample enrichment（seed + golden）。
 
 **直近のリリース履歴:**
 
 | Version | 種別 | 概要 |
 |---|---|---|
-| [v4.1.1](docs/releases/v4.1.1-notes.md) | docs | Okinawa Travel Book sample enrichment plan |
+| [v4.1.2](docs/releases/v4.1.2-notes.md) | minor | Okinawa Travel Book sample enrichment |
+| [v4.1.1](docs/releases/v4.1.1-notes.md) | docs | Okinawa sample enrichment plan |
 | [v4.1.0](docs/releases/v4.1.0-notes.md) | docs | Travel Book chapter structure design |
 | [v4.0.0](docs/releases/v4.0.0-notes.md) | docs | Travel Book concept design |
 | [v3.11.0](docs/releases/v3.11.0-notes.md) | minor | DB Use implementation |

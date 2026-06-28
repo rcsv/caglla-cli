@@ -66,6 +66,7 @@ fn normalize_export_v3(value: &serde_json::Value) -> serde_json::Value {
             "name": value["trip"]["name"],
             "start_date": value["trip"]["start_date"],
             "end_date": value["trip"]["end_date"],
+            "summary": value["trip"]["summary"],
         },
         "days": value["days"],
         "checklist_items": value["checklist_items"]

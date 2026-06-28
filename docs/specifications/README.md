@@ -58,3 +58,4 @@ Caglla CLI の内部モデル・設計仕様（実装前の設計メモを含む
 | [v4.0.0-travel-book-concept-design.md](v4.0.0-travel-book-concept-design.md) | v4.0.0 Travel Book Concept Design（**v4.0.0 documentation-only**） |
 | [v4.1.0-travel-book-chapter-structure-design.md](v4.1.0-travel-book-chapter-structure-design.md) | v4.1.0 Travel Book Chapter Structure Design（**v4.1.0 documentation-only**） |
 | [v4.1.1-okinawa-travel-book-sample-enrichment-plan.md](v4.1.1-okinawa-travel-book-sample-enrichment-plan.md) | v4.1.1 Okinawa Travel Book Sample Enrichment Plan（**v4.1.1 documentation-only**） |
+| [v4.1.2-okinawa-travel-book-sample-enrichment-implementation-plan.md](v4.1.2-okinawa-travel-book-sample-enrichment-implementation-plan.md) | v4.1.2 Okinawa Sample Enrichment Implementation Plan（**v4.1.2**） |
