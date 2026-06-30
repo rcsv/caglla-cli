@@ -2,29 +2,31 @@
 
 ## Current phase
 
-v4.3.0 Reservation / Summary display refinement（実装完了 — release 待ち）
+v4.3.2 Travel Book planned cost polish（planning）
 
 ## Latest completed
 
-- v4.2.2 Travel Book Markdown polish — **released**
-- v4.3.0 Reservation / Summary display refinement（本マイルストーン）
+- v4.3.0 Reservation / Summary display refinement — **released**
+- v4.3.1 Reservation / Summary display post-release review — **released**
 
 ## Repository state
 
-- Cargo version: `4.3.0`
-- Design: [v4.3.0-reservation-summary-display-refinement-design.md](specifications/v4.3.0-reservation-summary-display-refinement-design.md)
-- Implementation plan: [v4.3.0-reservation-summary-display-refinement-implementation-plan.md](specifications/v4.3.0-reservation-summary-display-refinement-implementation-plan.md)
+- Cargo version: `4.3.1`
+- Latest release: `v4.3.1`
+- Review doc: [v4.3.1-reservation-summary-display-post-release-review.md](specifications/v4.3.1-reservation-summary-display-post-release-review.md)
+- v4.3.0 design: [v4.3.0-reservation-summary-display-refinement-design.md](specifications/v4.3.0-reservation-summary-display-refinement-design.md)
 
 ## Next action
 
-**v4.3.0 release** — tag / GitHub Release（`make check` 通過後）
+**v4.3.2 — Travel Book planned cost polish**（review V9 主候補）
+
+- Planned cost 表 — Note 列がすべて空のとき列を省略
 
 ## Do not start yet
 
-- Daily schedule 内 Reservation ハイライト
+- Daily schedule 内 Reservation ハイライト（承認前）
+- 詳細無し Reservation の非表示
 - Travel Book への Expense / Receipt 追加
-- Highlights 自動抽出
-- PDF export
 - Venue model / map provider / 移動時間自動算出
 
 Canonical defer list: [long-term-version-strategy.md](long-term-version-strategy.md)

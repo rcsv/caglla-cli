@@ -128,6 +128,8 @@ Polish implementation（v4.2.2）: [v4.2.2-travel-book-markdown-polish-implement
 
 Reservation / Summary refinement（v4.3.0）: [v4.3.0-reservation-summary-display-refinement-design.md](specifications/v4.3.0-reservation-summary-display-refinement-design.md)
 
+Post-release review（v4.3.1）: [v4.3.1-reservation-summary-display-post-release-review.md](specifications/v4.3.1-reservation-summary-display-post-release-review.md)
+
 ### checklist_generate サンプル
 
 4日間・Itinerary 15件・チェックリスト10件の小規模サンプル:

@@ -857,7 +857,27 @@ Implementation plan: [v4.3.0-reservation-summary-display-refinement-implementati
 2. Reservations — 種別 `###` 廃止、旅程順フラット
 3. 見出し provider 冗長抑制、日本語フィールドラベル、Period 人間可読化
 
-非対象: Daily schedule 内予約ハイライト（v4.3.1+）、Venue / Maps、Expense / Receipt
+非対象: Daily schedule 内予約ハイライト（v4.3.2+）、Venue / Maps、Expense / Receipt
+
+Post-release review: [v4.3.1-reservation-summary-display-post-release-review.md](specifications/v4.3.1-reservation-summary-display-post-release-review.md)
+
+---
+
+## v4.3.1 — Reservation / Summary display post-release review（**documentation-only**）
+
+### テーマ
+
+```text
+v4.3.0 出力の Days overview / Reservations / 責務境界のレビュー
+沖縄 expected-export-md.md を正本
+分類: Keep / Polish candidate / Defer / Do not do → v4.3.2 へ polish を分離
+```
+
+Post-release review: [v4.3.1-reservation-summary-display-post-release-review.md](specifications/v4.3.1-reservation-summary-display-post-release-review.md)
+
+リリースノート: [v4.3.1-notes.md](releases/v4.3.1-notes.md)
+
+コード / golden / CLI 変更なし。
 
 ---
 
