@@ -14,12 +14,13 @@ v4.3.0 Reservation / Summary display refinement（planning）
 - Cargo version: `4.2.2`
 - Latest release: `v4.2.2`
 - Travel Book Markdown polish completed
-- Implementation plan: [v4.2.2-travel-book-markdown-polish-implementation-plan.md](specifications/v4.2.2-travel-book-markdown-polish-implementation-plan.md)
+- **v4.3.0 design:** [v4.3.0-reservation-summary-display-refinement-design.md](specifications/v4.3.0-reservation-summary-display-refinement-design.md)
+- Implementation plan (v4.2.2): [v4.2.2-travel-book-markdown-polish-implementation-plan.md](specifications/v4.2.2-travel-book-markdown-polish-implementation-plan.md)
 - Review doc: [v4.2.1-travel-book-export-md-post-release-review.md](specifications/v4.2.1-travel-book-export-md-post-release-review.md)
 
 ## Next action
 
-**v4.3.0 — Reservation / Summary display refinement**
+**v4.3.0 design review** — [Reservation / Summary display refinement design](specifications/v4.3.0-reservation-summary-display-refinement-design.md) を確認し、承認後に実装へ
 
 ## Do not start yet
 

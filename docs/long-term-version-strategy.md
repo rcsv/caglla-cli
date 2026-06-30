@@ -838,6 +838,28 @@ Implementation plan: [v4.2.2-travel-book-markdown-polish-implementation-plan.md]
 
 ---
 
+## v4.3.0 — Reservation / Summary display refinement（**planning**）
+
+### テーマ
+
+```text
+Travel Book 内の Reservation / Summary 表示を実旅行向けに整える
+データモデル変更なし — export-md 表示ルールのみ
+```
+
+Design: [v4.3.0-reservation-summary-display-refinement-design.md](specifications/v4.3.0-reservation-summary-display-refinement-design.md)
+
+主な提案:
+
+1. Summary（Trip / Day）— 配置は Keep、変更最小
+2. Reservations — 種別 `###` 廃止、旅程順フラット
+3. 見出し行の provider 冗長抑制（v4.2.2 の拡張）
+4. 確認番号・期間・備考のしおり向けラベルと Period 人間可読化
+
+非対象: Daily schedule 内予約ハイライト（v4.3.1+）、Venue / Maps、Expense / Receipt
+
+---
+
 ## v5 — Travel Journal
 
 ### テーマ
