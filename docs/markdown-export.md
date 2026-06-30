@@ -130,6 +130,8 @@ Reservation / Summary refinement（v4.3.0）: [v4.3.0-reservation-summary-displa
 
 Post-release review（v4.3.1）: [v4.3.1-reservation-summary-display-post-release-review.md](specifications/v4.3.1-reservation-summary-display-post-release-review.md)
 
+Planned cost polish（v4.3.2）: [v4.3.2-travel-book-planned-cost-polish-implementation-plan.md](specifications/v4.3.2-travel-book-planned-cost-polish-implementation-plan.md)
+
 ### checklist_generate サンプル
 
 4日間・Itinerary 15件・チェックリスト10件の小規模サンプル:

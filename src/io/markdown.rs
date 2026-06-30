@@ -297,33 +297,65 @@ fn format_planned_cost_chapter(
     }
     lines.push(String::new());
 
-    let mut current_itinerary_id: Option<i64> = None;
+    let mut grouped: Vec<(i64, Vec<&Estimate>)> = Vec::new();
     for estimate in trip_estimates {
-        if current_itinerary_id != Some(estimate.itinerary_id) {
-            if current_itinerary_id.is_some() {
-                lines.push(String::new());
-            }
-            current_itinerary_id = Some(estimate.itinerary_id);
-            if let Some(item) = itinerary_by_id.get(&estimate.itinerary_id) {
-                let context = match &item.start_time {
-                    Some(time) => format!("Day {} / {time} {}", item.day, item.title),
-                    None => format!("Day {} / {}", item.day, item.title),
-                };
-                lines.push(format!("### {context}"));
-                lines.push(String::new());
-                lines.push("| Item | Amount | Note |".to_string());
-                lines.push("|---|---:|---|".to_string());
+        if let Some((itinerary_id, rows)) = grouped.last_mut() {
+            if *itinerary_id == estimate.itinerary_id {
+                rows.push(estimate);
+                continue;
             }
         }
-        let title = estimate
-            .title
-            .as_deref()
-            .filter(|value| !value.trim().is_empty())
-            .unwrap_or("-");
-        let amount =
-            crate::estimate::format_estimate_amount_markdown(estimate.amount, &estimate.currency);
-        let note = estimate.note.as_deref().unwrap_or("");
-        lines.push(format!("| {title} | {amount} | {note} |"));
+        grouped.push((estimate.itinerary_id, vec![estimate]));
+    }
+
+    for (group_index, (itinerary_id, estimates)) in grouped.iter().enumerate() {
+        if group_index > 0 {
+            lines.push(String::new());
+        }
+        let Some(item) = itinerary_by_id.get(itinerary_id) else {
+            continue;
+        };
+
+        let context = match &item.start_time {
+            Some(time) => format!("Day {} / {time} {}", item.day, item.title),
+            None => format!("Day {} / {}", item.day, item.title),
+        };
+
+        let has_any_note = estimates.iter().any(|estimate| {
+            estimate
+                .note
+                .as_deref()
+                .map(str::trim)
+                .is_some_and(|note| !note.is_empty())
+        });
+
+        lines.push(format!("### {context}"));
+        lines.push(String::new());
+        if has_any_note {
+            lines.push("| Item | Amount | Note |".to_string());
+            lines.push("|---|---:|---|".to_string());
+        } else {
+            lines.push("| Item | Amount |".to_string());
+            lines.push("|---|---:|".to_string());
+        }
+
+        for estimate in estimates {
+            let title = estimate
+                .title
+                .as_deref()
+                .filter(|value| !value.trim().is_empty())
+                .unwrap_or("-");
+            let amount = crate::estimate::format_estimate_amount_markdown(
+                estimate.amount,
+                &estimate.currency,
+            );
+            if has_any_note {
+                let note = estimate.note.as_deref().unwrap_or("");
+                lines.push(format!("| {title} | {amount} | {note} |"));
+            } else {
+                lines.push(format!("| {title} | {amount} |"));
+            }
+        }
     }
 
     Some(format!("\n\n{}\n", lines.join("\n").trim_end()))
@@ -1361,7 +1393,7 @@ mod tests {
         assert!(daily.contains("#### Aquarium"));
         assert!(!daily.contains("予定費用:"));
         assert!(!daily.contains("Planned total:"));
-        assert!(md.contains("| - | JPY 2,180 |  |"));
+        assert!(md.contains("| - | JPY 2,180 |"));
     }
 
     #[test]
@@ -1429,6 +1461,73 @@ mod tests {
         let planned = &md[md.find("## Planned cost").unwrap()..];
         assert!(planned.contains("JPY 10,000"));
         assert!(planned.contains("KRW 50,000"));
+    }
+
+    #[test]
+    fn test_export_md_planned_cost_omits_note_column_when_all_empty() {
+        let conn = test_db();
+        let trip_id = add_test_trip(&conn, "Planned Cost No Notes Trip").unwrap();
+        let itinerary_id = add_itinerary_item(
+            &conn,
+            trip_id,
+            1,
+            "Aquarium",
+            None,
+            None,
+            Some(0),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        crate::estimate::add_estimate(&conn, itinerary_id, "2180", "JPY", None, None, None)
+            .unwrap();
+
+        let md = generate_trip_markdown(&conn, trip_id).unwrap();
+        let planned = &md[md.find("## Planned cost").unwrap()..];
+        assert!(planned.contains("| Item | Amount |"));
+        assert!(planned.contains("|---|---:|"));
+        assert!(!planned.contains("| Item | Amount | Note |"));
+    }
+
+    #[test]
+    fn test_export_md_planned_cost_includes_note_column_when_any_present() {
+        let conn = test_db();
+        let trip_id = add_test_trip(&conn, "Planned Cost With Notes Trip").unwrap();
+        let itinerary_id = add_itinerary_item(
+            &conn,
+            trip_id,
+            1,
+            "Aquarium",
+            None,
+            None,
+            Some(0),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        crate::estimate::add_estimate(&conn, itinerary_id, "2180", "JPY", None, None, None)
+            .unwrap();
+        crate::estimate::add_estimate(
+            &conn,
+            itinerary_id,
+            "13000",
+            "JPY",
+            None,
+            Some("予算メモ"),
+            None,
+        )
+        .unwrap();
+
+        let md = generate_trip_markdown(&conn, trip_id).unwrap();
+        let planned = &md[md.find("## Planned cost").unwrap()..];
+        assert!(planned.contains("| Item | Amount | Note |"));
+        assert!(planned.contains("|---|---:|---|"));
+        assert!(planned.contains("| - | JPY 2,180 |  |"));
+        assert!(planned.contains("| - | JPY 13,000 | 予算メモ |"));
     }
 
     #[test]

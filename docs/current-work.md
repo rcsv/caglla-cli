@@ -2,25 +2,22 @@
 
 ## Current phase
 
-v4.3.2 Travel Book planned cost polish（planning）
+v4.3.2 Travel Book planned cost polish（実装完了 — release 待ち）
 
 ## Latest completed
 
-- v4.3.0 Reservation / Summary display refinement — **released**
 - v4.3.1 Reservation / Summary display post-release review — **released**
+- v4.3.2 Travel Book planned cost polish（本マイルストーン）
 
 ## Repository state
 
-- Cargo version: `4.3.1`
-- Latest release: `v4.3.1`
-- Review doc: [v4.3.1-reservation-summary-display-post-release-review.md](specifications/v4.3.1-reservation-summary-display-post-release-review.md)
-- v4.3.0 design: [v4.3.0-reservation-summary-display-refinement-design.md](specifications/v4.3.0-reservation-summary-display-refinement-design.md)
+- Cargo version: `4.3.2`
+- Implementation plan: [v4.3.2-travel-book-planned-cost-polish-implementation-plan.md](specifications/v4.3.2-travel-book-planned-cost-polish-implementation-plan.md)
+- Review doc (v4.3.1): [v4.3.1-reservation-summary-display-post-release-review.md](specifications/v4.3.1-reservation-summary-display-post-release-review.md)
 
 ## Next action
 
-**v4.3.2 — Travel Book planned cost polish**（review V9 主候補）
-
-- Planned cost 表 — Note 列がすべて空のとき列を省略
+**v4.3.2 release** — tag / GitHub Release（`make check` 通過後）
 
 ## Do not start yet
 

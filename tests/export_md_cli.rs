@@ -394,5 +394,5 @@ fn cli_export_md_handles_null_title_and_note_estimates() {
     let output = run_cli(&dir, &["trip", "export-md", "1"]);
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("| - | JPY 1,500 |  |"));
+    assert!(stdout.contains("| - | JPY 1,500 |"));
 }

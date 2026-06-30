@@ -65,3 +65,4 @@ Caglla CLI の内部モデル・設計仕様（実装前の設計メモを含む
 | [v4.3.0-reservation-summary-display-refinement-design.md](v4.3.0-reservation-summary-display-refinement-design.md) | v4.3.0 Reservation / Summary Display Refinement Design（**v4.3.0**） |
 | [v4.3.0-reservation-summary-display-refinement-implementation-plan.md](v4.3.0-reservation-summary-display-refinement-implementation-plan.md) | v4.3.0 Reservation / Summary Display Refinement Implementation Plan（**v4.3.0 リリース済み**） |
 | [v4.3.1-reservation-summary-display-post-release-review.md](v4.3.1-reservation-summary-display-post-release-review.md) | v4.3.1 Reservation / Summary Display Post-Release Review（**v4.3.1 documentation-only**） |
+| [v4.3.2-travel-book-planned-cost-polish-implementation-plan.md](v4.3.2-travel-book-planned-cost-polish-implementation-plan.md) | v4.3.2 Travel Book Planned Cost Polish Implementation Plan（**v4.3.2**） |
