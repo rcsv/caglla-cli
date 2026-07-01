@@ -933,6 +933,35 @@ Implementation plan: [v4.4.1-category-display-name-in-travel-book-implementation
 
 ---
 
+## v4.4.2 — Travel Book presentation helper review（**documentation-only**）
+
+### テーマ
+
+```text
+markdown.rs 内 Travel Book presentation logic の棚卸し
+Domain / Presentation helper / Markdown renderer の分類マップ
+大規模 abstraction は作らない — v4.4.3 抽出の判断材料
+```
+
+Review: [v4.4.2-travel-book-presentation-helper-review.md](specifications/v4.4.2-travel-book-presentation-helper-review.md)
+
+リリースノート: [v4.4.2-notes.md](releases/v4.4.2-notes.md)
+
+---
+
+## v4.4.3 — Travel Book presentation helpers extraction（**planning**）
+
+### テーマ
+
+```text
+Phase 1: 既存 pub(crate) helper のモジュール移動（golden 不変）
+reservation / notes sort / category helpers
+```
+
+根拠: [v4.4.2-travel-book-presentation-helper-review.md](specifications/v4.4.2-travel-book-presentation-helper-review.md) §13
+
+---
+
 ## v5 — Travel Journal
 
 ### テーマ

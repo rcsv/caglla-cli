@@ -135,6 +135,8 @@ Planned cost polish（v4.3.2）: [v4.3.2-travel-book-planned-cost-polish-impleme
 
 Presentation model review（v4.4.0）: [v4.4.0-travel-book-presentation-model-review.md](specifications/v4.4.0-travel-book-presentation-model-review.md)
 
+Presentation helper review（v4.4.2）: [v4.4.2-travel-book-presentation-helper-review.md](specifications/v4.4.2-travel-book-presentation-helper-review.md)
+
 ### checklist_generate サンプル
 
 4日間・Itinerary 15件・チェックリスト10件の小規模サンプル:
