@@ -949,16 +949,20 @@ Review: [v4.4.2-travel-book-presentation-helper-review.md](specifications/v4.4.2
 
 ---
 
-## v4.4.3 — Travel Book presentation helpers extraction（**planning**）
+## v4.4.3 — Travel Book presentation helpers extraction
 
 ### テーマ
 
 ```text
-Phase 1: 既存 pub(crate) helper のモジュール移動（golden 不変）
-reservation / notes sort / category helpers
+Phase 1: markdown.rs から travel_book_presentation.rs へ helper 移動
+golden 不変リファクタ — 出力仕様変更なし
 ```
 
-根拠: [v4.4.2-travel-book-presentation-helper-review.md](specifications/v4.4.2-travel-book-presentation-helper-review.md) §13
+Implementation plan: [v4.4.3-travel-book-presentation-helpers-extraction-plan.md](specifications/v4.4.3-travel-book-presentation-helpers-extraction-plan.md)
+
+リリースノート: [v4.4.3-notes.md](releases/v4.4.3-notes.md)
+
+モジュール: `src/io/travel_book_presentation.rs`
 
 ---
 

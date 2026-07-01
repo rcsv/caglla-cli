@@ -2,39 +2,31 @@
 
 ## Current phase
 
-v4.4.3 Travel Book presentation helpers extraction（planning）
+v4.4.x Travel Book presentation model — Phase 2 判断待ち
 
 ## Latest completed
 
+- v4.4.3 Travel Book presentation helpers extraction — **released**
 - v4.4.2 Travel Book presentation helper review — **released**
-- v4.4.1 Category display name in Travel Book — **released**
 
 ## Repository state
 
-- Cargo version: `4.4.2`
-- **v4.4.2 review:** [v4.4.2-travel-book-presentation-helper-review.md](specifications/v4.4.2-travel-book-presentation-helper-review.md)
-- Release notes: [v4.4.2-notes.md](releases/v4.4.2-notes.md)
+- Cargo version: `4.4.3`
+- Presentation module: `src/io/travel_book_presentation.rs`
+- **v4.4.3 plan:** [v4.4.3-travel-book-presentation-helpers-extraction-plan.md](specifications/v4.4.3-travel-book-presentation-helpers-extraction-plan.md)
+- Release notes: [v4.4.3-notes.md](releases/v4.4.3-notes.md)
 
 ## Next action
 
-**v4.4.3 — Travel Book presentation helpers extraction**（Phase 1）
+v4.4.2 review §13 Phase 2（trip overview / days overview / planned cost 判定）を別 milestone で判断。大規模 `TravelBookDocument` は Defer。
 
-既存 `pub(crate)` helper を小さなモジュールへ移動（golden 不変）:
-
-- `format_travel_book_category_detail_line`
-- `reservation_provider_line_redundant`
-- `format_travel_book_reservation_period`
-- `format_travel_book_reservation_heading`（ロジック部分）
-- `travel_book_note_sort_key`
-
-根拠: [v4.4.2-travel-book-presentation-helper-review.md](specifications/v4.4.2-travel-book-presentation-helper-review.md) §13
+Dependabot #65（toml 0.8 → 1.1）は別作業 — rebase 後 CI 確認してから判断。
 
 ## Do not start yet
 
 - `TravelBookDocument` 全体抽象
-- 大規模 view model 一括導入
 - GUI / native app コード
 - Venue model / map provider
-- Dependabot #65（toml 0.8 → 1.1）— v4.4.2 とは分離、rebase 後 CI 確認
+- Dependabot #65 を v4.4.3 と混在させない
 
 Canonical defer list: [long-term-version-strategy.md](long-term-version-strategy.md)

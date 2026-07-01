@@ -137,6 +137,8 @@ Presentation model review（v4.4.0）: [v4.4.0-travel-book-presentation-model-re
 
 Presentation helper review（v4.4.2）: [v4.4.2-travel-book-presentation-helper-review.md](specifications/v4.4.2-travel-book-presentation-helper-review.md)
 
+Presentation helpers live in `src/io/travel_book_presentation.rs`（v4.4.3+）— renderer-independent rules shared by `trip export-md`.
+
 ### checklist_generate サンプル
 
 4日間・Itinerary 15件・チェックリスト10件の小規模サンプル:
