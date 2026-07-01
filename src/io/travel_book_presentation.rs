@@ -5,7 +5,94 @@
 
 use chrono::{NaiveDate, NaiveDateTime, Timelike};
 
-use crate::domain::models::{ExportNote, ItineraryCategory};
+use crate::analysis::statistics::TripStats;
+use crate::domain::models::{
+    Day, Estimate, ExportNote, ItineraryCategory, ItineraryItem, Participant, Trip,
+};
+
+/// Trip overview 章を出す価値があるか
+pub(crate) fn trip_overview_worth_showing(
+    trip: &Trip,
+    participants: &[Participant],
+    stats: &TripStats,
+) -> bool {
+    trip.summary.as_ref().is_some_and(|s| !s.trim().is_empty())
+        || !participants.is_empty()
+        || stats.itinerary_count > 0
+        || stats.checklist_total > 0
+        || stats.stay_minutes > 0
+        || stats.travel_minutes > 0
+        || stats.participants_recorded
+        || stats.days > 0
+        || trip.start_date.is_some()
+        || trip.end_date.is_some()
+}
+
+/// Stay / Travel / Total 時間メトリクス行を出すか
+pub(crate) fn trip_overview_time_metrics_worth_showing(stats: &TripStats) -> bool {
+    stats.stay_minutes > 0 || stats.travel_minutes > 0 || stats.total_minutes() > 0
+}
+
+/// Days overview 用エントリ（非空 Day summary のみ）
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct DaysOverviewEntry {
+    pub day_number: i64,
+    pub summary: String,
+}
+
+/// Day summary がある日だけ抽出し、`day_number` 昇順で返す
+pub(crate) fn collect_days_overview_entries(days: &[Day]) -> Vec<DaysOverviewEntry> {
+    let mut entries: Vec<DaysOverviewEntry> = days
+        .iter()
+        .filter_map(|day| {
+            day.summary
+                .as_deref()
+                .map(str::trim)
+                .filter(|summary| !summary.is_empty())
+                .map(|summary| DaysOverviewEntry {
+                    day_number: day.day_number,
+                    summary: summary.to_string(),
+                })
+        })
+        .collect();
+    entries.sort_by_key(|entry| entry.day_number);
+    entries
+}
+
+/// Days overview 一覧ラベル（`Day N — date`）
+pub(crate) fn travel_book_day_overview_label(trip: &Trip, day_number: i64) -> String {
+    match crate::day::day_date_for_trip(trip, day_number) {
+        Ok(date) => format!("Day {day_number} — {date}"),
+        Err(_) => format!("Day {day_number}"),
+    }
+}
+
+/// Planned cost 表で Note 列を出すか（いずれかの note が非空なら true）
+pub(crate) fn planned_cost_note_column_visible(estimates: &[&Estimate]) -> bool {
+    estimates.iter().any(|estimate| {
+        estimate
+            .note
+            .as_deref()
+            .map(str::trim)
+            .is_some_and(|note| !note.is_empty())
+    })
+}
+
+/// Planned cost 行タイトル（空・空白のみなら `-`）
+pub(crate) fn planned_cost_estimate_display_title(title: Option<&str>) -> &str {
+    title
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("-")
+}
+
+/// Planned cost itinerary グループ見出し用コンテキスト（`Day N / …`）
+pub(crate) fn planned_cost_itinerary_group_label(item: &ItineraryItem) -> String {
+    match &item.start_time {
+        Some(time) => format!("Day {} / {time} {}", item.day, item.title),
+        None => format!("Day {} / {}", item.day, item.title),
+    }
+}
 
 /// Daily schedule 向け itinerary カテゴリ詳細行（domain 定義の表示名）
 pub(crate) fn format_travel_book_category_detail_line(category: ItineraryCategory) -> String {
@@ -162,6 +249,108 @@ pub(crate) fn format_travel_book_reservation_heading(
 mod tests {
     use super::*;
     use crate::domain::models::ItineraryCategory;
+
+    #[test]
+    fn test_trip_overview_time_metrics_worth_showing() {
+        use std::collections::{BTreeMap, HashMap};
+
+        let mut stats = TripStats {
+            trip_name: String::new(),
+            days: 1,
+            itinerary_count: 0,
+            checklist_completed: 0,
+            checklist_total: 0,
+            category_counts: HashMap::new(),
+            stay_minutes: 0,
+            travel_minutes: 0,
+            total_minutes: 0,
+            expense_count: 0,
+            expense_totals: BTreeMap::new(),
+            estimate_count: 0,
+            estimate_totals: BTreeMap::new(),
+            difference_totals: None,
+            registered_participant_count: 0,
+            participants_recorded: false,
+            self_known: false,
+            participant_count: None,
+            traveler_count: None,
+            companion_count: None,
+        };
+        assert!(!trip_overview_time_metrics_worth_showing(&stats));
+        stats.stay_minutes = 1;
+        assert!(trip_overview_time_metrics_worth_showing(&stats));
+    }
+
+    #[test]
+    fn test_collect_days_overview_entries() {
+        let days = vec![
+            Day {
+                id: 1,
+                trip_id: 1,
+                day_number: 2,
+                title: String::new(),
+                summary: Some("  Day 2 summary  ".to_string()),
+                created_at: String::new(),
+                updated_at: String::new(),
+            },
+            Day {
+                id: 2,
+                trip_id: 1,
+                day_number: 1,
+                title: String::new(),
+                summary: Some("Day 1 summary".to_string()),
+                created_at: String::new(),
+                updated_at: String::new(),
+            },
+            Day {
+                id: 3,
+                trip_id: 1,
+                day_number: 3,
+                title: String::new(),
+                summary: Some("   ".to_string()),
+                created_at: String::new(),
+                updated_at: String::new(),
+            },
+        ];
+        let entries = collect_days_overview_entries(&days);
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].day_number, 1);
+        assert_eq!(entries[0].summary, "Day 1 summary");
+        assert_eq!(entries[1].day_number, 2);
+        assert_eq!(entries[1].summary, "Day 2 summary");
+    }
+
+    #[test]
+    fn test_planned_cost_note_column_visible() {
+        let with_note = Estimate {
+            id: 1,
+            itinerary_id: 1,
+            title: None,
+            amount: 100,
+            currency: "JPY".to_string(),
+            note: Some("memo".to_string()),
+            sort_order: 0,
+            created_at: String::new(),
+            updated_at: String::new(),
+        };
+        let empty_note = Estimate {
+            note: Some("  ".to_string()),
+            ..with_note.clone()
+        };
+        let no_note = Estimate {
+            note: None,
+            ..with_note.clone()
+        };
+        assert!(planned_cost_note_column_visible(&[&with_note]));
+        assert!(!planned_cost_note_column_visible(&[&empty_note, &no_note]));
+    }
+
+    #[test]
+    fn test_planned_cost_estimate_display_title() {
+        assert_eq!(planned_cost_estimate_display_title(None), "-");
+        assert_eq!(planned_cost_estimate_display_title(Some("  ")), "-");
+        assert_eq!(planned_cost_estimate_display_title(Some("Lunch")), "Lunch");
+    }
 
     #[test]
     fn test_format_travel_book_category_detail_line_uses_definition_display_name() {

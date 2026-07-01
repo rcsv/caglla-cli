@@ -9,8 +9,12 @@ use crate::domain::models::{
     ChecklistItem, Day, Estimate, ExportNote, ItineraryItem, Participant, Trip,
 };
 use crate::io::travel_book_presentation::{
-    format_travel_book_category_detail_line, format_travel_book_reservation_heading,
-    format_travel_book_reservation_period, sort_export_notes_for_travel_book,
+    collect_days_overview_entries, format_travel_book_category_detail_line,
+    format_travel_book_reservation_heading, format_travel_book_reservation_period,
+    planned_cost_estimate_display_title, planned_cost_itinerary_group_label,
+    planned_cost_note_column_visible, sort_export_notes_for_travel_book,
+    travel_book_day_overview_label, trip_overview_time_metrics_worth_showing,
+    trip_overview_worth_showing,
 };
 use crate::reservation::ReservationWithContext;
 
@@ -88,23 +92,6 @@ fn append_cover(output: &mut String, trip: &Trip, stats: &TripStats) {
     }
 }
 
-fn trip_overview_worth_showing(
-    trip: &Trip,
-    participants: &[Participant],
-    stats: &TripStats,
-) -> bool {
-    trip.summary.as_ref().is_some_and(|s| !s.trim().is_empty())
-        || !participants.is_empty()
-        || stats.itinerary_count > 0
-        || stats.checklist_total > 0
-        || stats.stay_minutes > 0
-        || stats.travel_minutes > 0
-        || stats.participants_recorded
-        || stats.days > 0
-        || trip.start_date.is_some()
-        || trip.end_date.is_some()
-}
-
 fn append_trip_overview_stats(output: &mut String, stats: &TripStats) {
     output.push_str(&format!("- Days: {}\n", stats.days));
     output.push_str(&format!("- Itineraries: {}\n", stats.itinerary_count));
@@ -112,7 +99,7 @@ fn append_trip_overview_stats(output: &mut String, stats: &TripStats) {
         "- Checklist: {} / {} completed\n",
         stats.checklist_completed, stats.checklist_total
     ));
-    if stats.stay_minutes > 0 || stats.travel_minutes > 0 || stats.total_minutes() > 0 {
+    if trip_overview_time_metrics_worth_showing(stats) {
         output.push_str(&format!(
             "- Stay Time: {}\n",
             format_minutes_duration(stats.stay_minutes)
@@ -145,39 +132,21 @@ fn append_trip_overview_stats(output: &mut String, stats: &TripStats) {
     }
 }
 
-fn format_day_overview_list_label(trip: &Trip, day_number: i64) -> String {
-    match crate::day::day_date_for_trip(trip, day_number) {
-        Ok(date) => format!("Day {day_number} — {date}"),
-        Err(_) => format!("Day {day_number}"),
-    }
-}
-
 fn append_days_overview(output: &mut String, trip: &Trip, days: &[Day]) {
-    let mut day_summaries: Vec<(&Day, &str)> = days
-        .iter()
-        .filter_map(|day| {
-            day.summary
-                .as_deref()
-                .map(str::trim)
-                .filter(|summary| !summary.is_empty())
-                .map(|summary| (day, summary))
-        })
-        .collect();
-    if day_summaries.is_empty() {
+    let entries = collect_days_overview_entries(days);
+    if entries.is_empty() {
         return;
     }
 
-    day_summaries.sort_by_key(|(day, _)| day.day_number);
-
     output.push_str("\n### Days overview\n\n");
-    for (index, (day, summary)) in day_summaries.iter().enumerate() {
+    for (index, entry) in entries.iter().enumerate() {
         if index > 0 {
             output.push('\n');
         }
         output.push_str(&format!(
             "- **{}**: {}",
-            format_day_overview_list_label(trip, day.day_number),
-            summary
+            travel_book_day_overview_label(trip, entry.day_number),
+            entry.summary
         ));
     }
     output.push('\n');
@@ -320,22 +289,13 @@ fn format_planned_cost_chapter(
             continue;
         };
 
-        let context = match &item.start_time {
-            Some(time) => format!("Day {} / {time} {}", item.day, item.title),
-            None => format!("Day {} / {}", item.day, item.title),
-        };
+        let context = planned_cost_itinerary_group_label(item);
 
-        let has_any_note = estimates.iter().any(|estimate| {
-            estimate
-                .note
-                .as_deref()
-                .map(str::trim)
-                .is_some_and(|note| !note.is_empty())
-        });
+        let show_note_column = planned_cost_note_column_visible(estimates);
 
         lines.push(format!("### {context}"));
         lines.push(String::new());
-        if has_any_note {
+        if show_note_column {
             lines.push("| Item | Amount | Note |".to_string());
             lines.push("|---|---:|---|".to_string());
         } else {
@@ -344,16 +304,12 @@ fn format_planned_cost_chapter(
         }
 
         for estimate in estimates {
-            let title = estimate
-                .title
-                .as_deref()
-                .filter(|value| !value.trim().is_empty())
-                .unwrap_or("-");
+            let title = planned_cost_estimate_display_title(estimate.title.as_deref());
             let amount = crate::estimate::format_estimate_amount_markdown(
                 estimate.amount,
                 &estimate.currency,
             );
-            if has_any_note {
+            if show_note_column {
                 let note = estimate.note.as_deref().unwrap_or("");
                 lines.push(format!("| {title} | {amount} | {note} |"));
             } else {

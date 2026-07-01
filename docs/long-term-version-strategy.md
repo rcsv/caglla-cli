@@ -966,6 +966,21 @@ Implementation plan: [v4.4.3-travel-book-presentation-helpers-extraction-plan.md
 
 ---
 
+## v4.4.4 — Travel Book presentation helpers extraction Phase 2
+
+### テーマ
+
+```text
+Phase 2: Trip overview / Days overview / Planned cost の presentation decision を helper 化
+golden 不変リファクタ
+```
+
+Implementation plan: [v4.4.4-travel-book-presentation-helpers-extraction-phase-2.md](specifications/v4.4.4-travel-book-presentation-helpers-extraction-phase-2.md)
+
+リリースノート: [v4.4.4-notes.md](releases/v4.4.4-notes.md)
+
+---
+
 ## v5 — Travel Journal
 
 ### テーマ

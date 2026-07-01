@@ -70,3 +70,4 @@ Caglla CLI の内部モデル・設計仕様（実装前の設計メモを含む
 | [v4.4.1-category-display-name-in-travel-book-implementation-plan.md](v4.4.1-category-display-name-in-travel-book-implementation-plan.md) | v4.4.1 Category Display Name in Travel Book Implementation Plan（**v4.4.1**） |
 | [v4.4.2-travel-book-presentation-helper-review.md](v4.4.2-travel-book-presentation-helper-review.md) | v4.4.2 Travel Book Presentation Helper Review（**v4.4.2**） |
 | [v4.4.3-travel-book-presentation-helpers-extraction-plan.md](v4.4.3-travel-book-presentation-helpers-extraction-plan.md) | v4.4.3 Travel Book Presentation Helpers Extraction Plan（**v4.4.3**） |
+| [v4.4.4-travel-book-presentation-helpers-extraction-phase-2.md](v4.4.4-travel-book-presentation-helpers-extraction-phase-2.md) | v4.4.4 Travel Book Presentation Helpers Extraction Phase 2（**v4.4.4**） |
