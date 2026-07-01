@@ -13,8 +13,8 @@ use crate::io::travel_book_presentation::{
     format_travel_book_reservation_heading, format_travel_book_reservation_period,
     planned_cost_estimate_display_title, planned_cost_itinerary_group_label,
     planned_cost_note_column_visible, sort_export_notes_for_travel_book,
-    travel_book_day_overview_label, trip_overview_time_metrics_worth_showing,
-    trip_overview_worth_showing,
+    travel_book_day_overview_label, travel_book_note_heading_label, travel_book_trip_date_range,
+    trip_overview_time_metrics_worth_showing, trip_overview_worth_showing,
 };
 use crate::reservation::ReservationWithContext;
 
@@ -24,16 +24,6 @@ pub(crate) fn list_itinerary_items_for_markdown(
     trip_id: i64,
 ) -> Result<Vec<ItineraryItem>> {
     crate::itinerary::list_itinerary_items(conn, trip_id)
-}
-
-/// 旅行の日付範囲を Markdown 用の1行テキストに整形する
-pub(crate) fn format_trip_date_range(trip: &Trip) -> Option<String> {
-    match (&trip.start_date, &trip.end_date) {
-        (Some(start), Some(end)) => Some(format!("{start} 〜 {end}")),
-        (Some(start), None) => Some(start.clone()),
-        (None, Some(end)) => Some(end.clone()),
-        (None, None) => None,
-    }
 }
 
 /// Daily schedule 章向けに 1 件の Itinerary を Markdown 形式に整形する
@@ -71,7 +61,7 @@ pub(crate) fn format_itinerary_item_markdown(item: &ItineraryItem) -> String {
 
 fn append_cover(output: &mut String, trip: &Trip, stats: &TripStats) {
     output.push_str(&format!("# {}\n", trip.name));
-    if let Some(dates) = format_trip_date_range(trip) {
+    if let Some(dates) = travel_book_trip_date_range(trip) {
         output.push('\n');
         output.push_str(&dates);
         output.push('\n');
@@ -185,10 +175,11 @@ fn append_trip_overview(
 }
 
 fn format_day_heading(trip: &Trip, day_number: i64) -> String {
-    match crate::day::day_date_for_trip(trip, day_number) {
-        Ok(date) => format!("### Day {day_number} — {date}"),
-        Err(_) => format!("### Day {day_number}"),
-    }
+    format!("### {}", travel_book_day_overview_label(trip, day_number))
+}
+
+fn format_note_heading(note: &ExportNote) -> String {
+    format!("### {}", travel_book_note_heading_label(note))
 }
 
 fn append_daily_schedule(output: &mut String, trip: &Trip, days: &[Day], items: &[ItineraryItem]) {
@@ -321,45 +312,6 @@ fn format_planned_cost_chapter(
     Some(format!("\n\n{}\n", lines.join("\n").trim_end()))
 }
 
-fn format_note_heading(note: &ExportNote) -> String {
-    match note {
-        ExportNote::Trip { title, .. } => {
-            let label = title
-                .as_deref()
-                .filter(|value| !value.trim().is_empty())
-                .unwrap_or("Trip note");
-            format!("### Trip — {label}")
-        }
-        ExportNote::Day {
-            day_number, title, ..
-        } => {
-            let label = title
-                .as_deref()
-                .filter(|value| !value.trim().is_empty())
-                .unwrap_or("Day note");
-            format!("### Day {day_number} — {label}")
-        }
-        ExportNote::Itinerary {
-            itinerary_key,
-            title,
-            ..
-        } => {
-            let label = title
-                .as_deref()
-                .filter(|value| !value.trim().is_empty())
-                .unwrap_or("Itinerary note");
-            let context = match &itinerary_key.start_time {
-                Some(time) => format!(
-                    "Day {} / {time} {}",
-                    itinerary_key.day_number, itinerary_key.title
-                ),
-                None => format!("Day {} / {}", itinerary_key.day_number, itinerary_key.title),
-            };
-            format!("### {context} — {label}")
-        }
-    }
-}
-
 fn note_body(note: &ExportNote) -> &str {
     match note {
         ExportNote::Trip { body, .. }
@@ -397,7 +349,7 @@ fn append_colophon(output: &mut String, trip: &Trip) {
     output.push_str(&format!("Version: {}\n", env!("CARGO_PKG_VERSION")));
     output.push_str(&format!("Generated at: {}\n", Utc::now().to_rfc3339()));
     output.push_str(&format!("Trip: {}\n", trip.name));
-    if let Some(dates) = format_trip_date_range(trip) {
+    if let Some(dates) = travel_book_trip_date_range(trip) {
         output.push_str(&format!("Dates: {dates}\n"));
     }
 }

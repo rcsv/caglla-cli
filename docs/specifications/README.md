@@ -72,3 +72,4 @@ Caglla CLI の内部モデル・設計仕様（実装前の設計メモを含む
 | [v4.4.3-travel-book-presentation-helpers-extraction-plan.md](v4.4.3-travel-book-presentation-helpers-extraction-plan.md) | v4.4.3 Travel Book Presentation Helpers Extraction Plan（**v4.4.3**） |
 | [v4.4.4-travel-book-presentation-helpers-extraction-phase-2.md](v4.4.4-travel-book-presentation-helpers-extraction-phase-2.md) | v4.4.4 Travel Book Presentation Helpers Extraction Phase 2（**v4.4.4**） |
 | [v4.4.5-travel-book-presentation-extraction-review.md](v4.4.5-travel-book-presentation-extraction-review.md) | v4.4.5 Travel Book Presentation Extraction Review（**v4.4.5**） |
+| [v4.4.6-travel-book-presentation-helpers-extraction-phase-3.md](v4.4.6-travel-book-presentation-helpers-extraction-phase-3.md) | v4.4.6 Travel Book Presentation Helpers Extraction Phase 3（**v4.4.6**） |

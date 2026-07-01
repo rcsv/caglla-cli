@@ -7,8 +7,19 @@ use chrono::{NaiveDate, NaiveDateTime, Timelike};
 
 use crate::analysis::statistics::TripStats;
 use crate::domain::models::{
-    Day, Estimate, ExportNote, ItineraryCategory, ItineraryItem, Participant, Trip,
+    Day, Estimate, ExportNote, ItineraryCategory, ItineraryItem, ItineraryNoteKey, Participant,
+    Trip,
 };
+
+/// Trip の日付範囲ラベル（`start 〜 end`、片方のみの場合はその日付）
+pub(crate) fn travel_book_trip_date_range(trip: &Trip) -> Option<String> {
+    match (&trip.start_date, &trip.end_date) {
+        (Some(start), Some(end)) => Some(format!("{start} 〜 {end}")),
+        (Some(start), None) => Some(start.clone()),
+        (None, Some(end)) => Some(end.clone()),
+        (None, None) => None,
+    }
+}
 
 /// Trip overview 章を出す価値があるか
 pub(crate) fn trip_overview_worth_showing(
@@ -86,11 +97,59 @@ pub(crate) fn planned_cost_estimate_display_title(title: Option<&str>) -> &str {
         .unwrap_or("-")
 }
 
+/// Itinerary コンテキストラベル（`Day N / time title` または `Day N / title`）
+fn travel_book_itinerary_context_label(
+    day_number: i64,
+    start_time: Option<&str>,
+    title: &str,
+) -> String {
+    match start_time {
+        Some(time) => format!("Day {day_number} / {time} {title}"),
+        None => format!("Day {day_number} / {title}"),
+    }
+}
+
+/// Note（Itinerary スコープ）の itinerary コンテキスト
+pub(crate) fn travel_book_note_itinerary_context(key: &ItineraryNoteKey) -> String {
+    travel_book_itinerary_context_label(key.day_number, key.start_time.as_deref(), &key.title)
+}
+
 /// Planned cost itinerary グループ見出し用コンテキスト（`Day N / …`）
 pub(crate) fn planned_cost_itinerary_group_label(item: &ItineraryItem) -> String {
-    match &item.start_time {
-        Some(time) => format!("Day {} / {time} {}", item.day, item.title),
-        None => format!("Day {} / {}", item.day, item.title),
+    travel_book_itinerary_context_label(item.day, item.start_time.as_deref(), &item.title)
+}
+
+/// Note 見出しラベル（`Trip — …` / `Day N — …` / `Day N / … — …`）。Markdown `###` は含まない
+pub(crate) fn travel_book_note_heading_label(note: &ExportNote) -> String {
+    match note {
+        ExportNote::Trip { title, .. } => {
+            let label = title
+                .as_deref()
+                .filter(|value| !value.trim().is_empty())
+                .unwrap_or("Trip note");
+            format!("Trip — {label}")
+        }
+        ExportNote::Day {
+            day_number, title, ..
+        } => {
+            let label = title
+                .as_deref()
+                .filter(|value| !value.trim().is_empty())
+                .unwrap_or("Day note");
+            format!("Day {day_number} — {label}")
+        }
+        ExportNote::Itinerary {
+            itinerary_key,
+            title,
+            ..
+        } => {
+            let label = title
+                .as_deref()
+                .filter(|value| !value.trim().is_empty())
+                .unwrap_or("Itinerary note");
+            let context = travel_book_note_itinerary_context(itinerary_key);
+            format!("{context} — {label}")
+        }
     }
 }
 
@@ -387,6 +446,91 @@ mod tests {
             "Ks Rent A Car",
             "Toyota Alphard 又は同等車種"
         ));
+    }
+
+    #[test]
+    fn test_travel_book_trip_date_range() {
+        let both = Trip {
+            id: 1,
+            name: "t".to_string(),
+            start_date: Some("2026-04-26".to_string()),
+            end_date: Some("2026-04-29".to_string()),
+            summary: None,
+            created_at: String::new(),
+            updated_at: String::new(),
+        };
+        assert_eq!(
+            travel_book_trip_date_range(&both),
+            Some("2026-04-26 〜 2026-04-29".to_string())
+        );
+        let start_only = Trip {
+            end_date: None,
+            ..both.clone()
+        };
+        assert_eq!(
+            travel_book_trip_date_range(&start_only),
+            Some("2026-04-26".to_string())
+        );
+        let neither = Trip {
+            start_date: None,
+            end_date: None,
+            ..both
+        };
+        assert_eq!(travel_book_trip_date_range(&neither), None);
+    }
+
+    #[test]
+    fn test_travel_book_note_itinerary_context() {
+        let with_time = ItineraryNoteKey {
+            day_number: 2,
+            sort_order: 4,
+            start_time: Some("08:30".to_string()),
+            title: "水族館に入館".to_string(),
+        };
+        assert_eq!(
+            travel_book_note_itinerary_context(&with_time),
+            "Day 2 / 08:30 水族館に入館"
+        );
+        let no_time = ItineraryNoteKey {
+            start_time: None,
+            ..with_time
+        };
+        assert_eq!(
+            travel_book_note_itinerary_context(&no_time),
+            "Day 2 / 水族館に入館"
+        );
+    }
+
+    #[test]
+    fn test_travel_book_note_heading_label() {
+        assert_eq!(
+            travel_book_note_heading_label(&ExportNote::Trip {
+                title: None,
+                body: String::new(),
+            }),
+            "Trip — Trip note"
+        );
+        assert_eq!(
+            travel_book_note_heading_label(&ExportNote::Day {
+                day_number: 1,
+                title: Some("memo".to_string()),
+                body: String::new(),
+            }),
+            "Day 1 — memo"
+        );
+        assert_eq!(
+            travel_book_note_heading_label(&ExportNote::Itinerary {
+                itinerary_key: ItineraryNoteKey {
+                    day_number: 1,
+                    sort_order: 6,
+                    start_time: Some("08:30".to_string()),
+                    title: "NU045 NGO ⇒ OKA (11:00着)".to_string(),
+                },
+                title: None,
+                body: String::new(),
+            }),
+            "Day 1 / 08:30 NU045 NGO ⇒ OKA (11:00着) — Itinerary note"
+        );
     }
 
     #[test]

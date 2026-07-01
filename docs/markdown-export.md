@@ -137,7 +137,7 @@ Presentation model review（v4.4.0）: [v4.4.0-travel-book-presentation-model-re
 
 Presentation helper review（v4.4.2）: [v4.4.2-travel-book-presentation-helper-review.md](specifications/v4.4.2-travel-book-presentation-helper-review.md)
 
-Presentation helpers live in `src/io/travel_book_presentation.rs`（v4.4.3+）— renderer-independent rules shared by `trip export-md`.
+Presentation helpers live in `src/io/travel_book_presentation.rs`（v4.4.3+）— renderer-independent rules shared by `trip export-md`. Phase 3（v4.4.6+）で note / day / date range ラベルも移行済み。
 
 ### checklist_generate サンプル
 

@@ -999,6 +999,21 @@ Review: [v4.4.5-travel-book-presentation-extraction-review.md](specifications/v4
 
 ---
 
+## v4.4.6 — Travel Book presentation helpers extraction Phase 3
+
+### テーマ
+
+```text
+Phase 3: note heading / day label / date range の label / context を helper 化
+golden 不変リファクタ
+```
+
+Implementation plan: [v4.4.6-travel-book-presentation-helpers-extraction-phase-3.md](specifications/v4.4.6-travel-book-presentation-helpers-extraction-phase-3.md)
+
+リリースノート: [v4.4.6-notes.md](releases/v4.4.6-notes.md)
+
+---
+
 ## v5 — Travel Journal
 
 ### テーマ
