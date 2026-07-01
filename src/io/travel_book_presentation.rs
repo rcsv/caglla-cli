@@ -153,9 +153,11 @@ pub(crate) fn travel_book_note_heading_label(note: &ExportNote) -> String {
     }
 }
 
-/// Daily schedule 向け itinerary カテゴリ詳細行（domain 定義の表示名）
-pub(crate) fn format_travel_book_category_detail_line(category: ItineraryCategory) -> String {
-    format!("- 種別: {}", category.definition().display_name)
+/// Daily schedule 向け itinerary カテゴリ詳細の label / value（Markdown bullet は含まない）
+pub(crate) fn travel_book_category_detail_label(
+    category: ItineraryCategory,
+) -> (&'static str, &'static str) {
+    ("種別", category.definition().display_name)
 }
 
 /// Note entity の Travel Book 出力順（Trip → Day → Itinerary）
@@ -290,17 +292,28 @@ pub(crate) fn format_travel_book_reservation_period(
     }
 }
 
-/// Reservation 見出し行（provider 冗長時は subtitle 省略）
-pub(crate) fn format_travel_book_reservation_heading(
+/// Reservation 見出しの presentation 部分（Markdown bold は含まない）
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct TravelBookReservationHeading {
+    pub main_label: String,
+    pub provider_suffix: Option<String>,
+}
+
+/// Reservation 見出し（provider 冗長時は `provider_suffix` なし）
+pub(crate) fn travel_book_reservation_heading(
     day_number: i64,
     itinerary_title: &str,
     provider_name: &str,
-) -> String {
-    let primary = format!("**Day {day_number} / {itinerary_title}**");
-    if reservation_provider_line_redundant(provider_name, itinerary_title) {
-        primary
+) -> TravelBookReservationHeading {
+    let main_label = format!("Day {day_number} / {itinerary_title}");
+    let provider_suffix = if reservation_provider_line_redundant(provider_name, itinerary_title) {
+        None
     } else {
-        format!("{primary} — {provider_name}")
+        Some(provider_name.to_string())
+    };
+    TravelBookReservationHeading {
+        main_label,
+        provider_suffix,
     }
 }
 
@@ -412,20 +425,39 @@ mod tests {
     }
 
     #[test]
-    fn test_format_travel_book_category_detail_line_uses_definition_display_name() {
+    fn test_travel_book_category_detail_label_uses_definition_display_name() {
         assert_eq!(
-            format_travel_book_category_detail_line(ItineraryCategory::Transport),
-            "- 種別: 移動"
+            travel_book_category_detail_label(ItineraryCategory::Transport),
+            ("種別", "移動")
         );
         assert_eq!(
-            format_travel_book_category_detail_line(ItineraryCategory::Flight),
-            "- 種別: フライト"
+            travel_book_category_detail_label(ItineraryCategory::Flight),
+            ("種別", "フライト")
         );
         for category in ItineraryCategory::all() {
-            let line = format_travel_book_category_detail_line(category);
-            assert!(line.starts_with("- 種別: "));
-            assert!(!line.contains(category.as_str()));
+            let (label, value) = travel_book_category_detail_label(category);
+            assert_eq!(label, "種別");
+            assert!(!value.is_empty());
+            assert!(!value.contains(category.as_str()));
         }
+    }
+
+    #[test]
+    fn test_travel_book_reservation_heading() {
+        assert_eq!(
+            travel_book_reservation_heading(1, "NU045 NGO ⇒ OKA (11:00着)", "NU045 NGO ⇒ OKA",),
+            TravelBookReservationHeading {
+                main_label: "Day 1 / NU045 NGO ⇒ OKA (11:00着)".to_string(),
+                provider_suffix: None,
+            }
+        );
+        assert_eq!(
+            travel_book_reservation_heading(1, "チェックイン", "ヒルトン瀬底"),
+            TravelBookReservationHeading {
+                main_label: "Day 1 / チェックイン".to_string(),
+                provider_suffix: Some("ヒルトン瀬底".to_string()),
+            }
+        );
     }
 
     #[test]

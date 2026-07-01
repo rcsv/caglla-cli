@@ -9,12 +9,13 @@ use crate::domain::models::{
     ChecklistItem, Day, Estimate, ExportNote, ItineraryItem, Participant, Trip,
 };
 use crate::io::travel_book_presentation::{
-    collect_days_overview_entries, format_travel_book_category_detail_line,
-    format_travel_book_reservation_heading, format_travel_book_reservation_period,
+    collect_days_overview_entries, format_travel_book_reservation_period,
     planned_cost_estimate_display_title, planned_cost_itinerary_group_label,
     planned_cost_note_column_visible, sort_export_notes_for_travel_book,
-    travel_book_day_overview_label, travel_book_note_heading_label, travel_book_trip_date_range,
+    travel_book_category_detail_label, travel_book_day_overview_label,
+    travel_book_note_heading_label, travel_book_reservation_heading, travel_book_trip_date_range,
     trip_overview_time_metrics_worth_showing, trip_overview_worth_showing,
+    TravelBookReservationHeading,
 };
 use crate::reservation::ReservationWithContext;
 
@@ -36,7 +37,8 @@ pub(crate) fn format_itinerary_item_markdown(item: &ItineraryItem) -> String {
 
     let mut detail_lines = Vec::new();
     if let Some(category) = item.category {
-        detail_lines.push(format_travel_book_category_detail_line(category));
+        let (label, value) = travel_book_category_detail_label(category);
+        detail_lines.push(format!("- {label}: {value}"));
     }
     if let Some(location) = &item.location {
         detail_lines.push(format!("- 場所: {location}"));
@@ -368,6 +370,13 @@ pub(crate) fn format_checklist_markdown(items: &[ChecklistItem]) -> Option<Strin
     Some(format!("\n\n{}\n", lines.join("\n")))
 }
 
+fn format_reservation_heading_markdown(heading: &TravelBookReservationHeading) -> String {
+    match &heading.provider_suffix {
+        Some(provider) => format!("**{}** — {provider}", heading.main_label),
+        None => format!("**{}**", heading.main_label),
+    }
+}
+
 /// Trip 全体の Reservation セクションを Markdown 形式に整形する（0 件なら None）
 pub(crate) fn format_reservations_markdown(
     reservations: &[ReservationWithContext],
@@ -383,11 +392,12 @@ pub(crate) fn format_reservations_markdown(
         }
 
         let res = &row.reservation;
-        lines.push(format_travel_book_reservation_heading(
+        let heading = travel_book_reservation_heading(
             row.day_number,
             &row.itinerary_title,
             &res.provider_name,
-        ));
+        );
+        lines.push(format_reservation_heading_markdown(&heading));
         if let Some(code) = &res.confirmation_code {
             lines.push(format!("確認番号: {code}"));
         }

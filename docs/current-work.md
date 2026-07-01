@@ -2,34 +2,34 @@
 
 ## Current phase
 
-v4.4.7 Travel Book presentation helpers final review（planning / review）
+v4.4.8 Travel Book presentation helper cleanup — **implementation complete** (release pending)
 
 ## Latest completed
 
+- v4.4.7 Travel Book presentation helpers final review — **released**
 - v4.4.6 Travel Book presentation helpers extraction Phase 3 — **released**
 - v4.4.5 Travel Book presentation extraction review — **released**
-- v4.4.4 Travel Book presentation helpers extraction Phase 2 — **released**
 
 ## Repository state
 
-- Cargo version: `4.4.6`
-- **v4.4.7 review:** [v4.4.7-travel-book-presentation-helpers-final-review.md](specifications/v4.4.7-travel-book-presentation-helpers-final-review.md)
-- Presentation module: `src/io/travel_book_presentation.rs`（Phase 1 + 2 + 3、~17 helper）
+- Cargo version: `4.4.8`
+- Implementation plan: [v4.4.8-travel-book-presentation-helper-cleanup.md](specifications/v4.4.8-travel-book-presentation-helper-cleanup.md)
+- Presentation module: `src/io/travel_book_presentation.rs` — Markdown syntax boundary clean
 
-## Next action（v4.4.7 レビュー結論）
+## v4.4.x arc status
 
-**B → Defer A** を推奨:
+Helper extraction Phase 1–3 + v4.4.8 cleanup **complete**. Presentation helpers are renderer-independent.
 
-- **B. v4.4.8** — helper cleanup（category `-` / reservation `**` 構文分離、golden 不変・任意）
-- **A. v4.5.0** — TravelBookDocument prototype（**Defer** — UI / Venue 要件が見えてから）
-- C. v4.4.8 をスキップし Travel Book presentation を凍結、別ロードマップへ
+## Next action
 
-Helper extraction arc（Phase 1〜3）は **十分完了**。
+- **v4.4.8 release** — helper cleanup (golden Colophon `Version:` only)
+- **v4.5.0** — `TravelBookDocument` prototype (**Defer** — UI / Venue requirements)
+- Or return to another roadmap item outside Travel Book presentation
 
 ## Do not start yet
 
-- `TravelBookDocument` 全体抽象（UI/Venue 要件まで Defer）
-- GUI / native app コード
+- `TravelBookDocument` full abstraction (UI/Venue requirements)
+- GUI / native app code
 - Venue model / map provider
 
 Canonical defer list: [long-term-version-strategy.md](long-term-version-strategy.md)

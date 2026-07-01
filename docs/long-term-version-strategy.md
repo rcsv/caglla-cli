@@ -1030,6 +1030,22 @@ Review: [v4.4.7-travel-book-presentation-helpers-final-review.md](specifications
 
 ---
 
+## v4.4.8 — Travel Book presentation helper cleanup
+
+### テーマ
+
+```text
+presentation helper 内の Markdown 構文混入 2 件を解消
+category bullet / reservation bold を markdown.rs へ移動
+golden 不変の small cleanup — v4.4.x arc を閉じる
+```
+
+Plan: [v4.4.8-travel-book-presentation-helper-cleanup.md](specifications/v4.4.8-travel-book-presentation-helper-cleanup.md)
+
+`TravelBookDocument` は引き続き **Defer**（UI / Venue 要件まで）。
+
+---
+
 ## v5 — Travel Journal
 
 ### テーマ
