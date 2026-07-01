@@ -981,6 +981,24 @@ Implementation plan: [v4.4.4-travel-book-presentation-helpers-extraction-phase-2
 
 ---
 
+## v4.4.5 — Travel Book presentation extraction review（**documentation-only**）
+
+### テーマ
+
+```text
+Phase 1 / Phase 2 抽出後のレビュー
+markdown.rs / travel_book_presentation.rs 責務の健全性確認
+次 milestone（v4.4.6 / v4.5.0 / Defer）の判断材料
+```
+
+Review: [v4.4.5-travel-book-presentation-extraction-review.md](specifications/v4.4.5-travel-book-presentation-extraction-review.md)
+
+リリースノート: [v4.4.5-notes.md](releases/v4.4.5-notes.md)
+
+結論: **A → B** 推奨（v4.4.6 Phase 3 small extraction → 要件が見えたら v4.5.0 prototype）。`TravelBookDocument` は現時点 premature。
+
+---
+
 ## v5 — Travel Journal
 
 ### テーマ

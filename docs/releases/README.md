@@ -4,6 +4,7 @@ GitHub Release 用ノート一覧（新しい順）。
 
 | Version | Title | File |
 |---|---|---|
+| v4.4.5 | Travel Book presentation extraction review | [v4.4.5-notes.md](v4.4.5-notes.md) |
 | v4.4.4 | Travel Book presentation helpers extraction Phase 2 | [v4.4.4-notes.md](v4.4.4-notes.md) |
 | v4.4.3 | Travel Book presentation helpers extraction | [v4.4.3-notes.md](v4.4.3-notes.md) |
 | v4.4.2 | Travel Book presentation helper review | [v4.4.2-notes.md](v4.4.2-notes.md) |
