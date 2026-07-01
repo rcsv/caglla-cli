@@ -1014,6 +1014,22 @@ Implementation plan: [v4.4.6-travel-book-presentation-helpers-extraction-phase-3
 
 ---
 
+## v4.4.7 — Travel Book presentation helpers final review（**documentation-only**）
+
+### テーマ
+
+```text
+Phase 1〜3 helper extraction 完了後の最終レビュー
+markdown.rs / travel_book_presentation.rs の健全性確認
+TravelBookDocument 着手タイミングの再判断
+```
+
+Review: [v4.4.7-travel-book-presentation-helpers-final-review.md](specifications/v4.4.7-travel-book-presentation-helpers-final-review.md)
+
+結論: **B → Defer A** 推奨（v4.4.8 optional cleanup → v4.5.0 prototype は UI/Venue 要件まで Defer）。Helper extraction arc は十分完了。
+
+---
+
 ## v5 — Travel Journal
 
 ### テーマ
