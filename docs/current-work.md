@@ -2,7 +2,7 @@
 
 ## Current phase
 
-v4.6.14 planning — expense list service boundary
+v4.6.14 — expense list service boundary（implementation complete, release pending）
 
 ## Latest completed
 
@@ -22,20 +22,20 @@ v4.6.14 planning — expense list service boundary
 
 ## Repository state
 
-- Cargo version: `4.6.13`
+- Cargo version: `4.6.14`
 - Latest release: **v4.6.13** — [v4.6.13-notes.md](releases/v4.6.13-notes.md)
-- **v4.6.13 spec:** [v4.6.13-reservation-list-service-boundary.md](specifications/v4.6.13-reservation-list-service-boundary.md)
+- **v4.6.14 spec:** [v4.6.14-expense-list-service-boundary.md](specifications/v4.6.14-expense-list-service-boundary.md)
 
 ## Next action
 
-**v4.6.14 — `expense list` service boundary**（optional implementation）
+**v4.6.14 release**（optional formal release）
 
-- `reservation list` と同様に service + CLI display 分離
-- `ExpenseListJson` wrapper は CLI 層に残す
+- `make check` PASS
+- Okinawa golden: Colophon `Version: 4.6.14` のみ
 
-**代替候補:**
+**v4.6.15 候補:**
 
-- `checklist list` service boundary（表示責務が軽い）
+- `checklist list` service boundary
 
 **Parallel track（v4.6.x、独立）:**
 

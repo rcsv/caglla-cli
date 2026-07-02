@@ -397,21 +397,14 @@ fn main() -> Result<()> {
                 itinerary,
                 json,
             } => {
-                let target = crate::expense::resolve_expense_list_target(trip, itinerary)?;
-                let expenses = match target {
-                    crate::expense::ExpenseListTarget::Trip(trip_id) => {
-                        crate::expense::list_expenses_for_trip(&conn, trip_id)?
-                    }
-                    crate::expense::ExpenseListTarget::Itinerary(itinerary_id) => {
-                        crate::expense::list_expenses_for_itinerary(&conn, itinerary_id)?
-                    }
-                };
+                let result = crate::services::expense_list::list_expenses(&conn, trip, itinerary)?;
                 if json {
-                    let (trip_id, itinerary_id) = match target {
+                    let (trip_id, itinerary_id) = match result.target {
                         crate::expense::ExpenseListTarget::Trip(id) => (Some(id), None),
                         crate::expense::ExpenseListTarget::Itinerary(id) => (None, Some(id)),
                     };
-                    let json_expenses: Vec<crate::expense::ExpenseJson> = expenses
+                    let json_expenses: Vec<crate::expense::ExpenseJson> = result
+                        .expenses
                         .iter()
                         .map(|e| crate::expense::expense_to_json(&conn, e))
                         .collect::<Result<Vec<_>>>()?;
@@ -421,7 +414,7 @@ fn main() -> Result<()> {
                         expenses: json_expenses,
                     })?;
                 } else {
-                    crate::expense::print_expense_list(&conn, target, &expenses)?;
+                    crate::expense::print_expense_list(&conn, result.target, &result.expenses)?;
                 }
             }
             ExpenseAction::Show { id, json } => {
