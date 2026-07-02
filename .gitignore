@@ -44,3 +44,6 @@ $RECYCLE.BIN/
 .directory
 .Trash-*
 .nfs*
+
+# Gemini との会話用 npx repomix の出力
+repomix-output.xml
