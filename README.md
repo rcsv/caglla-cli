@@ -113,12 +113,13 @@ caglla db use --clear           # config の path を削除（既定 ./caglla.db
 
 GitHub Release 用ノートは [docs/releases/](docs/releases/) にあります。
 
-**最新:** [v4.6.0](docs/releases/v4.6.0-notes.md) — TripStats.days semantics fix。
+**最新:** [v4.6.1](docs/releases/v4.6.1-notes.md) — SQLite FK / orphan data hardening review。
 
 **直近のリリース履歴:**
 
 | Version | 種別 | 概要 |
 |---|---|---|
+| [v4.6.1](docs/releases/v4.6.1-notes.md) | docs | SQLite FK / orphan data hardening review |
 | [v4.6.0](docs/releases/v4.6.0-notes.md) | minor | TripStats.days semantics fix |
 | [v4.5.1](docs/releases/v4.5.1-notes.md) | minor | doctor / advisor Receipt utilization |
 | [v4.5.0](docs/releases/v4.5.0-notes.md) | docs | Receipt Inbox responsibilities review |
