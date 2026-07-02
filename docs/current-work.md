@@ -2,10 +2,11 @@
 
 ## Current phase
 
-v4.6.11 — read-only service boundary review（documentation complete, release pending）
+v4.6.12 planning — note list service boundary
 
 ## Latest completed
 
+- v4.6.11 Read-only service boundary review — **released**
 - v4.6.10 Itinerary show service boundary — **released**
 - v4.6.9 Itinerary timeline service boundary — **released**
 - v4.6.8 Itinerary list service boundary — **released**
@@ -19,20 +20,16 @@ v4.6.11 — read-only service boundary review（documentation complete, release 
 
 ## Repository state
 
-- Cargo version: `4.6.10`
-- Latest release: **v4.6.10** — [v4.6.10-notes.md](releases/v4.6.10-notes.md)
-- **v4.6.11 draft review:** [v4.6.11-read-only-service-boundary-review.md](specifications/v4.6.11-read-only-service-boundary-review.md)
+- Cargo version: `4.6.11`
+- Latest release: **v4.6.11** — [v4.6.11-notes.md](releases/v4.6.11-notes.md)
+- **v4.6.11 review:** [v4.6.11-read-only-service-boundary-review.md](specifications/v4.6.11-read-only-service-boundary-review.md)
 
 ## Next action
 
-**v4.6.11 release**（optional formal release）
+**v4.6.12 — `note list` service boundary**（optional implementation）
 
-- documentation-only review
-- Rust code 変更なし
-
-**v4.6.12 推奨候補:**
-
-- `note list` service boundary
+- [v4.6.11 review](specifications/v4.6.11-read-only-service-boundary-review.md) 推奨に従い read-only expansion を継続
+- `NoteListJson` wrapper は CLI 層に残す
 
 **Parallel track（v4.6.x、独立）:**
 
