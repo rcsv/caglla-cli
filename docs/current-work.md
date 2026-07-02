@@ -2,7 +2,7 @@
 
 ## Current phase
 
-v4.6.15 planning — checklist list service boundary
+v4.6.15 — checklist list service boundary（implementation complete, release pending）
 
 ## Latest completed
 
@@ -23,20 +23,21 @@ v4.6.15 planning — checklist list service boundary
 
 ## Repository state
 
-- Cargo version: `4.6.14`
+- Cargo version: `4.6.15`
 - Latest release: **v4.6.14** — [v4.6.14-notes.md](releases/v4.6.14-notes.md)
-- **v4.6.14 spec:** [v4.6.14-expense-list-service-boundary.md](specifications/v4.6.14-expense-list-service-boundary.md)
+- **v4.6.15 spec:** [v4.6.15-checklist-list-service-boundary.md](specifications/v4.6.15-checklist-list-service-boundary.md)
 
 ## Next action
 
-**v4.6.15 — `checklist list` service boundary**（optional implementation）
+**v4.6.15 release**（optional formal release）
 
-- `expense list` と同様に service + CLI display 分離
-- JSON wrapper は CLI 層に残す
+- `make check` PASS
+- Okinawa golden: Colophon `Version: 4.6.15` のみ
 
-**代替候補:**
+**v4.6.16 候補:**
 
-- expense list service boundary review（必要時）
+- read-only service boundary follow-up review
+- `checklist show` service boundary
 
 **Parallel track（v4.6.x、独立）:**
 

@@ -1,5 +1,6 @@
 //! Application service layer — use case orchestration with structured results (no terminal I/O).
 
+pub mod checklist_list;
 pub mod day_list;
 pub mod expense_list;
 pub mod itinerary_list;

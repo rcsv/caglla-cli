@@ -220,12 +220,12 @@ fn main() -> Result<()> {
                 println!("  タイトル: {title}");
             }
             ChecklistAction::List { trip_id, json } => {
-                let items = crate::checklist::list_checklist_items(&conn, trip_id)?;
+                let result = crate::services::checklist_list::list_checklist(&conn, trip_id)?;
                 if json {
-                    crate::output::json::print_json(&items)?;
+                    crate::output::json::print_json(&result.items)?;
                 } else {
                     println!("旅行 ID {trip_id} のチェックリスト:");
-                    crate::checklist::print_checklist_list(&items);
+                    crate::checklist::print_checklist_list(&result.items);
                 }
             }
             ChecklistAction::Show { id, json } => {
