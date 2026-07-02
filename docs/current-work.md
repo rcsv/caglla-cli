@@ -2,10 +2,11 @@
 
 ## Current phase
 
-v4.6.16 — read-only service boundary follow-up review（documentation complete, release pending）
+v4.6.17 planning — checklist show service boundary
 
 ## Latest completed
 
+- v4.6.16 Read-only service boundary follow-up review — **released**
 - v4.6.15 Checklist list service boundary — **released**
 - v4.6.14 Expense list service boundary — **released**
 - v4.6.13 Reservation list service boundary — **released**
@@ -21,20 +22,16 @@ v4.6.16 — read-only service boundary follow-up review（documentation complete
 
 ## Repository state
 
-- Cargo version: `4.6.15`
-- Latest release: **v4.6.15** — [v4.6.15-notes.md](releases/v4.6.15-notes.md)
-- **v4.6.16 draft review:** [v4.6.16-read-only-service-boundary-follow-up-review.md](specifications/v4.6.16-read-only-service-boundary-follow-up-review.md)
+- Cargo version: `4.6.16`
+- Latest release: **v4.6.16** — [v4.6.16-notes.md](releases/v4.6.16-notes.md)
+- **v4.6.16 review:** [v4.6.16-read-only-service-boundary-follow-up-review.md](specifications/v4.6.16-read-only-service-boundary-follow-up-review.md)
 
 ## Next action
 
-**v4.6.16 release**（optional formal release）
+**v4.6.17 — `checklist show` service boundary**（optional implementation）
 
-- documentation-only follow-up review
-- Rust code 変更なし
-
-**v4.6.17 推奨候補:**
-
-- `checklist show` service boundary
+- [v4.6.16 follow-up review](specifications/v4.6.16-read-only-service-boundary-follow-up-review.md) 推奨に従い show 系へ移行
+- `checklist list` が直前に service 化済みで自然な次候補
 
 **Parallel track（v4.6.x、独立）:**
 
