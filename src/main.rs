@@ -325,17 +325,15 @@ fn main() -> Result<()> {
                 itinerary,
                 json,
             } => {
-                let owner = crate::note::resolve_note_owner_for_list(&conn, trip, day, itinerary)?;
-                let notes =
-                    crate::note::list_notes_for_owner(&conn, owner.owner_type(), owner.owner_id())?;
+                let result = crate::services::note_list::list_notes(&conn, trip, day, itinerary)?;
                 if json {
                     crate::output::json::print_json(&crate::note::NoteListJson {
-                        owner_type: owner.owner_type(),
-                        owner_id: owner.owner_id(),
-                        notes,
+                        owner_type: result.owner_type,
+                        owner_id: result.owner_id,
+                        notes: result.notes,
                     })?;
                 } else {
-                    crate::note::print_note_list(owner.owner_type(), owner.owner_id(), &notes);
+                    crate::note::print_note_list(result.owner_type, result.owner_id, &result.notes);
                 }
             }
             NoteAction::Show { id, json } => {
