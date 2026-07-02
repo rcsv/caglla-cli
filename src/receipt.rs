@@ -769,6 +769,48 @@ pub(crate) fn compute_pending_receipt_summary(
     })
 }
 
+/// Trip の active な Receipt 件数（`trashed_at IS NULL`）を返す
+pub(crate) fn count_active_receipts_for_trip(conn: &Connection, trip_id: i64) -> Result<usize> {
+    crate::trip::get_trip(conn, trip_id)?;
+    let count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM receipts WHERE trip_id = ?1 AND trashed_at IS NULL",
+        params![trip_id],
+        |row| row.get(0),
+    )?;
+    Ok(count.max(0) as usize)
+}
+
+/// Receipt の状態矛盾を検出して id を返す
+///
+/// - `status = ignored` かつ `trashed_at IS NULL`
+/// - `status = unreviewed` かつ `trashed_at IS NOT NULL`
+pub(crate) fn find_inconsistent_receipts_for_trip(
+    conn: &Connection,
+    trip_id: i64,
+) -> Result<Vec<i64>> {
+    crate::trip::get_trip(conn, trip_id)?;
+    let mut stmt = conn.prepare(
+        "SELECT id
+         FROM receipts
+         WHERE trip_id = ?1
+           AND (
+             (status = ?2 AND trashed_at IS NULL)
+             OR
+             (status = ?3 AND trashed_at IS NOT NULL)
+           )
+         ORDER BY id",
+    )?;
+    let rows = stmt.query_map(
+        params![trip_id, RECEIPT_STATUS_IGNORED, RECEIPT_STATUS_UNREVIEWED],
+        |row| row.get::<_, i64>(0),
+    )?;
+    let mut ids = Vec::new();
+    for id in rows {
+        ids.push(id?);
+    }
+    Ok(ids)
+}
+
 pub(crate) fn print_pending_receipt_summary(summary: &PendingReceiptSummaryJson) {
     println!("Pending Receipts:");
     println!("  Count: {}", summary.active_count);

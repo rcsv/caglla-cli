@@ -20,6 +20,14 @@ pub(crate) fn generate_advice(issue: &DoctorIssue) -> Vec<String> {
             "Add an estimated duration.".to_string(),
             "Even a rough estimate improves planning quality.".to_string(),
         ],
+        DoctorIssueCode::PendingReceipts => vec![
+            "Review pending receipts in Receipt Inbox.".to_string(),
+            "Assign them to an itinerary expense or trash them.".to_string(),
+        ],
+        DoctorIssueCode::InconsistentReceiptState => vec![
+            "A receipt has inconsistent state (status vs trashed_at).".to_string(),
+            "Review the receipt list and fix by trash/restore or re-create if needed.".to_string(),
+        ],
         DoctorIssueCode::OverloadedDay => vec![
             "Consider moving some activities to another day.".to_string(),
             "Leave buffer time for delays and rest.".to_string(),
@@ -79,6 +87,16 @@ pub(crate) fn generate_command_hints(issue: &DoctorIssue, trip_id: i64) -> Vec<S
                 vec![format!("cargo run -- itinerary list {trip_id}")]
             }
         }
+        DoctorIssueCode::PendingReceipts => vec![
+            format!("cargo run -- receipt list --trip {trip_id}"),
+            "cargo run -- receipt assign <receipt_id> --itinerary <itinerary_id>".to_string(),
+            "cargo run -- receipt trash <receipt_id>".to_string(),
+        ],
+        DoctorIssueCode::InconsistentReceiptState => vec![
+            format!("cargo run -- receipt list --trip {trip_id} --all"),
+            "cargo run -- receipt trash <receipt_id>".to_string(),
+            "cargo run -- receipt restore <receipt_id>".to_string(),
+        ],
         DoctorIssueCode::ParticipantsNotRecorded => vec![format!(
             r#"cargo run -- participant add --trip {trip_id} --name "Your name" --self"#
         )],
@@ -296,6 +314,15 @@ mod advisor_tests {
             travel_minutes: None,
         };
         assert_eq!(generate_advice(&overloaded).len(), 2);
+
+        let pending = DoctorIssue {
+            code: DoctorIssueCode::PendingReceipts,
+            target: DoctorIssueTarget::Trip,
+            day: None,
+            itinerary_count: Some(2),
+            travel_minutes: None,
+        };
+        assert!(!generate_advice(&pending).is_empty());
     }
 
     #[test]
@@ -357,6 +384,22 @@ mod advisor_tests {
             generate_command_hints(&duration, trip_id),
             vec!["cargo run -- itinerary update 3 --duration 60".to_string()]
         );
+
+        let pending = DoctorIssue {
+            code: DoctorIssueCode::PendingReceipts,
+            target: DoctorIssueTarget::Trip,
+            day: None,
+            itinerary_count: Some(2),
+            travel_minutes: None,
+        };
+        let hints = generate_command_hints(&pending, trip_id);
+        assert!(hints.iter().any(|h| h.contains("receipt list --trip 1")));
+        assert!(hints
+            .iter()
+            .any(|h| h.contains("receipt assign <receipt_id> --itinerary <itinerary_id>")));
+        assert!(hints
+            .iter()
+            .any(|h| h.contains("receipt trash <receipt_id>")));
 
         let overloaded = DoctorIssue {
             code: DoctorIssueCode::OverloadedDay,
@@ -649,7 +692,10 @@ mod advisor_tests {
 
         let parsed: serde_json::Value =
             serde_json::from_str(&serde_json::to_string_pretty(&report).unwrap()).unwrap();
-        assert_eq!(parsed["schema_version"], 1);
+        assert_eq!(
+            parsed["schema_version"],
+            crate::domain::models::ADVISOR_REPORT_SCHEMA_VERSION
+        );
         assert_eq!(parsed["issues"][0]["code"], "no_restaurant");
         assert_eq!(parsed["issues"][0]["target"]["type"], "day");
         assert!(parsed["issues"][0]["advice"].is_array());

@@ -25,6 +25,34 @@ pub(crate) fn analyze_trip_issues(conn: &Connection, trip_id: i64) -> Result<Vec
     let mut issues = collect_trip_issues(&items);
     issues.extend(collect_participant_issues(conn, trip_id)?);
     issues.extend(collect_shared_expense_issues(conn, trip_id)?);
+    issues.extend(collect_receipt_inbox_issues(conn, trip_id)?);
+    Ok(issues)
+}
+
+fn collect_receipt_inbox_issues(conn: &Connection, trip_id: i64) -> Result<Vec<DoctorIssue>> {
+    let mut issues = Vec::new();
+
+    let pending = crate::receipt::count_active_receipts_for_trip(conn, trip_id)?;
+    if pending > 0 {
+        issues.push(DoctorIssue {
+            code: DoctorIssueCode::PendingReceipts,
+            target: DoctorIssueTarget::Trip,
+            day: None,
+            itinerary_count: Some(pending),
+            travel_minutes: None,
+        });
+    }
+
+    for id in crate::receipt::find_inconsistent_receipts_for_trip(conn, trip_id)? {
+        issues.push(DoctorIssue {
+            code: DoctorIssueCode::InconsistentReceiptState,
+            target: DoctorIssueTarget::Receipt(id),
+            day: None,
+            itinerary_count: None,
+            travel_minutes: None,
+        });
+    }
+
     Ok(issues)
 }
 
@@ -226,6 +254,12 @@ fn issues_to_doctor_report(issues: &[DoctorIssue]) -> DoctorReport {
                 warnings.push(issue.warning_message());
             }
             DoctorIssueCode::MissingDuration => {}
+            DoctorIssueCode::PendingReceipts => {
+                info.push(issue.warning_message());
+            }
+            DoctorIssueCode::InconsistentReceiptState => {
+                warnings.push(issue.warning_message());
+            }
             DoctorIssueCode::ParticipantsNotRecorded | DoctorIssueCode::SelfParticipantUnknown => {
                 info.push(issue.warning_message());
             }
@@ -325,8 +359,10 @@ mod tests {
     use super::*;
     use crate::domain::models::ItineraryCategory;
     use crate::itinerary::add_itinerary_item;
+    use crate::receipt::{trash_receipt, AddReceiptParams, RECEIPT_STATUS_IGNORED};
     use crate::storage::db::open_db_at;
     use crate::trip::{add_test_self_participant, add_test_trip, add_trip};
+    use rusqlite::params;
     use rusqlite::Connection;
 
     fn test_db() -> Connection {
@@ -614,6 +650,99 @@ mod tests {
     }
 
     #[test]
+    fn test_doctor_detects_pending_receipts_as_info() {
+        let conn = test_db();
+        let trip_id = add_test_trip(&conn, "Receipt pending trip").unwrap();
+
+        crate::receipt::add_receipt(
+            &conn,
+            AddReceiptParams {
+                trip_id,
+                day_number: Some(1),
+                amount_input: Some("100"),
+                currency_input: Some("JPY"),
+                occurred_date: None,
+                memo: Some("r1"),
+            },
+        )
+        .unwrap();
+        crate::receipt::add_receipt(
+            &conn,
+            AddReceiptParams {
+                trip_id,
+                day_number: None,
+                amount_input: Some("200"),
+                currency_input: Some("JPY"),
+                occurred_date: None,
+                memo: Some("r2"),
+            },
+        )
+        .unwrap();
+
+        let report = analyze_trip(&conn, trip_id).unwrap();
+        assert!(report
+            .info
+            .iter()
+            .any(|m| m == "Trip has 2 pending receipts in Receipt Inbox."));
+    }
+
+    #[test]
+    fn test_doctor_does_not_count_trashed_receipts_as_pending() {
+        let conn = test_db();
+        let trip_id = add_test_trip(&conn, "Receipt trashed only trip").unwrap();
+
+        let id = crate::receipt::add_receipt(
+            &conn,
+            AddReceiptParams {
+                trip_id,
+                day_number: Some(1),
+                amount_input: Some("100"),
+                currency_input: Some("JPY"),
+                occurred_date: None,
+                memo: Some("r1"),
+            },
+        )
+        .unwrap();
+        trash_receipt(&conn, id).unwrap();
+
+        let issues = analyze_trip_issues(&conn, trip_id).unwrap();
+        assert!(!issues
+            .iter()
+            .any(|i| i.code == DoctorIssueCode::PendingReceipts));
+    }
+
+    #[test]
+    fn test_doctor_detects_inconsistent_receipt_state_as_warning() {
+        let conn = test_db();
+        let trip_id = add_test_trip(&conn, "Receipt inconsistent trip").unwrap();
+
+        let id = crate::receipt::add_receipt(
+            &conn,
+            AddReceiptParams {
+                trip_id,
+                day_number: Some(1),
+                amount_input: Some("100"),
+                currency_input: Some("JPY"),
+                occurred_date: None,
+                memo: Some("r1"),
+            },
+        )
+        .unwrap();
+
+        // status=ignored だが trashed_at を付けない（矛盾状態を意図的に作る）
+        conn.execute(
+            "UPDATE receipts SET status = ?1, updated_at = ?2 WHERE id = ?3",
+            params![RECEIPT_STATUS_IGNORED, crate::storage::db::now_string(), id],
+        )
+        .unwrap();
+
+        let report = analyze_trip(&conn, trip_id).unwrap();
+        assert!(report.warnings.iter().any(|m| {
+            m == format!("Receipt {id} has inconsistent state (status vs trashed_at)").as_str()
+        }));
+    }
+
+    #[test]
     fn test_doctor_empty_itinerary_reports_info() {
         let conn = test_db();
         let trip_id = add_test_trip(&conn, "空の旅行").unwrap();
@@ -660,7 +789,10 @@ mod tests {
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
 
         assert_eq!(report.issues.len(), 0);
-        assert_eq!(parsed["schema_version"], 1);
+        assert_eq!(
+            parsed["schema_version"],
+            crate::domain::models::DOCTOR_REPORT_SCHEMA_VERSION
+        );
         assert_eq!(parsed["trip_id"], trip_id);
         assert_eq!(parsed["issues"], serde_json::json!([]));
     }
@@ -703,7 +835,10 @@ mod tests {
         );
         assert_eq!(missing.details.itinerary_id, Some(missing.target.id));
 
-        assert_eq!(parsed["schema_version"], 1);
+        assert_eq!(
+            parsed["schema_version"],
+            crate::domain::models::DOCTOR_REPORT_SCHEMA_VERSION
+        );
         assert!(parsed["issues"]
             .as_array()
             .unwrap()
@@ -773,7 +908,10 @@ mod tests {
             .issues
             .iter()
             .any(|issue| issue.code == DoctorIssueCode::MissingDuration));
-        assert_eq!(parsed["schema_version"], 1);
+        assert_eq!(
+            parsed["schema_version"],
+            crate::domain::models::DOCTOR_REPORT_SCHEMA_VERSION
+        );
         assert!(parsed["issues"].as_array().unwrap().len() >= 3);
     }
 

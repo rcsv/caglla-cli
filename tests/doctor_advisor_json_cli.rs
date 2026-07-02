@@ -61,7 +61,7 @@ fn cli_trip_doctor_json_envelope_and_codes() {
     let parsed: serde_json::Value =
         serde_json::from_slice(&output.stdout).expect("doctor stdout must be valid JSON");
 
-    assert_eq!(parsed["schema_version"], 1);
+    assert_eq!(parsed["schema_version"], 2);
     assert_eq!(parsed["trip_id"], 1);
     assert!(parsed["issues"].is_array());
     assert!(parsed["issues"]
@@ -110,7 +110,7 @@ fn cli_trip_advisor_json_envelope_and_commands_flag() {
     let parsed: serde_json::Value =
         serde_json::from_slice(&output.stdout).expect("advisor stdout must be valid JSON");
 
-    assert_eq!(parsed["schema_version"], 1);
+    assert_eq!(parsed["schema_version"], 2);
     assert_eq!(parsed["trip_id"], 1);
     assert_eq!(parsed["with_commands"], true);
     assert!(parsed["issues"].is_array());

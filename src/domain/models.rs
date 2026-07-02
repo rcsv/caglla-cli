@@ -163,6 +163,8 @@ pub enum DoctorIssueCode {
     NoRestaurant,
     HighTravelTime,
     MissingDuration,
+    PendingReceipts,
+    InconsistentReceiptState,
     ParticipantsNotRecorded,
     SelfParticipantUnknown,
     MultipleSelfParticipants,
@@ -178,6 +180,7 @@ pub enum DoctorIssueTarget {
     Day(i64),
     Itinerary(i64),
     Expense(i64),
+    Receipt(i64),
 }
 
 /// JSON 出力用の issue 対象種別
@@ -188,6 +191,7 @@ pub enum IssueTargetType {
     Day,
     Itinerary,
     Expense,
+    Receipt,
 }
 
 /// JSON 出力用の issue 対象（`target.id` の意味は `type` 依存）
@@ -217,6 +221,10 @@ impl IssueTarget {
                 target_type: IssueTargetType::Expense,
                 id,
             },
+            DoctorIssueTarget::Receipt(id) => Self {
+                target_type: IssueTargetType::Receipt,
+                id,
+            },
         }
     }
 }
@@ -234,6 +242,10 @@ pub struct IssueDetails {
     pub travel_minutes: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub expense_id: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub receipt_id: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub receipt_count: Option<usize>,
 }
 
 impl IssueDetails {
@@ -243,6 +255,8 @@ impl IssueDetails {
             && self.itinerary_count.is_none()
             && self.travel_minutes.is_none()
             && self.expense_id.is_none()
+            && self.receipt_id.is_none()
+            && self.receipt_count.is_none()
     }
 }
 
@@ -266,7 +280,7 @@ pub struct DoctorIssueJson {
 }
 
 /// trip doctor `--json` の envelope
-pub const DOCTOR_REPORT_SCHEMA_VERSION: i32 = 1;
+pub const DOCTOR_REPORT_SCHEMA_VERSION: i32 = 2;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DoctorReportJson {
@@ -296,7 +310,7 @@ pub struct AdvisorIssueJson {
 }
 
 /// trip advisor `--json` の envelope
-pub const ADVISOR_REPORT_SCHEMA_VERSION: i32 = 1;
+pub const ADVISOR_REPORT_SCHEMA_VERSION: i32 = 2;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AdvisorReportJson {
@@ -369,6 +383,20 @@ impl DoctorIssue {
                 }
                 _ => "1 itinerary has no duration estimate".to_string(),
             },
+            DoctorIssueCode::PendingReceipts => {
+                let count = self.itinerary_count.unwrap_or(0);
+                if count == 1 {
+                    "Trip has 1 pending receipt in Receipt Inbox.".to_string()
+                } else {
+                    format!("Trip has {count} pending receipts in Receipt Inbox.")
+                }
+            }
+            DoctorIssueCode::InconsistentReceiptState => match self.target {
+                DoctorIssueTarget::Receipt(id) => {
+                    format!("Receipt {id} has inconsistent state (status vs trashed_at)")
+                }
+                _ => "Receipt has inconsistent state (status vs trashed_at)".to_string(),
+            },
             DoctorIssueCode::ParticipantsNotRecorded => {
                 "No participants recorded for this trip.".to_string()
             }
@@ -400,11 +428,13 @@ impl DoctorIssue {
         match self.code {
             DoctorIssueCode::EmptyItinerary
             | DoctorIssueCode::ParticipantsNotRecorded
-            | DoctorIssueCode::SelfParticipantUnknown => DoctorIssueSeverity::Info,
+            | DoctorIssueCode::SelfParticipantUnknown
+            | DoctorIssueCode::PendingReceipts => DoctorIssueSeverity::Info,
             DoctorIssueCode::MultipleSelfParticipants
             | DoctorIssueCode::SharedExpenseSingleBeneficiary
             | DoctorIssueCode::PaidByNameParticipantMismatch
-            | DoctorIssueCode::DuplicateParticipantNames => DoctorIssueSeverity::Warning,
+            | DoctorIssueCode::DuplicateParticipantNames
+            | DoctorIssueCode::InconsistentReceiptState => DoctorIssueSeverity::Warning,
             _ => DoctorIssueSeverity::Warning,
         }
     }
@@ -429,6 +459,17 @@ impl DoctorIssue {
             },
             DoctorIssueCode::MissingDuration => IssueDetails {
                 itinerary_id: self.target_itinerary_id(),
+                ..IssueDetails::default()
+            },
+            DoctorIssueCode::PendingReceipts => IssueDetails {
+                receipt_count: self.itinerary_count,
+                ..IssueDetails::default()
+            },
+            DoctorIssueCode::InconsistentReceiptState => IssueDetails {
+                receipt_id: match self.target {
+                    DoctorIssueTarget::Receipt(id) => Some(id),
+                    _ => None,
+                },
                 ..IssueDetails::default()
             },
             DoctorIssueCode::ParticipantsNotRecorded
@@ -1329,6 +1370,26 @@ mod tests {
         };
         let details = missing.to_issue_details();
         assert_eq!(details.itinerary_id, Some(11));
+
+        let pending = DoctorIssue {
+            code: DoctorIssueCode::PendingReceipts,
+            target: DoctorIssueTarget::Trip,
+            day: None,
+            itinerary_count: Some(5),
+            travel_minutes: None,
+        };
+        let details = pending.to_issue_details();
+        assert_eq!(details.receipt_count, Some(5));
+
+        let inconsistent = DoctorIssue {
+            code: DoctorIssueCode::InconsistentReceiptState,
+            target: DoctorIssueTarget::Receipt(9),
+            day: None,
+            itinerary_count: None,
+            travel_minutes: None,
+        };
+        let details = inconsistent.to_issue_details();
+        assert_eq!(details.receipt_id, Some(9));
 
         let report = crate::domain::models::DoctorReportJson::new(1, vec![]);
         assert_eq!(report.schema_version, DOCTOR_REPORT_SCHEMA_VERSION);

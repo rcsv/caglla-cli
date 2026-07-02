@@ -1062,6 +1062,21 @@ Review: [v4.5.0-receipt-inbox-responsibilities-review.md](specifications/v4.5.0-
 
 ---
 
+## v4.5.1 — doctor / advisor Receipt utilization
+
+### テーマ
+
+```text
+Receipt Inbox を Actual として集計せず、ledger hygiene として可視化する
+pending receipts（info）と receipt state inconsistency（warning）を doctor/advisor に追加
+```
+
+Plan: [v4.5.1-doctor-advisor-receipt-utilization-implementation-plan.md](specifications/v4.5.1-doctor-advisor-receipt-utilization-implementation-plan.md)
+
+trip stats / export-md の Actual・Difference 定義は **変更しない**。
+
+---
+
 ## v5 — Travel Journal
 
 ### テーマ

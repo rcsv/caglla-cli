@@ -12,10 +12,11 @@ v4.5.1 planning — doctor / advisor Receipt utilization
 
 ## Repository state
 
-- Cargo version: `4.5.0`
+- Cargo version: `4.5.1`
 - Latest release: **v4.5.0** — [v4.5.0-notes.md](releases/v4.5.0-notes.md)
 - **v4.5.0 review:** [v4.5.0-receipt-inbox-responsibilities-review.md](specifications/v4.5.0-receipt-inbox-responsibilities-review.md)
 - Receipt Inbox: v3.6–v3.7 実装済み（metadata-only + assign/trash workflow）
+- v4.5.1 plan: [v4.5.1-doctor-advisor-receipt-utilization-implementation-plan.md](specifications/v4.5.1-doctor-advisor-receipt-utilization-implementation-plan.md)
 
 ## v4.4.x arc status
 
