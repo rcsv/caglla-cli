@@ -2,31 +2,26 @@
 
 ## Current phase
 
-v4.6.2 implementation — SQLite migration strategy review (**release pending**)
+v4.6.3 planning — command handler split Phase 1
 
 ## Latest completed
 
+- v4.6.2 SQLite migration strategy review — **released**
 - v4.6.1 SQLite FK / orphan data hardening review — **released**
 - v4.6.0 TripStats.days semantics fix — **released**
-- v4.5.1 doctor / advisor Receipt utilization — **released**
 
 ## Repository state
 
-- Cargo version: `4.6.1`
-- Latest release: **v4.6.1** — [v4.6.1-notes.md](releases/v4.6.1-notes.md)
-- **v4.6.2 review (draft):** [v4.6.2-sqlite-migration-strategy-review.md](specifications/v4.6.2-sqlite-migration-strategy-review.md)
-- **v4.6.2 notes (draft):** [v4.6.2-notes.md](releases/v4.6.2-notes.md)
+- Cargo version: `4.6.2`
+- Latest release: **v4.6.2** — [v4.6.2-notes.md](releases/v4.6.2-notes.md)
+- **v4.6.2 review:** [v4.6.2-sqlite-migration-strategy-review.md](specifications/v4.6.2-sqlite-migration-strategy-review.md)
 
 ## Next action
 
-**v4.6.2 release** — documentation-only SQLite migration strategy review
-
-- `make check` PASS 後 `tools/release/full-release.sh v4.6.2 "SQLite migration strategy review"`
-- P0 docs sync（README latest → v4.6.2）
-
-**Then:**
-
 **v4.6.3 — command handler split Phase 1**
+
+- 将来の Tauri GUI 化を見据え、CLI command handler と core / service logic の分離方針を整理
+- migration runner / FK 実装とは独立した refactor track
 
 **Defer (from v4.6.2 review):**
 
