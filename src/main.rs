@@ -95,12 +95,12 @@ fn main() -> Result<()> {
                 println!("  メモ    : {}", crate::itinerary::fmt_text(&note));
             }
             ItineraryAction::List { trip_id, json } => {
-                let items = crate::itinerary::list_itinerary_items(&conn, trip_id)?;
+                let result = crate::services::itinerary_list::list_itineraries(&conn, trip_id)?;
                 if json {
-                    crate::output::json::print_json(&items)?;
+                    crate::output::json::print_json(&result.items)?;
                 } else {
                     println!("旅行 ID {trip_id} の日程:");
-                    crate::itinerary::print_itinerary_list(&items);
+                    crate::itinerary::print_itinerary_list(&result.items);
                 }
             }
             ItineraryAction::Timeline { trip_id } => {

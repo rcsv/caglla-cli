@@ -16,9 +16,9 @@ v4.6.8 planning — itinerary list service boundary
 
 ## Repository state
 
-- Cargo version: `4.6.7`
+- Cargo version: `4.6.7` (planned: `4.6.8`)
 - Latest release: **v4.6.7** — [v4.6.7-notes.md](releases/v4.6.7-notes.md)
-- **v4.6.7 spec:** [v4.6.7-day-list-service-boundary.md](specifications/v4.6.7-day-list-service-boundary.md)
+- **v4.6.8 draft spec:** [v4.6.8-itinerary-list-service-boundary.md](specifications/v4.6.8-itinerary-list-service-boundary.md)
 
 ## Next action
 
