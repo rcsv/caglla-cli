@@ -2,7 +2,7 @@
 
 ## Current phase
 
-v4.6.2 planning — SQLite migration strategy review
+v4.6.2 implementation — SQLite migration strategy review (**release pending**)
 
 ## Latest completed
 
@@ -14,27 +14,31 @@ v4.6.2 planning — SQLite migration strategy review
 
 - Cargo version: `4.6.1`
 - Latest release: **v4.6.1** — [v4.6.1-notes.md](releases/v4.6.1-notes.md)
-- **v4.6.1 review:** [v4.6.1-sqlite-fk-orphan-data-hardening-review.md](specifications/v4.6.1-sqlite-fk-orphan-data-hardening-review.md)
+- **v4.6.2 review (draft):** [v4.6.2-sqlite-migration-strategy-review.md](specifications/v4.6.2-sqlite-migration-strategy-review.md)
+- **v4.6.2 notes (draft):** [v4.6.2-notes.md](releases/v4.6.2-notes.md)
 
 ## Next action
 
-**v4.6.2 — SQLite migration strategy review**（documentation-only）
+**v4.6.2 release** — documentation-only SQLite migration strategy review
 
-- DB ファイル内 `schema_version`、migration runner、backup before migrate、dry-run
-- legacy DB fixture 方針、destructive migration 回避原則
-- v4.6.1 review の FK 導入前提を満たす設計
+- `make check` PASS 後 `tools/release/full-release.sh v4.6.2 "SQLite migration strategy review"`
+- P0 docs sync（README latest → v4.6.2）
 
-**Defer (from v4.6.1 review):**
+**Then:**
 
-- FK 制約の即時追加・migration 実装
-- orphan detection / doctor 連携（v4.6.x 候補）
-- `duration_label` / `accommodation_night_count`
+**v4.6.3 — command handler split Phase 1**
+
+**Defer (from v4.6.2 review):**
+
+- migration runner 実装
+- `PRAGMA user_version` コード追加
+- FK 制約追加
+- orphan detection / auto-repair
 
 ## Do not start yet
 
 - FK migration 実装
-- orphan 自動修復
-- command handler split Phase 1（v4.6.3 候補）
+- Tauri / GUI 実装
 - `TravelBookDocument` full abstraction
 
 Canonical defer list: [long-term-version-strategy.md](long-term-version-strategy.md)
