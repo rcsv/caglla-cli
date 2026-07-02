@@ -110,11 +110,11 @@ fn main() -> Result<()> {
                 crate::itinerary::print_itinerary_timeline(&result.items);
             }
             ItineraryAction::Show { id, json } => {
-                let item = crate::itinerary::get_itinerary_item(&conn, id)?;
+                let result = crate::services::itinerary_show::show_itinerary(&conn, id)?;
                 if json {
-                    crate::output::json::print_json(&item)?;
+                    crate::output::json::print_json(&result.item)?;
                 } else {
-                    crate::itinerary::print_itinerary_detail(&item);
+                    crate::itinerary::print_itinerary_detail(&result.item);
                     let reservations =
                         crate::reservation::list_reservations_for_itinerary(&conn, id)?;
                     if !reservations.is_empty() {
