@@ -984,11 +984,11 @@ fn main() -> Result<()> {
                 }
             }
             TripAction::List { json } => {
-                let trips = crate::trip::list_trips(&conn)?;
+                let result = crate::services::trip_list::list_trips(&conn)?;
                 if json {
-                    crate::output::json::print_json(&trips)?;
+                    crate::output::json::print_json(&result.trips)?;
                 } else {
-                    crate::trip::print_trip_list(&trips);
+                    crate::trip::print_trip_list(&result.trips);
                 }
             }
             TripAction::Show { id, json } => {

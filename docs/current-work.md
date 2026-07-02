@@ -13,9 +13,9 @@ v4.6.5 planning — read-only service boundary expansion
 
 ## Repository state
 
-- Cargo version: `4.6.4`
+- Cargo version: `4.6.4` (planned: `4.6.5`)
 - Latest release: **v4.6.4** — [v4.6.4-notes.md](releases/v4.6.4-notes.md)
-- **v4.6.4 spec:** [v4.6.4-read-only-service-boundary-pilot.md](specifications/v4.6.4-read-only-service-boundary-pilot.md)
+- **v4.6.5 draft spec:** [v4.6.5-read-only-service-boundary-expansion.md](specifications/v4.6.5-read-only-service-boundary-expansion.md)
 
 ## Next action
 
