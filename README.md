@@ -113,12 +113,13 @@ caglla db use --clear           # config の path を削除（既定 ./caglla.db
 
 GitHub Release 用ノートは [docs/releases/](docs/releases/) にあります。
 
-**最新:** [v4.6.11](docs/releases/v4.6.11-notes.md) — Read-only service boundary review。
+**最新:** [v4.6.12](docs/releases/v4.6.12-notes.md) — Note list service boundary。
 
 **直近のリリース履歴:**
 
 | Version | 種別 | 概要 |
 |---|---|---|
+| [v4.6.12](docs/releases/v4.6.12-notes.md) | minor | Note list service boundary (`note list`) |
 | [v4.6.11](docs/releases/v4.6.11-notes.md) | docs | Read-only service boundary review |
 | [v4.6.10](docs/releases/v4.6.10-notes.md) | minor | Itinerary show service boundary (`itinerary show`) |
 | [v4.6.9](docs/releases/v4.6.9-notes.md) | minor | Itinerary timeline service boundary (`itinerary timeline`) |

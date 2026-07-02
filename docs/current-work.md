@@ -2,10 +2,11 @@
 
 ## Current phase
 
-v4.6.12 — note list service boundary（implementation complete, release pending）
+v4.6.13 planning — reservation list service boundary
 
 ## Latest completed
 
+- v4.6.12 Note list service boundary — **released**
 - v4.6.11 Read-only service boundary review — **released**
 - v4.6.10 Itinerary show service boundary — **released**
 - v4.6.9 Itinerary timeline service boundary — **released**
@@ -21,19 +22,19 @@ v4.6.12 — note list service boundary（implementation complete, release pendin
 ## Repository state
 
 - Cargo version: `4.6.12`
-- Latest release: **v4.6.11** — [v4.6.11-notes.md](releases/v4.6.11-notes.md)
+- Latest release: **v4.6.12** — [v4.6.12-notes.md](releases/v4.6.12-notes.md)
 - **v4.6.12 spec:** [v4.6.12-note-list-service-boundary.md](specifications/v4.6.12-note-list-service-boundary.md)
 
 ## Next action
 
-**v4.6.12 release**（optional formal release）
+**v4.6.13 — `reservation list` service boundary**（optional implementation）
 
-- `make check` PASS
-- Okinawa golden: Colophon `Version: 4.6.12` のみ
+- `note list` と同様に service + CLI display 分離
+- `ReservationListJson` wrapper は CLI 層に残す
 
-**v4.6.13 候補:**
+**代替候補:**
 
-- `reservation list` または `checklist list` service boundary
+- `checklist list` service boundary（表示責務が軽い）
 
 **Parallel track（v4.6.x、独立）:**
 
