@@ -2,7 +2,7 @@
 
 ## Current phase
 
-v4.6.0 planning — Core architecture hardening review
+v4.6.0 implementation — TripStats.days semantics fix (**release pending**)
 
 ## Latest completed
 
@@ -12,23 +12,25 @@ v4.6.0 planning — Core architecture hardening review
 
 ## Repository state
 
-- Cargo version: `4.5.1`
+- Cargo version: `4.6.0`
 - Latest release: **v4.5.1** — [v4.5.1-notes.md](releases/v4.5.1-notes.md)
-- **v4.5.1 plan:** [v4.5.1-doctor-advisor-receipt-utilization-implementation-plan.md](specifications/v4.5.1-doctor-advisor-receipt-utilization-implementation-plan.md)
-- **v4.5.0 review:** [v4.5.0-receipt-inbox-responsibilities-review.md](specifications/v4.5.0-receipt-inbox-responsibilities-review.md)
+- **v4.6.0 spec:** [v4.6.0-trip-stats-days-semantics-fix.md](specifications/v4.6.0-trip-stats-days-semantics-fix.md)
+- **v4.6.0 notes (draft):** [v4.6.0-notes.md](releases/v4.6.0-notes.md)
 
 ## Next action
 
-**v4.6.0 — Core architecture hardening review**（documentation-only）
+**v4.6.0 release** — `TripStats.days` semantics fix
 
-- TripStats.days 意味、SQLite FK / orphan data、migration strategy、Receipt state、main.rs、domain/models.rs 等を棚卸し
-- v4.6.1+ は review で確定した優先順位に従って小さく実装
+- `make check` PASS 後 `tools/release/full-release.sh v4.6.0 "TripStats.days semantics fix"`
+- P0 docs sync（README latest → v4.6.0）
 
-**Defer:**
+**Then (defer):**
 
-- `TravelBookDocument` prototype（UI / Venue 要件まで）
-- Evidence / Attachment / Travel Journal 実装
-- trip stats への Receipt 反映、Potential Actual 表示
+```text
+v4.6.1 — SQLite FK / orphan data hardening review
+v4.6.2 — SQLite migration strategy review
+v4.6.3 — command handler split Phase 1
+```
 
 ## Do not start yet
 

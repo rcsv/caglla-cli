@@ -839,7 +839,7 @@ mod tests {
 
         let md = generate_trip_markdown(&conn, trip_id).unwrap();
         assert!(md.contains("## Trip overview"));
-        assert!(md.contains("- Days: 2"));
+        assert!(md.contains("- Days: 4"));
         assert!(md.contains("- Itineraries: 2"));
         assert!(md.contains("- Checklist: 1 / 2 completed"));
         assert!(md.contains("- Stay Time: 2h30m"));

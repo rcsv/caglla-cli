@@ -4,12 +4,13 @@ use anyhow::Result;
 use rusqlite::Connection;
 use serde::Serialize;
 
-use crate::domain::models::{Estimate, Expense, ItineraryCategory};
+use crate::domain::models::{Estimate, Expense, ItineraryCategory, Trip};
 
 /// 旅行統計の集計結果
 #[derive(Serialize)]
 pub(crate) struct TripStats {
     pub trip_name: String,
+    /// Trip に属する日数（出発日〜帰着日）。Itinerary の最大 day でも、宿泊数（nights）でもない。
     pub days: i64,
     pub itinerary_count: usize,
     pub checklist_total: usize,
@@ -103,17 +104,35 @@ pub(crate) fn sum_expense_totals_by_currency(expenses: &[Expense]) -> BTreeMap<S
     totals
 }
 
+/// `TripStats.days` 用の Trip 日数。`days` テーブル件数を正本とし、空のときのみ fallback する。
+fn trip_day_count_for_stats(conn: &Connection, trip_id: i64, trip: &Trip) -> Result<i64> {
+    let trip_days = crate::day::list_days(conn, trip_id)?;
+    let count = trip_days.len() as i64;
+    if count > 0 {
+        return Ok(count);
+    }
+
+    if let (Some(start), Some(end)) = (trip.start_date.as_deref(), trip.end_date.as_deref()) {
+        if let Ok(from_dates) = crate::day::trip_day_count(start, end) {
+            return Ok(from_dates);
+        }
+    }
+
+    let max_itinerary_day: Option<i64> = conn.query_row(
+        "SELECT MAX(day) FROM itinerary_items WHERE trip_id = ?1",
+        [trip_id],
+        |row| row.get(0),
+    )?;
+    Ok(max_itinerary_day.unwrap_or(0))
+}
+
 /// 旅行統計を集計する
 pub(crate) fn compute_trip_stats(conn: &Connection, trip_id: i64) -> Result<TripStats> {
     let trip = crate::trip::get_trip(conn, trip_id)?;
     let itinerary_items = crate::itinerary::list_itinerary_items(conn, trip_id)?;
     let checklist_items = crate::checklist::list_checklist_items(conn, trip_id)?;
 
-    let days = itinerary_items
-        .iter()
-        .map(|item| item.day)
-        .max()
-        .unwrap_or(0);
+    let days = trip_day_count_for_stats(conn, trip_id, &trip)?;
 
     let mut category_counts: HashMap<String, i64> = HashMap::new();
     let mut uncategorized = 0i64;
@@ -318,7 +337,7 @@ mod tests {
     use super::*;
     use crate::domain::models::{Estimate, Expense, ItineraryCategory};
     use crate::storage::db::open_db_at;
-    use crate::trip::add_test_trip;
+    use crate::trip::{add_test_trip, add_trip};
     use rusqlite::Connection;
 
     fn test_db() -> Connection {
@@ -360,7 +379,7 @@ mod tests {
 
         let stats = compute_trip_stats(&conn, trip_id).unwrap();
         assert_eq!(stats.itinerary_count, 2);
-        assert_eq!(stats.days, 2);
+        assert_eq!(stats.days, 3);
     }
 
     #[test]
@@ -525,7 +544,7 @@ mod tests {
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
 
         assert_eq!(parsed["trip_name"], "沖縄旅行");
-        assert_eq!(parsed["days"], 1);
+        assert_eq!(parsed["days"], 3);
         assert_eq!(parsed["itinerary_count"], 1);
         assert_eq!(parsed["checklist_total"], 1);
         assert_eq!(parsed["checklist_completed"], 1);
@@ -542,7 +561,7 @@ mod tests {
 
         let stats = compute_trip_stats(&conn, trip_id).unwrap();
         assert_eq!(stats.itinerary_count, 0);
-        assert_eq!(stats.days, 0);
+        assert_eq!(stats.days, 3);
         assert_eq!(stats.stay_minutes, 0);
         assert_eq!(stats.travel_minutes, 0);
         assert_eq!(stats.total_minutes, 0);
@@ -833,6 +852,80 @@ mod tests {
         let json = serde_json::to_string_pretty(&stats).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert!(parsed.get("difference_totals").is_none());
+    }
+
+    #[test]
+    fn test_stats_days_uses_trip_day_count_not_max_itinerary_day() {
+        let conn = test_db();
+        let trip_id = add_trip(&conn, "Four Day Trip", "2026-04-26", "2026-04-29", None).unwrap();
+        crate::itinerary::add_itinerary_item(
+            &conn,
+            trip_id,
+            1,
+            "Day 1 only",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let stats = compute_trip_stats(&conn, trip_id).unwrap();
+        assert_eq!(stats.itinerary_count, 1);
+        assert_eq!(stats.days, 4);
+    }
+
+    #[test]
+    fn test_stats_days_with_zero_itinerary_uses_trip_duration() {
+        let conn = test_db();
+        let trip_id = add_trip(&conn, "Three Day Trip", "2026-01-01", "2026-01-03", None).unwrap();
+
+        let stats = compute_trip_stats(&conn, trip_id).unwrap();
+        assert_eq!(stats.itinerary_count, 0);
+        assert_eq!(stats.days, 3);
+    }
+
+    #[test]
+    fn test_stats_days_falls_back_to_trip_dates_when_days_table_empty() {
+        let conn = test_db();
+        let now = crate::storage::db::now_string();
+        conn.execute(
+            "INSERT INTO trips (name, start_date, end_date, summary, created_at, updated_at)
+             VALUES ('Legacy Trip', '2026-04-26', '2026-04-29', NULL, ?1, ?1)",
+            [&now],
+        )
+        .unwrap();
+        let trip_id = conn.last_insert_rowid();
+
+        let stats = compute_trip_stats(&conn, trip_id).unwrap();
+        assert_eq!(stats.itinerary_count, 0);
+        assert_eq!(stats.days, 4);
+    }
+
+    #[test]
+    fn test_stats_days_falls_back_to_itinerary_max_when_days_and_dates_unavailable() {
+        let conn = test_db();
+        let now = crate::storage::db::now_string();
+        conn.execute(
+            "INSERT INTO trips (name, start_date, end_date, summary, created_at, updated_at)
+             VALUES ('No Dates Trip', NULL, NULL, NULL, ?1, ?1)",
+            [&now],
+        )
+        .unwrap();
+        let trip_id = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO itinerary_items
+             (trip_id, day_id, day, title, note, sort_order, created_at, updated_at)
+             VALUES (?1, NULL, 2, 'Day 2 only', NULL, 0, ?2, ?2)",
+            rusqlite::params![trip_id, &now],
+        )
+        .unwrap();
+
+        let stats = compute_trip_stats(&conn, trip_id).unwrap();
+        assert_eq!(stats.days, 2);
     }
 
     #[test]

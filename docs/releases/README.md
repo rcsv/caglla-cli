@@ -4,6 +4,7 @@ GitHub Release 用ノート一覧（新しい順）。
 
 | Version | Title | File |
 |---|---|---|
+| v4.6.0 | TripStats.days semantics fix | [v4.6.0-notes.md](v4.6.0-notes.md) |
 | v4.5.1 | doctor / advisor Receipt utilization | [v4.5.1-notes.md](v4.5.1-notes.md) |
 | v4.5.0 | Receipt Inbox responsibilities review | [v4.5.0-notes.md](v4.5.0-notes.md) |
 | v4.4.8 | Travel Book presentation helper cleanup | [v4.4.8-notes.md](v4.4.8-notes.md) |
