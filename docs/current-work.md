@@ -2,7 +2,7 @@
 
 ## Current phase
 
-v4.6.11 planning — read-only service boundary review
+v4.6.11 — read-only service boundary review（documentation complete, release pending）
 
 ## Latest completed
 
@@ -21,14 +21,18 @@ v4.6.11 planning — read-only service boundary review
 
 - Cargo version: `4.6.10`
 - Latest release: **v4.6.10** — [v4.6.10-notes.md](releases/v4.6.10-notes.md)
-- **v4.6.10 spec:** [v4.6.10-itinerary-show-service-boundary.md](specifications/v4.6.10-itinerary-show-service-boundary.md)
+- **v4.6.11 draft review:** [v4.6.11-read-only-service-boundary-review.md](specifications/v4.6.11-read-only-service-boundary-review.md)
 
 ## Next action
 
-**v4.6.11 — read-only service boundary review**（optional）
+**v4.6.11 release**（optional formal release）
 
-- v4.6.4〜v4.6.10 の read-only service boundary 展開を横断レビュー
-- 次の service 化候補（`note list` 等）を整理
+- documentation-only review
+- Rust code 変更なし
+
+**v4.6.12 推奨候補:**
+
+- `note list` service boundary
 
 **Parallel track（v4.6.x、独立）:**
 

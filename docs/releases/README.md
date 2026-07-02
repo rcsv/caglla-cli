@@ -4,6 +4,7 @@ GitHub Release 用ノート一覧（新しい順）。
 
 | Version | Title | File |
 |---|---|---|
+| v4.6.11 | Read-only service boundary review | [v4.6.11-notes.md](v4.6.11-notes.md) |
 | v4.6.10 | Itinerary show service boundary | [v4.6.10-notes.md](v4.6.10-notes.md) |
 | v4.6.9 | Itinerary timeline service boundary | [v4.6.9-notes.md](v4.6.9-notes.md) |
 | v4.6.8 | Itinerary list service boundary | [v4.6.8-notes.md](v4.6.8-notes.md) |
