@@ -2,10 +2,11 @@
 
 ## Current phase
 
-v4.6.8 planning — itinerary list service boundary
+v4.6.9 planning — itinerary timeline service boundary
 
 ## Latest completed
 
+- v4.6.8 Itinerary list service boundary — **released**
 - v4.6.7 Day list service boundary — **released**
 - v4.6.6 Trip show service boundary — **released**
 - v4.6.5 Read-only service boundary expansion — **released**
@@ -16,15 +17,15 @@ v4.6.8 planning — itinerary list service boundary
 
 ## Repository state
 
-- Cargo version: `4.6.7` (planned: `4.6.8`)
-- Latest release: **v4.6.7** — [v4.6.7-notes.md](releases/v4.6.7-notes.md)
-- **v4.6.8 draft spec:** [v4.6.8-itinerary-list-service-boundary.md](specifications/v4.6.8-itinerary-list-service-boundary.md)
+- Cargo version: `4.6.8`
+- Latest release: **v4.6.8** — [v4.6.8-notes.md](releases/v4.6.8-notes.md)
+- **v4.6.8 spec:** [v4.6.8-itinerary-list-service-boundary.md](specifications/v4.6.8-itinerary-list-service-boundary.md)
 
 ## Next action
 
-**v4.6.8 — `itinerary list` service boundary**（optional implementation）
+**v4.6.9 — `itinerary timeline` service boundary**（optional implementation）
 
-- `day list` と同様に service + CLI display 分離
+- `itinerary list` と同様に service + CLI display 分離
 - CLI behavior / JSON output / ordering 不変を gate とする
 
 **Parallel track（v4.6.x、独立）:**
