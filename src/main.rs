@@ -15,6 +15,7 @@ mod output;
 mod participant;
 mod receipt;
 mod reservation;
+mod services;
 mod storage;
 mod summary;
 mod trip;
@@ -1054,11 +1055,11 @@ fn main() -> Result<()> {
                 }
             }
             TripAction::Stats { trip_id, json } => {
+                let result = crate::services::trip_stats::get_trip_stats(&conn, trip_id)?;
                 if json {
-                    let stats = crate::analysis::statistics::compute_trip_stats(&conn, trip_id)?;
-                    crate::output::json::print_json(&stats)?;
+                    crate::output::json::print_json(&result.stats)?;
                 } else {
-                    crate::analysis::statistics::print_trip_stats(&conn, trip_id)?;
+                    crate::analysis::statistics::print_trip_stats_display(&result.stats)?;
                 }
             }
             TripAction::Doctor { trip_id, json } => {

@@ -2,34 +2,32 @@
 
 ## Current phase
 
-v4.6.4 planning — read-only service boundary pilot
+v4.6.4 — read-only service boundary pilot (**released**)
 
 ## Latest completed
 
+- v4.6.4 Read-only service boundary pilot — **released**
 - v4.6.3 Command handler split Phase 1 — **released**
 - v4.6.2 SQLite migration strategy review — **released**
 - v4.6.1 SQLite FK / orphan data hardening review — **released**
 
 ## Repository state
 
-- Cargo version: `4.6.3`
-- Latest release: **v4.6.3** — [v4.6.3-notes.md](releases/v4.6.3-notes.md)
-- **v4.6.3 review:** [v4.6.3-command-handler-split-phase-1.md](specifications/v4.6.3-command-handler-split-phase-1.md)
+- Cargo version: `4.6.4`
+- Latest release: **v4.6.4** — [v4.6.4-notes.md](releases/v4.6.4-notes.md)
+- **v4.6.4 spec:** [v4.6.4-read-only-service-boundary-pilot.md](specifications/v4.6.4-read-only-service-boundary-pilot.md)
 
 ## Next action
 
-**v4.6.4 — read-only service boundary pilot**（optional implementation）
-
-候補 command:
+**Follow-up read-only service pilots**（optional）
 
 ```text
 trip list / show
 day list
 itinerary list / timeline
-trip stats
 ```
 
-- service が structured result を返し、CLI は既存 human/JSON 出力を維持
+- 各 command で `TripStats` pilot と同様に service + CLI display 分離
 - CLI behavior / golden 不変を gate とする
 
 **Parallel track（v4.6.x、独立）:**

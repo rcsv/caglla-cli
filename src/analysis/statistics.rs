@@ -211,10 +211,8 @@ pub(crate) fn compute_trip_stats(conn: &Connection, trip_id: i64) -> Result<Trip
     })
 }
 
-/// 旅行統計を表示する
-pub(crate) fn print_trip_stats(conn: &Connection, trip_id: i64) -> Result<()> {
-    let stats = compute_trip_stats(conn, trip_id)?;
-
+/// 旅行統計を人間向けに表示する（terminal I/O のみ。集計は呼び出し元で行う）
+pub(crate) fn print_trip_stats_display(stats: &TripStats) -> Result<()> {
     println!("Trip Stats");
     println!("==========");
     println!();
@@ -573,7 +571,8 @@ mod tests {
         assert!(stats.estimate_totals.is_empty());
         assert!(stats.difference_totals.is_none());
 
-        print_trip_stats(&conn, trip_id).unwrap();
+        let result = crate::services::trip_stats::get_trip_stats(&conn, trip_id).unwrap();
+        print_trip_stats_display(&result.stats).unwrap();
     }
 
     #[test]
@@ -665,7 +664,8 @@ mod tests {
         assert_eq!(stats.expense_totals.get("JPY"), Some(&10000));
         assert_eq!(stats.expense_totals.get("USD"), Some(&1750));
 
-        print_trip_stats(&conn, trip_id).unwrap();
+        let result = crate::services::trip_stats::get_trip_stats(&conn, trip_id).unwrap();
+        print_trip_stats_display(&result.stats).unwrap();
     }
 
     #[test]
