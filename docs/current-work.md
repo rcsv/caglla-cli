@@ -2,7 +2,7 @@
 
 ## Current phase
 
-v4.6.3 planning — command handler split Phase 1
+v4.6.3 implementation — command handler split Phase 1 (**release pending**)
 
 ## Latest completed
 
@@ -14,26 +14,29 @@ v4.6.3 planning — command handler split Phase 1
 
 - Cargo version: `4.6.2`
 - Latest release: **v4.6.2** — [v4.6.2-notes.md](releases/v4.6.2-notes.md)
-- **v4.6.2 review:** [v4.6.2-sqlite-migration-strategy-review.md](specifications/v4.6.2-sqlite-migration-strategy-review.md)
+- **v4.6.3 review (draft):** [v4.6.3-command-handler-split-phase-1.md](specifications/v4.6.3-command-handler-split-phase-1.md)
+- **v4.6.3 notes (draft):** [v4.6.3-notes.md](releases/v4.6.3-notes.md)
 
 ## Next action
 
-**v4.6.3 — command handler split Phase 1**
+**v4.6.3 release** — documentation-first command handler split Phase 1
 
-- 将来の Tauri GUI 化を見据え、CLI command handler と core / service logic の分離方針を整理
-- migration runner / FK 実装とは独立した refactor track
+- `make check` PASS 後 `tools/release/full-release.sh v4.6.3 "Command handler split Phase 1"`
+- P0 docs sync（README latest → v4.6.3）
 
-**Defer (from v4.6.2 review):**
+**Then (candidates):**
 
-- migration runner 実装
-- `PRAGMA user_version` コード追加
-- FK 制約追加
-- orphan detection / auto-repair
+| Milestone | 内容 |
+|---|---|
+| **v4.6.4** | read-only service boundary pilot（`trip list/show`, `day list`, `itinerary timeline`, `stats`） |
+| **v4.6.x** | migration track — orphan detection / migration runner（v4.6.2 順序、独立） |
+| **v4.7.0** | Tauri shell spike（read-only GUI、defer） |
 
-## Do not start yet
+## Defer
 
-- FK migration 実装
-- Tauri / GUI 実装
-- `TravelBookDocument` full abstraction
+- Tauri プロジェクト作成 / GUI 実装
+- `main.rs` 一括 `commands/` 移動
+- DB schema / FK / migration runner
+- `domain/models.rs` 分割
 
 Canonical defer list: [long-term-version-strategy.md](long-term-version-strategy.md)

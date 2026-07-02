@@ -4,6 +4,7 @@ GitHub Release 用ノート一覧（新しい順）。
 
 | Version | Title | File |
 |---|---|---|
+| v4.6.3 | Command handler split Phase 1 | [v4.6.3-notes.md](v4.6.3-notes.md) |
 | v4.6.2 | SQLite migration strategy review | [v4.6.2-notes.md](v4.6.2-notes.md) |
 | v4.6.1 | SQLite FK / orphan data hardening review | [v4.6.1-notes.md](v4.6.1-notes.md) |
 | v4.6.0 | TripStats.days semantics fix | [v4.6.0-notes.md](v4.6.0-notes.md) |
