@@ -2,7 +2,7 @@
 
 ## Current phase
 
-v4.6.4 — read-only service boundary pilot (**released**)
+v4.6.5 planning — read-only service boundary expansion
 
 ## Latest completed
 
@@ -19,15 +19,18 @@ v4.6.4 — read-only service boundary pilot (**released**)
 
 ## Next action
 
-**Follow-up read-only service pilots**（optional）
+**v4.6.5 — read-only service boundary expansion**（optional implementation）
+
+優先 pilot 候補: **`trip list`**（単独推奨）
 
 ```text
-trip list / show
+trip list
+trip show
 day list
 itinerary list / timeline
 ```
 
-- 各 command で `TripStats` pilot と同様に service + CLI display 分離
+- `trip stats` pilot と同様に service + CLI display 分離
 - CLI behavior / golden 不変を gate とする
 
 **Parallel track（v4.6.x、独立）:**
